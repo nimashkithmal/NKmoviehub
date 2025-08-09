@@ -162,56 +162,7 @@ const Home = () => {
 
   return (
     <div>
-      <div className="card">
-        <h1>Welcome to NKMovieHUB</h1>
-        <p className="lead">
-          Your ultimate destination for movie management and user administration.
-        </p>
-        
-        {!isAuthenticated ? (
-          <div className="auth-options">
-            <h2>Get Started</h2>
-            <p>Please login or register to access the full features of NKMovieHUB.</p>
-            <div className="form-actions">
-              <Link to="/login" className="btn btn-primary">
-                Login
-              </Link>
-              <Link to="/register" className="btn btn-secondary">
-                Register
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="user-welcome">
-            <h2>Welcome back, {user?.name}!</h2>
-            <p>You are logged in as a <strong>{user?.role}</strong>.</p>
-            
-            {user?.role === 'admin' && (
-              <div className="admin-info">
-                <h3>Admin Features</h3>
-                <p>As an administrator, you have access to:</p>
-                <ul>
-                  <li>User management dashboard</li>
-                  <li>Movie management system</li>
-                  <li>System statistics</li>
-                  <li>User role management</li>
-                  <li>System configuration</li>
-                </ul>
-                <Link to="/admin" className="btn btn-primary">
-                  Go to Admin Dashboard
-                </Link>
-              </div>
-            )}
-            
-            <div className="user-info">
-              <h3>Your Account Information</h3>
-              <p><strong>Email:</strong> {user?.email}</p>
-              <p><strong>Member since:</strong> {new Date(user?.createdAt).toLocaleDateString()}</p>
-            </div>
-          </div>
-        )}
-      </div>
-
+      
       {/* Movie Browsing Section */}
       <div className="card">
         <h2>Browse Movies</h2>
@@ -357,36 +308,6 @@ const Home = () => {
             ))}
           </div>
         )}
-      </div>
-
-      <div className="features">
-        <h2>Features</h2>
-        <div className="feature-grid">
-          <div className="feature-item">
-            <h3>Movie Collection</h3>
-            <p>Browse through our extensive collection of movies across all genres.</p>
-          </div>
-          <div className="feature-item">
-            <h3>User Management</h3>
-            <p>Comprehensive user administration with role-based access control.</p>
-          </div>
-          <div className="feature-item">
-            <h3>Secure Authentication</h3>
-            <p>JWT-based authentication system with protected routes.</p>
-          </div>
-          <div className="feature-item">
-            <h3>Admin Dashboard</h3>
-            <p>Powerful admin interface for system and content management.</p>
-          </div>
-          <div className="feature-item">
-            <h3>Search & Filter</h3>
-            <p>Advanced search and filtering capabilities for finding the perfect movie.</p>
-          </div>
-          <div className="feature-item">
-            <h3>Responsive Design</h3>
-            <p>Modern, mobile-friendly interface built with React.</p>
-          </div>
-        </div>
       </div>
     </div>
   );

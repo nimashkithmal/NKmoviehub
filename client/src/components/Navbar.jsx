@@ -32,11 +32,6 @@ const Navbar = () => {
             </>
           ) : (
             <>
-              {user?.role === 'admin' && (
-                <li>
-                  <Link to="/admin">Admin Dashboard</Link>
-                </li>
-              )}
               <li>
                 <span>Welcome, {user?.name}!</span>
               </li>
