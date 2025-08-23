@@ -253,11 +253,16 @@ const Home = () => {
                     <span className="movie-year">{movie.year}</span>
                     <span className="movie-genre">{movie.genre}</span>
                     <div className="movie-rating-info">
-                      <span className="movie-rating">
-                        ⭐ {movie.averageRating ? movie.averageRating.toFixed(1) : movie.imdbRating ? movie.imdbRating.toFixed(1) : '0.0'}/10
-                      </span>
+                      <div className="rating-row">
+                        <span className="movie-rating imdb-rating">
+                          🎬 IMDB: {movie.imdbRating ? movie.imdbRating.toFixed(1) : '0.0'}/10
+                        </span>
+                        <span className="movie-rating user-rating">
+                          ⭐ Users: {movie.averageRating ? movie.averageRating.toFixed(1) : '0.0'}/10
+                        </span>
+                      </div>
                       <span className="rating-count">
-                        ({movie.totalRatings || 0} ratings)
+                        ({movie.totalRatings || 0} user ratings)
                       </span>
                     </div>
                   </div>

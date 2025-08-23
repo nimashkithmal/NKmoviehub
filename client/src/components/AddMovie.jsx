@@ -96,7 +96,7 @@ const AddMovie = () => {
         hasImageFile: !!requestData.imageFile,
         imageFileLength: requestData.imageFile ? requestData.imageFile.length : 0,
         hasDownloadUrl: !!requestData.downloadUrl,
-        hasRating: requestData.rating !== undefined,
+        hasImdbRating: requestData.imdbRating !== undefined,
         token: token ? 'Present' : 'Missing'
       });
       

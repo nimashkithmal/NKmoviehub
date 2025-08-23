@@ -219,7 +219,8 @@ router.post('/', protect, restrictToAdmin, [
       hasImageFile: !!req.body.imageFile,
       imageFileLength: req.body.imageFile ? req.body.imageFile.length : 0,
       hasDownloadUrl: !!req.body.downloadUrl,
-      hasImdbRating: req.body.imdbRating !== undefined
+      hasImdbRating: req.body.imdbRating !== undefined,
+      fullBody: JSON.stringify(req.body, null, 2)
     });
 
     // Check for validation errors
@@ -235,12 +236,68 @@ router.post('/', protect, restrictToAdmin, [
 
     const { title, year, description, genre, movieUrl, downloadUrl, imdbRating, imageFile } = req.body;
 
-    // Validate required fields
-    if (!title || !year || !description || !genre || !movieUrl || !downloadUrl || imdbRating === undefined || !imageFile) {
-      console.log('Missing required fields:', { title, year, description, genre, movieUrl, downloadUrl, imdbRating, hasImageFile: !!imageFile });
+    // Additional validation for edge cases
+    if (title && title.trim() === '') {
       return res.status(400).json({
         success: false,
-        message: 'All required fields must be provided'
+        message: 'Title cannot be empty'
+      });
+    }
+    
+    if (description && description.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Description cannot be empty'
+      });
+    }
+    
+    if (genre && genre.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Genre cannot be empty'
+      });
+    }
+    
+    if (movieUrl && movieUrl.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Movie URL cannot be empty'
+      });
+    }
+    
+    if (downloadUrl && downloadUrl.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Download URL cannot be empty'
+      });
+    }
+
+    // Validate required fields
+    if (!title || !year || !description || !genre || !movieUrl || !downloadUrl || imdbRating === undefined || !imageFile) {
+      console.log('Missing required fields:', { 
+        title: title || 'MISSING', 
+        year: year || 'MISSING', 
+        description: description || 'MISSING', 
+        genre: genre || 'MISSING', 
+        movieUrl: movieUrl || 'MISSING', 
+        downloadUrl: downloadUrl || 'MISSING', 
+        imdbRating: imdbRating !== undefined ? imdbRating : 'MISSING', 
+        hasImageFile: !!imageFile 
+      });
+      
+      const missingFields = [];
+      if (!title) missingFields.push('title');
+      if (!year) missingFields.push('year');
+      if (!description) missingFields.push('description');
+      if (!genre) missingFields.push('genre');
+      if (!movieUrl) missingFields.push('movieUrl');
+      if (!downloadUrl) missingFields.push('downloadUrl');
+      if (imdbRating === undefined) missingFields.push('imdbRating');
+      if (!imageFile) missingFields.push('imageFile');
+      
+      return res.status(400).json({
+        success: false,
+        message: `Missing required fields: ${missingFields.join(', ')}`
       });
     }
 

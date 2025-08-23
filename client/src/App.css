@@ -368,12 +368,16 @@ main {
 .movie-rating-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+}
+
+.rating-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .movie-rating {
-  background: #ffc107;
-  color: #333;
   padding: 4px 8px;
   border-radius: 12px;
   font-size: 0.8rem;
@@ -383,10 +387,23 @@ main {
   gap: 4px;
 }
 
+.imdb-rating {
+  background: linear-gradient(135deg, #ff6b35, #f7931e);
+  color: white;
+  border: 1px solid #e55a2b;
+}
+
+.user-rating {
+  background: linear-gradient(135deg, #ffc107, #ff9800);
+  color: #333;
+  border: 1px solid #e0a800;
+}
+
 .rating-count {
   font-size: 0.7rem;
   color: #6c757d;
   font-style: italic;
+  text-align: center;
 }
 
 .movie-rating-section {
@@ -608,5 +625,22 @@ main {
   .form-actions .btn {
     width: 100%;
     max-width: 300px;
+  }
+} 
+
+/* Responsive Design for Ratings */
+@media (max-width: 768px) {
+  .rating-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .movie-rating {
+    font-size: 0.75rem;
+    padding: 3px 6px;
+  }
+  
+  .rating-count {
+    font-size: 0.65rem;
   }
 } 
