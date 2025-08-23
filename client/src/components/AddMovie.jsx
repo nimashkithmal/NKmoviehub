@@ -14,7 +14,7 @@ const AddMovie = () => {
     genre: '',
     movieUrl: '',
     downloadUrl: '',
-    rating: 0,
+    imdbRating: 0,
     imageFile: null
   });
   const [imagePreview, setImagePreview] = useState(null);
@@ -72,8 +72,8 @@ const AddMovie = () => {
       return;
     }
 
-    if (formData.rating < 0 || formData.rating > 10) {
-      setError('Rating must be between 0 and 10');
+    if (formData.imdbRating < 0 || formData.imdbRating > 10) {
+      setError('IMDB rating must be between 0 and 10');
       return;
     }
 
@@ -146,7 +146,7 @@ const AddMovie = () => {
       genre: '',
       movieUrl: '',
       downloadUrl: '',
-      rating: 0,
+      imdbRating: 0,
       imageFile: null
     });
     setImagePreview(null);
@@ -230,13 +230,13 @@ const AddMovie = () => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="rating">Initial Rating (0-10) *</label>
+              <label htmlFor="imdbRating">IMDB Rating (0-10) *</label>
               <div className="rating-input">
                 <input
                   type="number"
-                  id="rating"
-                  name="rating"
-                  value={formData.rating}
+                  id="imdbRating"
+                  name="imdbRating"
+                  value={formData.imdbRating}
                   onChange={handleInputChange}
                   min="0"
                   max="10"
@@ -245,8 +245,8 @@ const AddMovie = () => {
                   className="rating-number-input"
                 />
                 <div className="rating-display">
-                  <span className="rating-label">Rating: </span>
-                  <span className="rating-value">{formData.rating}/10</span>
+                  <span className="rating-label">IMDB Rating: </span>
+                  <span className="rating-value">{formData.imdbRating}/10</span>
                 </div>
               </div>
             </div>

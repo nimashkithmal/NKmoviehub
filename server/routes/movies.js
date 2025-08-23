@@ -208,7 +208,7 @@ router.post('/', protect, restrictToAdmin, [
   body('genre').trim().isLength({ min: 2, max: 50 }).withMessage('Genre must be between 2 and 50 characters'),
   body('movieUrl').isURL().withMessage('Please provide a valid movie URL'),
   body('downloadUrl').isURL().withMessage('Please provide a valid download URL'),
-  body('rating').isFloat({ min: 0, max: 10 }).withMessage('Rating must be between 0 and 10'),
+  body('imdbRating').isFloat({ min: 0, max: 10 }).withMessage('IMDB rating must be between 0 and 10'),
   body('imageFile').notEmpty().withMessage('Movie image is required')
 ], async (req, res) => {
   try {
@@ -219,7 +219,7 @@ router.post('/', protect, restrictToAdmin, [
       hasImageFile: !!req.body.imageFile,
       imageFileLength: req.body.imageFile ? req.body.imageFile.length : 0,
       hasDownloadUrl: !!req.body.downloadUrl,
-      hasRating: req.body.rating !== undefined
+      hasImdbRating: req.body.imdbRating !== undefined
     });
 
     // Check for validation errors
@@ -233,11 +233,11 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
 
-    const { title, year, description, genre, movieUrl, downloadUrl, rating, imageFile } = req.body;
+    const { title, year, description, genre, movieUrl, downloadUrl, imdbRating, imageFile } = req.body;
 
     // Validate required fields
-    if (!title || !year || !description || !genre || !movieUrl || !downloadUrl || rating === undefined || !imageFile) {
-      console.log('Missing required fields:', { title, year, description, genre, movieUrl, downloadUrl, rating, hasImageFile: !!imageFile });
+    if (!title || !year || !description || !genre || !movieUrl || !downloadUrl || imdbRating === undefined || !imageFile) {
+      console.log('Missing required fields:', { title, year, description, genre, movieUrl, downloadUrl, imdbRating, hasImageFile: !!imageFile });
       return res.status(400).json({
         success: false,
         message: 'All required fields must be provided'
@@ -297,7 +297,7 @@ router.post('/', protect, restrictToAdmin, [
       genre,
       movieUrl,
       downloadUrl,
-      rating: parseFloat(rating),
+      imdbRating: parseFloat(imdbRating),
       imageUrl,
       addedBy: req.user.id
     });
@@ -308,7 +308,7 @@ router.post('/', protect, restrictToAdmin, [
       genre: movie.genre,
       hasImageUrl: !!movie.imageUrl,
       hasDownloadUrl: !!movie.downloadUrl,
-      rating: movie.rating
+      imdbRating: movie.imdbRating
     });
 
     await movie.save();
@@ -416,6 +416,65 @@ router.put('/:id', protect, restrictToAdmin, [
     res.status(500).json({
       success: false,
       message: 'Server error while updating movie'
+    });
+  }
+});
+
+// @route   PUT /api/movies/:id/update-admin-fields
+// @desc    Update IMDB rating and download URL (admin only)
+// @access  Private/Admin
+router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
+  body('imdbRating').optional().isFloat({ min: 0, max: 10 }).withMessage('IMDB rating must be between 0 and 10'),
+  body('downloadUrl').optional().isURL().withMessage('Please provide a valid download URL')
+], async (req, res) => {
+  try {
+    const { imdbRating, downloadUrl } = req.body;
+    const movieId = req.params.id;
+
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    // Find the movie
+    const movie = await Movie.findById(movieId);
+    if (!movie) {
+      return res.status(404).json({
+        success: false,
+        message: 'Movie not found'
+      });
+    }
+
+    // Update only the fields that are provided
+    if (imdbRating !== undefined) {
+      movie.imdbRating = parseFloat(imdbRating);
+    }
+    
+    if (downloadUrl !== undefined) {
+      movie.downloadUrl = downloadUrl;
+    }
+
+    await movie.save();
+
+    // Populate addedBy field
+    await movie.populate('addedBy', 'name email');
+
+    res.json({
+      success: true,
+      message: 'Movie updated successfully',
+      data: { movie }
+    });
+
+  } catch (error) {
+    console.error('Update admin fields error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while updating movie: ' + error.message
     });
   }
 });

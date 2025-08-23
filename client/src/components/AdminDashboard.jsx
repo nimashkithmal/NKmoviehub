@@ -29,7 +29,7 @@ const AdminDashboard = () => {
     genre: '',
     movieUrl: '',
     downloadUrl: '',
-    rating: 0
+    imdbRating: 0
   });
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -119,7 +119,7 @@ const AdminDashboard = () => {
         // Calculate movie stats
         const totalMovies = result.data.movies.length;
         const activeMovies = result.data.movies.filter(m => m.status === 'active').length;
-        const averageRating = result.data.movies.reduce((sum, m) => sum + m.rating, 0) / totalMovies || 0;
+        const averageImdbRating = result.data.movies.reduce((sum, m) => sum + m.imdbRating, 0) / totalMovies || 0;
         const newMoviesThisMonth = result.data.movies.filter(m => {
           const movieDate = new Date(m.createdAt);
           const now = new Date();
@@ -129,7 +129,7 @@ const AdminDashboard = () => {
         setMovieStats({
           totalMovies,
           activeMovies,
-          averageRating: Math.round(averageRating * 10) / 10,
+          averageRating: Math.round(averageImdbRating * 10) / 10,
           newMoviesThisMonth
         });
       } else {
@@ -313,7 +313,7 @@ const AdminDashboard = () => {
       genre: movie.genre,
       movieUrl: movie.movieUrl,
       downloadUrl: movie.downloadUrl,
-      rating: movie.rating
+      imdbRating: movie.imdbRating
     });
   };
 
@@ -350,7 +350,7 @@ const AdminDashboard = () => {
           genre: '',
           movieUrl: '',
           downloadUrl: '',
-          rating: 0
+          imdbRating: 0
         });
         alert('Movie updated successfully!');
       }
@@ -413,6 +413,38 @@ const AdminDashboard = () => {
     } catch (err) {
       console.error('Error updating movie status:', err);
       alert(`Error updating movie status: ${err.message}`);
+    }
+  };
+
+  const handleUpdateAdminFields = async (movieId, imdbRating, downloadUrl) => {
+    try {
+      const updateData = {};
+      if (imdbRating !== undefined) updateData.imdbRating = imdbRating;
+      if (downloadUrl !== undefined) updateData.downloadUrl = downloadUrl;
+
+      const response = await fetch(`http://localhost:5001/api/movies/${movieId}/update-admin-fields`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update movie');
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        await fetchMovies();
+        alert('Movie updated successfully!');
+      }
+    } catch (err) {
+      console.error('Error updating movie:', err);
+      alert(`Error updating movie: ${err.message}`);
     }
   };
 
@@ -707,7 +739,8 @@ const AdminDashboard = () => {
                   <th>Title</th>
                   <th>Year</th>
                   <th>Genre</th>
-                  <th>Rating</th>
+                  <th>IMDB Rating</th>
+                  <th>User Rating</th>
                   <th>Download URL</th>
                   <th>Status</th>
                   <th>Added By</th>
@@ -742,30 +775,73 @@ const AdminDashboard = () => {
                       </span>
                     </td>
                     <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <span style={{ 
+                          padding: '4px 8px', 
+                          borderRadius: '4px', 
+                          backgroundColor: movie.imdbRating >= 7 ? '#28a745' : movie.imdbRating >= 5 ? '#ffc107' : '#dc3545',
+                          color: 'white',
+                          fontSize: '12px'
+                        }}>
+                          {movie.imdbRating}/10
+                        </span>
+                        <button 
+                          className="btn btn-secondary"
+                          style={{ padding: '2px 6px', fontSize: '10px' }}
+                          onClick={() => {
+                            const newRating = prompt('Enter new IMDB rating (0-10):', movie.imdbRating);
+                            if (newRating !== null && !isNaN(newRating) && newRating >= 0 && newRating <= 10) {
+                              handleUpdateAdminFields(movie._id, parseFloat(newRating), undefined);
+                            }
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </td>
+                    <td>
                       <span style={{ 
                         padding: '4px 8px', 
                         borderRadius: '4px', 
-                        backgroundColor: movie.rating >= 7 ? '#28a745' : movie.rating >= 5 ? '#ffc107' : '#dc3545',
+                        backgroundColor: movie.averageRating >= 7 ? '#28a745' : movie.averageRating >= 5 ? '#ffc107' : '#dc3545',
                         color: 'white',
                         fontSize: '12px'
                       }}>
-                        {movie.rating}/10
+                        {movie.averageRating ? movie.averageRating.toFixed(1) : '0.0'}/10
                       </span>
+                      <br />
+                      <small style={{ fontSize: '10px', color: '#6c757d' }}>
+                        ({movie.totalRatings || 0} ratings)
+                      </small>
                     </td>
                     <td>
-                      <a 
-                        href={movie.downloadUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        style={{ 
-                          color: '#007bff', 
-                          textDecoration: 'none',
-                          fontSize: '12px',
-                          wordBreak: 'break-all'
-                        }}
-                      >
-                        {movie.downloadUrl ? 'Download Link' : 'N/A'}
-                      </a>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <a 
+                          href={movie.downloadUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          style={{ 
+                            color: '#007bff', 
+                            textDecoration: 'none',
+                            fontSize: '12px',
+                            wordBreak: 'break-all'
+                          }}
+                        >
+                          {movie.downloadUrl ? 'Download Link' : 'N/A'}
+                        </a>
+                        <button 
+                          className="btn btn-secondary"
+                          style={{ padding: '2px 6px', fontSize: '10px' }}
+                          onClick={() => {
+                            const newUrl = prompt('Enter new download URL:', movie.downloadUrl);
+                            if (newUrl !== null && newUrl.trim() !== '') {
+                              handleUpdateAdminFields(movie._id, undefined, newUrl.trim());
+                            }
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </div>
                     </td>
                     <td>
                       <span style={{ 
@@ -1018,11 +1094,11 @@ const AdminDashboard = () => {
               />
             </div>
             <div className="form-group">
-              <label>Rating (0-10)</label>
+              <label>IMDB Rating (0-10)</label>
               <input
                 type="number"
-                value={movieFormData.rating}
-                onChange={(e) => setMovieFormData({...movieFormData, rating: parseInt(e.target.value)})}
+                value={movieFormData.imdbRating}
+                onChange={(e) => setMovieFormData({...movieFormData, imdbRating: parseInt(e.target.value)})}
                 min="0"
                 max="10"
               />

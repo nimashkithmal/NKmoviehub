@@ -33,11 +33,11 @@ const movieSchema = new mongoose.Schema({
     required: [true, 'Movie download URL is required'],
     trim: true
   },
-  rating: {
+  imdbRating: {
     type: Number,
-    required: [true, 'Initial rating is required'],
-    min: [0, 'Rating must be at least 0'],
-    max: [10, 'Rating cannot exceed 10'],
+    required: [true, 'IMDB rating is required'],
+    min: [0, 'IMDB rating must be at least 0'],
+    max: [10, 'IMDB rating cannot exceed 10'],
     default: 0
   },
   genre: {
