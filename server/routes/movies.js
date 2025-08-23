@@ -212,9 +212,20 @@ router.post('/', protect, restrictToAdmin, [
   body('imageFile').notEmpty().withMessage('Movie image is required')
 ], async (req, res) => {
   try {
+    console.log('Received movie creation request:', {
+      title: req.body.title,
+      year: req.body.year,
+      genre: req.body.genre,
+      hasImageFile: !!req.body.imageFile,
+      imageFileLength: req.body.imageFile ? req.body.imageFile.length : 0,
+      hasDownloadUrl: !!req.body.downloadUrl,
+      hasRating: req.body.rating !== undefined
+    });
+
     // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('Validation errors:', errors.array());
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
@@ -223,6 +234,15 @@ router.post('/', protect, restrictToAdmin, [
     }
 
     const { title, year, description, genre, movieUrl, downloadUrl, rating, imageFile } = req.body;
+
+    // Validate required fields
+    if (!title || !year || !description || !genre || !movieUrl || !downloadUrl || rating === undefined || !imageFile) {
+      console.log('Missing required fields:', { title, year, description, genre, movieUrl, downloadUrl, rating, hasImageFile: !!imageFile });
+      return res.status(400).json({
+        success: false,
+        message: 'All required fields must be provided'
+      });
+    }
 
     // Upload image to Cloudinary
     let imageUrl;
@@ -282,10 +302,21 @@ router.post('/', protect, restrictToAdmin, [
       addedBy: req.user.id
     });
 
+    console.log('Saving movie to database:', {
+      title: movie.title,
+      year: movie.year,
+      genre: movie.genre,
+      hasImageUrl: !!movie.imageUrl,
+      hasDownloadUrl: !!movie.downloadUrl,
+      rating: movie.rating
+    });
+
     await movie.save();
 
     // Populate addedBy field
     await movie.populate('addedBy', 'name email');
+
+    console.log('Movie created successfully:', movie._id);
 
     res.status(201).json({
       success: true,
