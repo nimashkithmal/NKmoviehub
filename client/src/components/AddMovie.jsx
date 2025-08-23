@@ -84,19 +84,36 @@ const AddMovie = () => {
       // Convert image to base64 for Cloudinary upload
       const base64Image = await convertImageToBase64(formData.imageFile);
       
+      const requestData = {
+        ...formData,
+        imageFile: base64Image
+      };
+      
+      console.log('Sending movie data:', {
+        title: requestData.title,
+        year: requestData.year,
+        genre: requestData.genre,
+        hasImageFile: !!requestData.imageFile,
+        imageFileLength: requestData.imageFile ? requestData.imageFile.length : 0,
+        hasDownloadUrl: !!requestData.downloadUrl,
+        hasRating: requestData.rating !== undefined,
+        token: token ? 'Present' : 'Missing'
+      });
+      
       const response = await fetch('http://localhost:5001/api/movies', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          ...formData,
-          imageFile: base64Image
-        })
+        body: JSON.stringify(requestData)
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
       const result = await response.json();
+      console.log('Response data:', result);
 
       if (result.success) {
         alert('Movie added successfully!');
