@@ -207,6 +207,8 @@ router.post('/', protect, restrictToAdmin, [
   body('description').trim().isLength({ min: 10, max: 1000 }).withMessage('Description must be between 10 and 1000 characters'),
   body('genre').trim().isLength({ min: 2, max: 50 }).withMessage('Genre must be between 2 and 50 characters'),
   body('movieUrl').isURL().withMessage('Please provide a valid movie URL'),
+  body('downloadUrl').isURL().withMessage('Please provide a valid download URL'),
+  body('rating').isFloat({ min: 0, max: 10 }).withMessage('Rating must be between 0 and 10'),
   body('imageFile').notEmpty().withMessage('Movie image is required')
 ], async (req, res) => {
   try {
@@ -220,7 +222,7 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
 
-    const { title, year, description, genre, movieUrl, imageFile } = req.body;
+    const { title, year, description, genre, movieUrl, downloadUrl, rating, imageFile } = req.body;
 
     // Upload image to Cloudinary
     let imageUrl;
@@ -274,6 +276,8 @@ router.post('/', protect, restrictToAdmin, [
       description,
       genre,
       movieUrl,
+      downloadUrl,
+      rating: parseFloat(rating),
       imageUrl,
       addedBy: req.user.id
     });

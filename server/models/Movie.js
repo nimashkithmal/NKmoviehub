@@ -28,6 +28,18 @@ const movieSchema = new mongoose.Schema({
     required: [true, 'Movie URL is required'],
     trim: true
   },
+  downloadUrl: {
+    type: String,
+    required: [true, 'Movie download URL is required'],
+    trim: true
+  },
+  rating: {
+    type: Number,
+    required: [true, 'Initial rating is required'],
+    min: [0, 'Rating must be at least 0'],
+    max: [10, 'Rating cannot exceed 10'],
+    default: 0
+  },
   genre: {
     type: String,
     required: [true, 'Movie genre is required'],
