@@ -529,6 +529,11 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
         });
         
         // Validate image format
+        console.log('Validating image format...');
+        console.log('Image type:', typeof imageFile);
+        console.log('Image starts with data:image/:', imageFile ? imageFile.startsWith('data:image/') : false);
+        console.log('Image length:', imageFile ? imageFile.length : 0);
+        
         if (typeof imageFile !== 'string' || !imageFile.startsWith('data:image/')) {
           console.error('Image validation failed:', {
             type: typeof imageFile,
@@ -539,11 +544,18 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
             message: 'Invalid image format. Please provide a valid image file.'
           });
         }
+        
+        console.log('Image validation passed');
 
         // Store old image URL for potential cleanup
         const oldImageUrl = movie.imageUrl;
 
         console.log('Uploading to Cloudinary...');
+        console.log('Cloudinary config:', {
+          cloud_name: cloudinary.config().cloud_name,
+          api_key: cloudinary.config().api_key ? '***' + cloudinary.config().api_key.slice(-4) : 'undefined'
+        });
+        
         // Upload new image to Cloudinary
         const uploadResult = await cloudinary.uploader.upload(imageFile, {
           folder: 'nkmoviehub',
@@ -554,6 +566,12 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
         });
         
         console.log('Image updated successfully:', uploadResult.secure_url);
+        console.log('Upload result:', {
+          public_id: uploadResult.public_id,
+          secure_url: uploadResult.secure_url,
+          format: uploadResult.format,
+          bytes: uploadResult.bytes
+        });
         movie.imageUrl = uploadResult.secure_url;
         
         // Optional: Delete old image from Cloudinary
