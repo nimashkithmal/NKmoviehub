@@ -416,11 +416,12 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleUpdateAdminFields = async (movieId, imdbRating, downloadUrl) => {
+  const handleUpdateAdminFields = async (movieId, imdbRating, downloadUrl, imageFile) => {
     try {
       const updateData = {};
       if (imdbRating !== undefined) updateData.imdbRating = imdbRating;
       if (downloadUrl !== undefined) updateData.downloadUrl = downloadUrl;
+      if (imageFile !== undefined) updateData.imageFile = imageFile;
 
       const response = await fetch(`http://localhost:5001/api/movies/${movieId}/update-admin-fields`, {
         method: 'PUT',
@@ -446,6 +447,51 @@ const AdminDashboard = () => {
       console.error('Error updating movie:', err);
       alert(`Error updating movie: ${err.message}`);
     }
+  };
+
+  const handleImageUpdate = async (movieId) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    
+    input.onchange = async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB');
+        return;
+      }
+
+      try {
+        // Convert to base64
+        const base64Image = await convertImageToBase64(file);
+        
+        // Update the movie image
+        await handleUpdateAdminFields(movieId, undefined, undefined, base64Image);
+      } catch (error) {
+        console.error('Error processing image:', error);
+        alert('Failed to process image. Please try again.');
+      }
+    };
+    
+    input.click();
+  };
+
+  const convertImageToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    });
   };
 
   const filteredUsers = users.filter(user =>
@@ -736,6 +782,7 @@ const AdminDashboard = () => {
             <table className="table">
               <thead>
                 <tr>
+                  <th>Image</th>
                   <th>Title</th>
                   <th>Year</th>
                   <th>Genre</th>
@@ -750,6 +797,21 @@ const AdminDashboard = () => {
               <tbody>
                 {filteredMovies.map(movie => (
                   <tr key={movie._id}>
+                    <td>
+                      <div className="movie-image-update">
+                        <img 
+                          src={movie.imageUrl} 
+                          alt={movie.title}
+                          className="movie-thumbnail"
+                        />
+                        <button 
+                          className="update-image-btn"
+                          onClick={() => handleImageUpdate(movie._id)}
+                        >
+                          📷 Update
+                        </button>
+                      </div>
+                    </td>
                     <td>
                       <div>
                         <strong>{movie.title}</strong>

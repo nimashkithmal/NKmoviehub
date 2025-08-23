@@ -628,6 +628,60 @@ main {
   }
 } 
 
+/* Admin Table Styles */
+.table {
+  table-layout: auto;
+  width: 100%;
+}
+
+.table th:first-child {
+  width: 100px;
+  text-align: center;
+}
+
+.table td:first-child {
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Image Update Styles */
+.movie-image-update {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.movie-thumbnail {
+  width: 60px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  transition: all 0.3s ease;
+}
+
+.movie-thumbnail:hover {
+  transform: scale(1.1);
+  border-color: #007bff;
+}
+
+.update-image-btn {
+  padding: 2px 6px;
+  font-size: 10px;
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.update-image-btn:hover {
+  background: linear-gradient(135deg, #20c997, #17a2b8);
+  transform: translateY(-1px);
+}
+
 /* Responsive Design for Ratings */
 @media (max-width: 768px) {
   .rating-row {
@@ -642,5 +696,14 @@ main {
   
   .rating-count {
     font-size: 0.65rem;
+  }
+  
+  .table th:first-child {
+    width: 80px;
+  }
+  
+  .movie-thumbnail {
+    width: 40px;
+    height: 60px;
   }
 } 

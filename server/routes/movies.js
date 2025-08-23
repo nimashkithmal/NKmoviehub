@@ -478,15 +478,22 @@ router.put('/:id', protect, restrictToAdmin, [
 });
 
 // @route   PUT /api/movies/:id/update-admin-fields
-// @desc    Update IMDB rating and download URL (admin only)
+// @desc    Update IMDB rating, download URL, and image (admin only)
 // @access  Private/Admin
 router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
   body('imdbRating').optional().isFloat({ min: 0, max: 10 }).withMessage('IMDB rating must be between 0 and 10'),
-  body('downloadUrl').optional().isURL().withMessage('Please provide a valid download URL')
+  body('downloadUrl').optional().isURL().withMessage('Please provide a valid download URL'),
+  body('imageFile').optional().notEmpty().withMessage('Image file cannot be empty if provided')
 ], async (req, res) => {
   try {
-    const { imdbRating, downloadUrl } = req.body;
+    const { imdbRating, downloadUrl, imageFile } = req.body;
     const movieId = req.params.id;
+
+    console.log('Updating admin fields for movie:', movieId, {
+      hasImdbRating: imdbRating !== undefined,
+      hasDownloadUrl: downloadUrl !== undefined,
+      hasImageFile: !!imageFile
+    });
 
     // Check for validation errors
     const errors = validationResult(req);
@@ -507,7 +514,58 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
       });
     }
 
-    // Update only the fields that are provided
+    // Handle image upload if provided
+    if (imageFile) {
+      try {
+        console.log('Starting image update to Cloudinary...');
+        
+        // Validate image format
+        if (typeof imageFile !== 'string' || !imageFile.startsWith('data:image/')) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid image format. Please provide a valid image file.'
+          });
+        }
+
+        // Store old image URL for potential cleanup
+        const oldImageUrl = movie.imageUrl;
+
+        // Upload new image to Cloudinary
+        const uploadResult = await cloudinary.uploader.upload(imageFile, {
+          folder: 'nkmoviehub',
+          transformation: [
+            { width: 500, height: 750, crop: 'fill' },
+            { quality: 'auto' }
+          ]
+        });
+        
+        console.log('Image updated successfully:', uploadResult.secure_url);
+        movie.imageUrl = uploadResult.secure_url;
+        
+        // Optional: Delete old image from Cloudinary
+        if (oldImageUrl && oldImageUrl.includes('cloudinary.com')) {
+          try {
+            const urlParts = oldImageUrl.split('/');
+            const fileNameWithExt = urlParts[urlParts.length - 1];
+            const publicId = `nkmoviehub/${fileNameWithExt.split('.')[0]}`;
+            await cloudinary.uploader.destroy(publicId);
+            console.log('Old image deleted from Cloudinary');
+          } catch (deleteError) {
+            console.warn('Could not delete old image:', deleteError.message);
+            // Continue anyway - not critical
+          }
+        }
+        
+      } catch (uploadError) {
+        console.error('Image upload error:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload image: ' + uploadError.message
+        });
+      }
+    }
+
+    // Update other fields
     if (imdbRating !== undefined) {
       movie.imdbRating = parseFloat(imdbRating);
     }
