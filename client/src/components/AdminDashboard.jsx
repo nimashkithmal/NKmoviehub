@@ -45,6 +45,37 @@ const AdminDashboard = () => {
   });
   const [activeTab, setActiveTab] = useState('users'); // 'users' or 'movies'
 
+  // Notification system
+  const showNotification = (message, type = 'info') => {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+      <div class="notification-content">
+        <span class="notification-message">${message}</span>
+        <button class="notification-close">×</button>
+      </div>
+    `;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 5000);
+    
+    // Close button functionality
+    const closeBtn = notification.querySelector('.notification-close');
+    closeBtn.addEventListener('click', () => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    });
+  };
+
   // Fetch users from backend
   const fetchUsers = useCallback(async () => {
     try {
@@ -153,7 +184,7 @@ const AdminDashboard = () => {
 
   const handleAddUser = async () => {
     if (!formData.name || !formData.email || !formData.password) {
-      alert('Please fill in all fields');
+      showNotification('Please fill in all fields', 'error');
       return;
     }
 
@@ -184,11 +215,11 @@ const AdminDashboard = () => {
         await fetchUsers();
         setFormData({ name: '', email: '', password: '', role: 'user' });
         setShowAddUserModal(false);
-        alert('User created successfully!');
+        showNotification('User created successfully!', 'success');
       }
     } catch (err) {
       console.error('Error creating user:', err);
-      alert(`Error creating user: ${err.message}`);
+      showNotification(`Error creating user: ${err.message}`, 'error');
     }
   };
 
@@ -204,7 +235,7 @@ const AdminDashboard = () => {
 
   const handleUpdateUser = async () => {
     if (!formData.name || !formData.email) {
-      alert('Please fill in all fields');
+      showNotification('Please fill in all fields', 'error');
       return;
     }
 
@@ -236,16 +267,16 @@ const AdminDashboard = () => {
         await fetchUsers();
         setEditingUser(null);
         setFormData({ name: '', email: '', password: '', role: 'user' });
-        alert('User updated successfully!');
+        showNotification('User updated successfully!', 'success');
       }
     } catch (err) {
       console.error('Error updating user:', err);
-      alert(`Error updating user: ${err.message}`);
+      showNotification(`Error updating user: ${err.message}`, 'error');
     }
   };
 
   const handleDeleteUser = async (userId) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
+    if (window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       try {
         const response = await fetch(`http://localhost:5001/api/users/${userId}`, {
           method: 'DELETE',
@@ -265,11 +296,11 @@ const AdminDashboard = () => {
         if (result.success) {
           // Refresh users list
           await fetchUsers();
-          alert('User deleted successfully!');
+          showNotification('User deleted successfully!', 'success');
         }
       } catch (err) {
         console.error('Error deleting user:', err);
-        alert(`Error deleting user: ${err.message}`);
+        showNotification(`Error deleting user: ${err.message}`, 'error');
       }
     }
   };
@@ -294,11 +325,11 @@ const AdminDashboard = () => {
       if (result.success) {
         // Refresh users list
         await fetchUsers();
-        alert(`User status updated successfully!`);
+        showNotification(`User status updated successfully!`, 'success');
       }
     } catch (err) {
       console.error('Error updating user status:', err);
-      alert(`Error updating user status: ${err.message}`);
+      showNotification(`Error updating user status: ${err.message}`, 'error');
     }
   };
 
@@ -319,7 +350,7 @@ const AdminDashboard = () => {
 
   const handleUpdateMovie = async () => {
     if (!movieFormData.title || !movieFormData.description || !movieFormData.genre || !movieFormData.movieUrl) {
-      alert('Please fill in all required fields');
+      showNotification('Please fill in all required fields', 'error');
       return;
     }
 
@@ -352,11 +383,11 @@ const AdminDashboard = () => {
           downloadUrl: '',
           imdbRating: 0
         });
-        alert('Movie updated successfully!');
+        showNotification('Movie updated successfully!', 'success');
       }
     } catch (err) {
       console.error('Error updating movie:', err);
-      alert(`Error updating movie: ${err.message}`);
+      showNotification(`Error updating movie: ${err.message}`, 'error');
     }
   };
 
@@ -380,11 +411,11 @@ const AdminDashboard = () => {
         
         if (result.success) {
           await fetchMovies();
-          alert('Movie deleted successfully!');
+          showNotification('Movie deleted successfully!', 'success');
         }
       } catch (err) {
         console.error('Error deleting movie:', err);
-        alert(`Error deleting movie: ${err.message}`);
+        showNotification(`Error deleting movie: ${err.message}`, 'error');
       }
     }
   };
@@ -408,11 +439,11 @@ const AdminDashboard = () => {
       
       if (result.success) {
         await fetchMovies();
-        alert(`Movie status updated successfully!`);
+        showNotification(`Movie status updated successfully!`, 'success');
       }
     } catch (err) {
       console.error('Error updating movie status:', err);
-      alert(`Error updating movie status: ${err.message}`);
+      showNotification(`Error updating movie status: ${err.message}`, 'error');
     }
   };
 
@@ -453,14 +484,16 @@ const AdminDashboard = () => {
       console.log('Response result:', result);
       
       if (result.success) {
-        // Always refresh movies list to show updates
-        await fetchMovies();
-        alert('Movie updated successfully!');
+        // Only refresh movies list for non-image updates to avoid double refresh
+        if (!imageFile) {
+          await fetchMovies();
+        }
+        showNotification('Movie updated successfully!', 'success');
       }
       return result; // Return the result for the handleImageUpdate function
     } catch (err) {
       console.error('Error updating movie:', err);
-      alert(`Error updating movie: ${err.message}`);
+      showNotification(`Error updating movie: ${err.message}`, 'error');
       return { success: false, message: err.message }; // Return a failure result
     }
   };
@@ -476,13 +509,13 @@ const AdminDashboard = () => {
 
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        alert('Please select a valid image file');
+        showNotification('Please select a valid image file', 'error');
         return;
       }
       
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image size should be less than 5MB');
+        showNotification('Image size should be less than 5MB', 'error');
         return;
       }
 
@@ -496,25 +529,27 @@ const AdminDashboard = () => {
 
         // Convert to base64
         const base64Image = await convertImageToBase64(file);
+        console.log('Base64 image created, length:', base64Image.length);
+        console.log('Base64 starts with data:image/:', base64Image.startsWith('data:image/'));
         
         // Update the movie image
         console.log('Calling handleUpdateAdminFields with image...');
-        const result = await handleUpdateAdminFields(movieId, null, null, base64Image);
+        const result = await handleUpdateAdminFields(movieId, undefined, undefined, base64Image);
         console.log('Result from handleUpdateAdminFields:', result);
         
         if (result && result.success) {
           // Refresh the movies list to show the updated image
           console.log('Image update successful, refreshing movies list...');
           await fetchMovies();
-          alert('Image updated successfully!');
+          showNotification('Image updated successfully!', 'success');
         } else {
           const errorMsg = result?.message || 'Failed to update image. Please try again.';
           console.error('Image update failed:', errorMsg);
-          alert(`Failed to update image: ${errorMsg}`);
+          showNotification(`Failed to update image: ${errorMsg}`, 'error');
         }
       } catch (error) {
         console.error('Error processing image:', error);
-        alert('Failed to process image. Please try again.');
+        showNotification('Failed to process image. Please try again.', 'error');
       } finally {
         // Reset button state
         const updateBtn = document.querySelector(`[data-movie-id="${movieId}"] .update-image-btn`);
@@ -551,7 +586,7 @@ const AdminDashboard = () => {
   if (loading) {
     return (
       <div className="card">
-        <div style={{ textAlign: 'center', padding: '50px' }}>
+        <div className="loading-state">
           <h3>Loading users...</h3>
           <p>Please wait while we fetch the latest user data.</p>
         </div>
@@ -562,13 +597,12 @@ const AdminDashboard = () => {
   if (error) {
     return (
       <div className="card">
-        <div style={{ textAlign: 'center', padding: '50px', color: '#dc3545' }}>
+        <div className="error-state">
           <h3>Error loading users</h3>
           <p>{error}</p>
           <button 
             className="btn btn-primary"
             onClick={fetchUsers}
-            style={{ marginTop: '20px' }}
           >
             Try Again
           </button>
@@ -683,7 +717,7 @@ const AdminDashboard = () => {
           </div>
 
           {filteredUsers.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '50px', color: '#6c757d' }}>
+            <div className="empty-state">
               <h3>No users found</h3>
               <p>{searchTerm ? 'Try adjusting your search terms.' : 'No users have been registered yet.'}</p>
             </div>
@@ -800,24 +834,23 @@ const AdminDashboard = () => {
           </div>
 
           {moviesLoading ? (
-            <div style={{ textAlign: 'center', padding: '50px' }}>
+            <div className="loading-state">
               <h3>Loading movies...</h3>
               <p>Please wait while we fetch the latest movie data.</p>
             </div>
           ) : moviesError ? (
-            <div style={{ textAlign: 'center', padding: '50px', color: '#dc3545' }}>
+            <div className="error-state">
               <h3>Error loading movies</h3>
               <p>{moviesError}</p>
               <button 
                 className="btn btn-primary"
                 onClick={fetchMovies}
-                style={{ marginTop: '20px' }}
               >
                 Try Again
               </button>
             </div>
           ) : filteredMovies.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '50px', color: '#6c757d' }}>
+            <div className="empty-state">
               <h3>No movies found</h3>
               <p>{movieSearchTerm ? 'Try adjusting your search terms.' : 'No movies have been added yet.'}</p>
             </div>

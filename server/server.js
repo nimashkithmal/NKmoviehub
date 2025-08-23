@@ -10,12 +10,21 @@ const movieRoutes = require('./routes/movies');
 const path = require('path');
 dotenv.config({ path: path.join(__dirname, 'config.env') });
 
+// Validate required environment variables
+const requiredEnvVars = ['JWT_SECRET', 'MONGODB_URI'];
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:', missingEnvVars);
+  process.exit(1);
+}
+
 // Fallback: manually set environment variables if dotenv fails
 if (!process.env.CLOUDINARY_CLOUD_NAME) {
   process.env.CLOUDINARY_CLOUD_NAME = 'dmjhodvge';
   process.env.CLOUDINARY_API_KEY = '869289811975563';
   process.env.CLOUDINARY_API_SECRET = '0N4n4B6JfqHrY_Pev2vEbn8P80U';
-  console.log('⚠️  Using fallback environment variables');
+  console.log('⚠️  Using fallback Cloudinary environment variables');
 }
 
 const app = express();
@@ -51,16 +60,18 @@ app.get('/api/health', (req, res) => {
     status: 'OK', 
     message: 'NKMovieHUB Server is running',
     timestamp: new Date().toISOString(),
-    database: 'Connected'
+    database: 'Connected',
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Server error:', err.stack);
   res.status(500).json({ 
     success: false, 
-    message: 'Something went wrong!' 
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
   });
 });
 
@@ -77,4 +88,6 @@ app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`🌐 Server URL: http://localhost:${PORT}`);
   console.log(`📚 API Documentation: http://localhost:${PORT}/api/health`);
+  console.log(`🔐 JWT Secret: ${process.env.JWT_SECRET ? 'Configured' : 'Missing'}`);
+  console.log(`☁️  Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Configured' : 'Missing'}`);
 }); 

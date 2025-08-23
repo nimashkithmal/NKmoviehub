@@ -10,10 +10,14 @@ const Register = () => {
     confirmPassword: ''
   });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   
   const { register } = useAuth();
   const navigate = useNavigate();
+
+  // Don't redirect immediately - let the form submission handle it
+  // This prevents the immediate redirect issue
 
   const handleChange = (e) => {
     setFormData({
@@ -61,12 +65,17 @@ const Register = () => {
       const result = await register(formData.name, formData.email, formData.password);
       
       if (result.success) {
-        navigate('/');
+        setSuccess('Account created successfully! Redirecting...');
+        // Add a longer delay to show success state before redirecting
+        setTimeout(() => {
+          navigate('/');
+        }, 2000);
       } else {
-        setError(result.error || 'Registration failed');
+        setError(result.error || 'Registration failed. Please try again.');
       }
     } catch (error) {
-      setError('An unexpected error occurred');
+      console.error('Registration error:', error);
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -80,6 +89,12 @@ const Register = () => {
         {error && (
           <div className="alert alert-error">
             {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="alert alert-success">
+            {success}
           </div>
         )}
         

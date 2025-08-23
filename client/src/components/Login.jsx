@@ -8,10 +8,14 @@ const Login = () => {
     password: ''
   });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Don't redirect immediately - let the form submission handle it
+  // This prevents the immediate redirect issue
 
   const handleChange = (e) => {
     setFormData({
@@ -33,19 +37,26 @@ const Login = () => {
 
     try {
       const result = await login(formData.email, formData.password);
+      console.log('Login result:', result);
       
       if (result.success) {
-        // Redirect based on user role or specific credentials
-        if (result.redirectTo === 'admin') {
-          navigate('/admin');
-        } else {
-          navigate('/');
-        }
+        console.log('Login successful, setting success message');
+        setSuccess('Login successful! Redirecting...');
+        // Add a longer delay to show success state before redirecting
+        setTimeout(() => {
+          console.log('Timeout completed, navigating to:', result.redirectTo === 'admin' ? '/admin' : '/');
+          if (result.redirectTo === 'admin') {
+            navigate('/admin');
+          } else {
+            navigate('/');
+          }
+        }, 2000);
       } else {
-        setError(result.error || 'Login failed');
+        setError(result.error || 'Login failed. Please check your credentials.');
       }
     } catch (error) {
-      setError('An unexpected error occurred');
+      console.error('Login error:', error);
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -59,6 +70,12 @@ const Login = () => {
         {error && (
           <div className="alert alert-error">
             {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="alert alert-success">
+            {success}
           </div>
         )}
         

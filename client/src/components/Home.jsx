@@ -11,6 +11,25 @@ const Home = () => {
   const [selectedYear, setSelectedYear] = useState('');
   const [userRatings, setUserRatings] = useState({});
   const [ratingLoading, setRatingLoading] = useState({});
+  const [showGenrePanel, setShowGenrePanel] = useState(false);
+  const [showYearPanel, setShowYearPanel] = useState(false);
+
+  // Close panels when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showGenrePanel && !event.target.closest('.filter-select-group')) {
+        setShowGenrePanel(false);
+      }
+      if (showYearPanel && !event.target.closest('.filter-select-group')) {
+        setShowYearPanel(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showGenrePanel, showYearPanel]);
 
   // Fetch movies from backend
   const fetchMovies = useCallback(async () => {
@@ -26,7 +45,8 @@ const Home = () => {
       const response = await fetch(url);
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
@@ -38,7 +58,7 @@ const Home = () => {
       }
     } catch (err) {
       console.error('Error fetching movies:', err);
-      setError(err.message);
+      setError(err.message || 'Failed to load movies. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -51,7 +71,9 @@ const Home = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchMovies();
+    if (searchTerm.trim()) {
+      fetchMovies();
+    }
   };
 
   const clearFilters = () => {
@@ -139,17 +161,51 @@ const Home = () => {
             : movie
         ));
 
-        alert(result.message);
+        // Show success message
+        const successMessage = result.message || 'Rating submitted successfully!';
+        showNotification(successMessage, 'success');
       } else {
         const errorData = await response.json();
-        alert(errorData.message || 'Failed to rate movie');
+        const errorMessage = errorData.message || 'Failed to rate movie';
+        showNotification(errorMessage, 'error');
       }
     } catch (err) {
       console.error('Error rating movie:', err);
-      alert('Failed to rate movie. Please try again.');
+      showNotification('Failed to rate movie. Please try again.', 'error');
     } finally {
       setRatingLoading(prev => ({ ...prev, [movieId]: false }));
     }
+  };
+
+  // Notification system
+  const showNotification = (message, type = 'info') => {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+      <div class="notification-content">
+        <span class="notification-message">${message}</span>
+        <button class="notification-close">×</button>
+      </div>
+    `;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 5000);
+    
+    // Close button functionality
+    const closeBtn = notification.querySelector('.notification-close');
+    closeBtn.addEventListener('click', () => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    });
   };
 
   // Fetch user ratings when movies change
@@ -169,70 +225,191 @@ const Home = () => {
         {/* Search and Filters */}
         <div className="movie-filters">
           <form onSubmit={handleSearch} className="search-form">
-            <div className="filter-row">
-              <input
-                type="text"
-                placeholder="Search movies by title, description, or genre..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="search-input"
-              />
-              <select
-                value={selectedGenre}
-                onChange={(e) => setSelectedGenre(e.target.value)}
-                className="filter-select"
-              >
-                <option value="">All Genres</option>
-                {genres.map(genre => (
-                  <option key={genre} value={genre}>{genre}</option>
-                ))}
-              </select>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-                className="filter-select"
-              >
-                <option value="">All Years</option>
-                {years.map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-              <button type="submit" className="btn btn-primary">
-                Search
-              </button>
+            {/* Search Bar */}
+            <div className="search-section">
+              <div className="search-input-wrapper">
+                <input
+                  type="text"
+                  placeholder="Search movies by title, description, or genre..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="search-input"
+                />
+                <button type="submit" className="search-btn">
+                  🔍 Search
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Controls */}
+            <div className="filter-controls">
+              {/* Genre Select */}
+              <div className="filter-select-group">
+                <label className="filter-label">Genre</label>
+                <div className="select-button-wrapper">
+                  <button
+                    type="button"
+                    className={`select-button ${selectedGenre ? 'has-selection' : ''}`}
+                    onClick={() => setShowGenrePanel(!showGenrePanel)}
+                  >
+                    <span className="select-button-text">
+                      {selectedGenre || 'All Genres'}
+                    </span>
+                    <span className={`select-arrow ${showGenrePanel ? 'rotated' : ''}`}>
+                      ▼
+                    </span>
+                  </button>
+                  
+                  {showGenrePanel && (
+                    <div className="select-panel genre-panel">
+                      <div className="panel-header">
+                        <h4>Select Genre</h4>
+                        <button
+                          type="button"
+                          className="close-panel-btn"
+                          onClick={() => setShowGenrePanel(false)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="panel-options">
+                        <button
+                          type="button"
+                          className={`panel-option ${selectedGenre === '' ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedGenre('');
+                            setShowGenrePanel(false);
+                          }}
+                        >
+                          All Genres
+                        </button>
+                        {genres.map(genre => (
+                          <button
+                            key={genre}
+                            type="button"
+                            className={`panel-option ${selectedGenre === genre ? 'selected' : ''}`}
+                            onClick={() => {
+                              setSelectedGenre(genre);
+                              setShowGenrePanel(false);
+                            }}
+                          >
+                            {genre}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Year Select */}
+              <div className="filter-select-group">
+                <label className="filter-label">Release Year</label>
+                <div className="select-button-wrapper">
+                  <button
+                    type="button"
+                    className={`select-button ${selectedYear ? 'has-selection' : ''}`}
+                    onClick={() => setShowYearPanel(!showYearPanel)}
+                  >
+                    <span className="select-button-text">
+                      {selectedYear || 'All Years'}
+                    </span>
+                    <span className={`select-arrow ${showYearPanel ? 'rotated' : ''}`}>
+                      ▼
+                    </span>
+                  </button>
+                  
+                  {showYearPanel && (
+                    <div className="select-panel year-panel">
+                      <div className="panel-header">
+                        <h4>Select Year</h4>
+                        <button
+                          type="button"
+                          className="close-panel-btn"
+                          onClick={() => setShowYearPanel(false)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="panel-options">
+                        <button
+                          type="button"
+                          className={`panel-option ${selectedYear === '' ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedYear('');
+                            setShowYearPanel(false);
+                          }}
+                        >
+                          All Years
+                        </button>
+                        {years.map(year => (
+                          <button
+                            key={year}
+                            type="button"
+                            className={`panel-option ${selectedYear === year ? 'selected' : ''}`}
+                            onClick={() => {
+                              setSelectedYear(year);
+                              setShowYearPanel(false);
+                            }}
+                          >
+                            {year}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="filter-actions">
               <button 
                 type="button" 
-                className="btn btn-secondary"
+                className="btn btn-secondary clear-btn"
                 onClick={clearFilters}
               >
-                Clear
+                🗑️ Clear All Filters
               </button>
+              <div className="filter-summary">
+                {searchTerm && <span className="filter-tag">Search: {searchTerm}</span>}
+                {selectedGenre && <span className="filter-tag">Genre: {selectedGenre}</span>}
+                {selectedYear && <span className="filter-tag">Year: {selectedYear}</span>}
+              </div>
             </div>
           </form>
         </div>
 
         {/* Movies Display */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '50px' }}>
+          <div className="loading-state">
+            <div className="loading-spinner"></div>
             <h3>Loading movies...</h3>
-            <p>Please wait while we fetch the latest movies.</p>
+            <p>Please wait while we fetch the latest movies from our collection.</p>
           </div>
         ) : error ? (
-          <div style={{ textAlign: 'center', padding: '50px', color: '#dc3545' }}>
+          <div className="error-state">
             <h3>Error loading movies</h3>
             <p>{error}</p>
             <button 
               className="btn btn-primary"
               onClick={fetchMovies}
-              style={{ marginTop: '20px' }}
             >
               Try Again
             </button>
           </div>
         ) : movies.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '50px', color: '#6c757d' }}>
+          <div className="empty-state">
             <h3>No movies found</h3>
-            <p>{searchTerm || selectedGenre || selectedYear ? 'Try adjusting your search terms.' : 'No movies have been added yet.'}</p>
+            <p>{searchTerm || selectedGenre || selectedYear ? 'Try adjusting your search terms or filters.' : 'No movies have been added to the collection yet.'}</p>
+            {!searchTerm && !selectedGenre && !selectedYear && (
+              <button 
+                className="btn btn-primary"
+                onClick={fetchMovies}
+              >
+                Refresh Movies
+              </button>
+            )}
           </div>
         ) : (
           <div className="movies-grid">

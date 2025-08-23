@@ -6,6 +6,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import AdminDashboard from './components/AdminDashboard';
 import AddMovie from './components/AddMovie';
+import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import './App.css';
 
@@ -26,41 +27,43 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router
-        future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true
-        }}
-      >
-        <div className="App">
-          <Navbar />
-          <main className="container">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route 
-                path="/admin" 
-                element={
-                  <ProtectedRoute adminOnly={true}>
-                    <AdminDashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/add-movie" 
-                element={
-                  <ProtectedRoute adminOnly={true}>
-                    <AddMovie />
-                  </ProtectedRoute>
-                } 
-              />
-            </Routes>
-          </main>
-        </div>
-      </Router>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true
+          }}
+        >
+          <div className="App">
+            <Navbar />
+            <main className="container">
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route 
+                  path="/admin" 
+                  element={
+                    <ProtectedRoute adminOnly={true}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/add-movie" 
+                  element={
+                    <ProtectedRoute adminOnly={true}>
+                      <AddMovie />
+                    </ProtectedRoute>
+                  } 
+                />
+              </Routes>
+            </main>
+          </div>
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
