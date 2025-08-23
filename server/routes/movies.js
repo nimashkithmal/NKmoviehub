@@ -492,7 +492,10 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
     console.log('Updating admin fields for movie:', movieId, {
       hasImdbRating: imdbRating !== undefined,
       hasDownloadUrl: downloadUrl !== undefined,
-      hasImageFile: !!imageFile
+      hasImageFile: !!imageFile,
+      imageFileType: typeof imageFile,
+      imageFileLength: imageFile ? imageFile.length : 0,
+      imageFileStart: imageFile ? imageFile.substring(0, 50) : 'N/A'
     });
 
     // Check for validation errors
@@ -518,9 +521,19 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
     if (imageFile) {
       try {
         console.log('Starting image update to Cloudinary...');
+        console.log('Image file received:', {
+          type: typeof imageFile,
+          length: imageFile.length,
+          startsWithData: imageFile.startsWith('data:image/'),
+          firstChars: imageFile.substring(0, 100)
+        });
         
         // Validate image format
         if (typeof imageFile !== 'string' || !imageFile.startsWith('data:image/')) {
+          console.error('Image validation failed:', {
+            type: typeof imageFile,
+            startsWithData: imageFile ? imageFile.startsWith('data:image/') : false
+          });
           return res.status(400).json({
             success: false,
             message: 'Invalid image format. Please provide a valid image file.'
@@ -530,6 +543,7 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
         // Store old image URL for potential cleanup
         const oldImageUrl = movie.imageUrl;
 
+        console.log('Uploading to Cloudinary...');
         // Upload new image to Cloudinary
         const uploadResult = await cloudinary.uploader.upload(imageFile, {
           folder: 'nkmoviehub',
@@ -558,6 +572,11 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
         
       } catch (uploadError) {
         console.error('Image upload error:', uploadError);
+        console.error('Error details:', {
+          name: uploadError.name,
+          message: uploadError.message,
+          stack: uploadError.stack
+        });
         return res.status(500).json({
           success: false,
           message: 'Failed to upload image: ' + uploadError.message
@@ -574,10 +593,32 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
       movie.downloadUrl = downloadUrl;
     }
 
-    await movie.save();
+    console.log('Saving movie with updated data...');
+    console.log('Updated movie data:', {
+      imageUrl: movie.imageUrl,
+      imdbRating: movie.imdbRating,
+      downloadUrl: movie.downloadUrl
+    });
+
+    try {
+      await movie.save();
+      console.log('Movie saved successfully');
+    } catch (saveError) {
+      console.error('Error saving movie:', saveError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to save movie: ' + saveError.message
+      });
+    }
 
     // Populate addedBy field
-    await movie.populate('addedBy', 'name email');
+    try {
+      await movie.populate('addedBy', 'name email');
+      console.log('Movie populated successfully');
+    } catch (populateError) {
+      console.error('Error populating movie:', populateError);
+      // Continue anyway - not critical
+    }
 
     res.json({
       success: true,

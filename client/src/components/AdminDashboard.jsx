@@ -419,9 +419,17 @@ const AdminDashboard = () => {
   const handleUpdateAdminFields = async (movieId, imdbRating, downloadUrl, imageFile) => {
     try {
       const updateData = {};
-      if (imdbRating !== undefined) updateData.imdbRating = imdbRating;
-      if (downloadUrl !== undefined) updateData.downloadUrl = downloadUrl;
-      if (imageFile !== undefined) updateData.imageFile = imageFile;
+      if (imdbRating !== null && imdbRating !== undefined) updateData.imdbRating = imdbRating;
+      if (downloadUrl !== null && downloadUrl !== undefined) updateData.downloadUrl = downloadUrl;
+      if (imageFile !== null && imageFile !== undefined) updateData.imageFile = imageFile;
+      
+      console.log('Sending update data:', {
+        movieId,
+        hasImdbRating: imdbRating !== null && imdbRating !== undefined,
+        hasDownloadUrl: downloadUrl !== null && downloadUrl !== undefined,
+        hasImageFile: imageFile !== null && imageFile !== undefined,
+        imageFileLength: imageFile ? imageFile.length : 0
+      });
 
       const response = await fetch(`http://localhost:5001/api/movies/${movieId}/update-admin-fields`, {
         method: 'PUT',
@@ -432,20 +440,28 @@ const AdminDashboard = () => {
         body: JSON.stringify(updateData)
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Response error:', errorData);
         throw new Error(errorData.message || 'Failed to update movie');
       }
 
       const result = await response.json();
+      console.log('Response result:', result);
       
       if (result.success) {
+        // Always refresh movies list to show updates
         await fetchMovies();
         alert('Movie updated successfully!');
       }
+      return result; // Return the result for the handleImageUpdate function
     } catch (err) {
       console.error('Error updating movie:', err);
       alert(`Error updating movie: ${err.message}`);
+      return { success: false, message: err.message }; // Return a failure result
     }
   };
 
@@ -471,14 +487,41 @@ const AdminDashboard = () => {
       }
 
       try {
+        // Show loading state
+        const updateBtn = document.querySelector(`[data-movie-id="${movieId}"] .update-image-btn`);
+        if (updateBtn) {
+          updateBtn.textContent = '🔄 Uploading...';
+          updateBtn.disabled = true;
+        }
+
         // Convert to base64
         const base64Image = await convertImageToBase64(file);
         
         // Update the movie image
-        await handleUpdateAdminFields(movieId, undefined, undefined, base64Image);
+        console.log('Calling handleUpdateAdminFields with image...');
+        const result = await handleUpdateAdminFields(movieId, null, null, base64Image);
+        console.log('Result from handleUpdateAdminFields:', result);
+        
+        if (result && result.success) {
+          // Refresh the movies list to show the updated image
+          console.log('Image update successful, refreshing movies list...');
+          await fetchMovies();
+          alert('Image updated successfully!');
+        } else {
+          const errorMsg = result?.message || 'Failed to update image. Please try again.';
+          console.error('Image update failed:', errorMsg);
+          alert(`Failed to update image: ${errorMsg}`);
+        }
       } catch (error) {
         console.error('Error processing image:', error);
         alert('Failed to process image. Please try again.');
+      } finally {
+        // Reset button state
+        const updateBtn = document.querySelector(`[data-movie-id="${movieId}"] .update-image-btn`);
+        if (updateBtn) {
+          updateBtn.textContent = '📷 Update';
+          updateBtn.disabled = false;
+        }
       }
     };
     
@@ -796,7 +839,7 @@ const AdminDashboard = () => {
               </thead>
               <tbody>
                 {filteredMovies.map(movie => (
-                  <tr key={movie._id}>
+                  <tr key={movie._id} data-movie-id={movie._id}>
                     <td>
                       <div className="movie-image-update">
                         <img 
@@ -806,6 +849,7 @@ const AdminDashboard = () => {
                         />
                         <button 
                           className="update-image-btn"
+                          data-movie-id={movie._id}
                           onClick={() => handleImageUpdate(movie._id)}
                         >
                           📷 Update
