@@ -298,9 +298,16 @@ const Home = () => {
                       href={movie.movieUrl} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="btn btn-primary"
+                      className="btn btn-primary watch-btn"
                     >
-                      Watch Movie
+                      🎬 Watch Movie
+                    </a>
+                    <a 
+                      href={movie.movieUrl} 
+                      download
+                      className="btn btn-secondary download-btn"
+                    >
+                      ⬇️ Download
                     </a>
                   </div>
                 </div>
