@@ -13,6 +13,8 @@ const AddMovie = () => {
     description: '',
     genre: '',
     movieUrl: '',
+    downloadUrl: '',
+    rating: 0,
     imageFile: null
   });
   const [imagePreview, setImagePreview] = useState(null);
@@ -22,6 +24,13 @@ const AddMovie = () => {
     setFormData(prev => ({
       ...prev,
       [name]: value
+    }));
+  };
+
+  const handleRatingChange = (rating) => {
+    setFormData(prev => ({
+      ...prev,
+      rating: parseInt(rating)
     }));
   };
 
@@ -60,6 +69,11 @@ const AddMovie = () => {
     
     if (!formData.imageFile) {
       setError('Please select an image');
+      return;
+    }
+
+    if (formData.rating < 0 || formData.rating > 10) {
+      setError('Rating must be between 0 and 10');
       return;
     }
 
@@ -114,6 +128,8 @@ const AddMovie = () => {
       description: '',
       genre: '',
       movieUrl: '',
+      downloadUrl: '',
+      rating: 0,
       imageFile: null
     });
     setImagePreview(null);
@@ -197,16 +213,55 @@ const AddMovie = () => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="movieUrl">Movie URL *</label>
+              <label htmlFor="rating">Initial Rating (0-10) *</label>
+              <div className="rating-input">
+                <input
+                  type="number"
+                  id="rating"
+                  name="rating"
+                  value={formData.rating}
+                  onChange={handleInputChange}
+                  min="0"
+                  max="10"
+                  step="0.1"
+                  required
+                  className="rating-number-input"
+                />
+                <div className="rating-display">
+                  <span className="rating-label">Rating: </span>
+                  <span className="rating-value">{formData.rating}/10</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="movieUrl">Movie URL (Watch) *</label>
               <input
                 type="url"
                 id="movieUrl"
                 name="movieUrl"
                 value={formData.movieUrl}
                 onChange={handleInputChange}
-                placeholder="https://example.com/movie"
+                placeholder="https://example.com/watch/movie"
                 required
               />
+              <small>URL where users can watch the movie</small>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="downloadUrl">Movie Download URL *</label>
+              <input
+                type="url"
+                id="downloadUrl"
+                name="downloadUrl"
+                value={formData.downloadUrl}
+                onChange={handleInputChange}
+                placeholder="https://example.com/download/movie"
+                required
+              />
+              <small>URL where users can download the movie</small>
             </div>
           </div>
 

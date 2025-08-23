@@ -254,7 +254,7 @@ const Home = () => {
                     <span className="movie-genre">{movie.genre}</span>
                     <div className="movie-rating-info">
                       <span className="movie-rating">
-                        ⭐ {movie.averageRating ? movie.averageRating.toFixed(1) : '0.0'}/10
+                        ⭐ {movie.averageRating ? movie.averageRating.toFixed(1) : movie.rating ? movie.rating.toFixed(1) : '0.0'}/10
                       </span>
                       <span className="rating-count">
                         ({movie.totalRatings || 0} ratings)
@@ -302,8 +302,9 @@ const Home = () => {
                       🎬 Watch Movie
                     </a>
                     <a 
-                      href={movie.movieUrl} 
-                      download
+                      href={movie.downloadUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
                       className="btn btn-secondary download-btn"
                     >
                       ⬇️ Download

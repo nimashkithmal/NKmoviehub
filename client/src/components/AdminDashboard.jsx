@@ -28,6 +28,7 @@ const AdminDashboard = () => {
     description: '',
     genre: '',
     movieUrl: '',
+    downloadUrl: '',
     rating: 0
   });
   const [stats, setStats] = useState({
@@ -311,6 +312,7 @@ const AdminDashboard = () => {
       description: movie.description,
       genre: movie.genre,
       movieUrl: movie.movieUrl,
+      downloadUrl: movie.downloadUrl,
       rating: movie.rating
     });
   };
@@ -347,6 +349,7 @@ const AdminDashboard = () => {
           description: '',
           genre: '',
           movieUrl: '',
+          downloadUrl: '',
           rating: 0
         });
         alert('Movie updated successfully!');
@@ -705,6 +708,7 @@ const AdminDashboard = () => {
                   <th>Year</th>
                   <th>Genre</th>
                   <th>Rating</th>
+                  <th>Download URL</th>
                   <th>Status</th>
                   <th>Added By</th>
                   <th>Actions</th>
@@ -747,6 +751,21 @@ const AdminDashboard = () => {
                       }}>
                         {movie.rating}/10
                       </span>
+                    </td>
+                    <td>
+                      <a 
+                        href={movie.downloadUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ 
+                          color: '#007bff', 
+                          textDecoration: 'none',
+                          fontSize: '12px',
+                          wordBreak: 'break-all'
+                        }}
+                      >
+                        {movie.downloadUrl ? 'Download Link' : 'N/A'}
+                      </a>
                     </td>
                     <td>
                       <span style={{ 
@@ -987,6 +1006,15 @@ const AdminDashboard = () => {
                 value={movieFormData.movieUrl}
                 onChange={(e) => setMovieFormData({...movieFormData, movieUrl: e.target.value})}
                 placeholder="https://example.com/movie"
+              />
+            </div>
+            <div className="form-group">
+              <label>Download URL</label>
+              <input
+                type="url"
+                value={movieFormData.downloadUrl}
+                onChange={(e) => setMovieFormData({...movieFormData, downloadUrl: e.target.value})}
+                placeholder="https://example.com/download"
               />
             </div>
             <div className="form-group">
