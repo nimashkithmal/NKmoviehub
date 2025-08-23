@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const Home = () => {
-  const { user, isAuthenticated, token } = useAuth();
+  const { isAuthenticated, token } = useAuth();
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -14,7 +13,7 @@ const Home = () => {
   const [ratingLoading, setRatingLoading] = useState({});
 
   // Fetch movies from backend
-  const fetchMovies = async () => {
+  const fetchMovies = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -43,12 +42,12 @@ const Home = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchTerm, selectedGenre, selectedYear]);
 
   // Fetch movies on component mount and when filters change
   useEffect(() => {
     fetchMovies();
-  }, [searchTerm, selectedGenre, selectedYear]);
+  }, [fetchMovies]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -70,7 +69,7 @@ const Home = () => {
   const years = Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i);
 
   // Fetch user ratings for movies
-  const fetchUserRatings = async () => {
+  const fetchUserRatings = useCallback(async () => {
     if (!isAuthenticated) return;
     
     try {
@@ -101,7 +100,7 @@ const Home = () => {
     } catch (err) {
       console.error('Error fetching user ratings:', err);
     }
-  };
+  }, [movies, isAuthenticated, token]);
 
   // Handle movie rating
   const handleRateMovie = async (movieId, rating, review = '') => {
@@ -158,7 +157,7 @@ const Home = () => {
     if (movies.length > 0 && isAuthenticated) {
       fetchUserRatings();
     }
-  }, [movies, isAuthenticated, token]);
+  }, [movies, isAuthenticated, token, fetchUserRatings]);
 
   return (
     <div>

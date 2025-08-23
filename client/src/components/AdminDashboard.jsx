@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -45,7 +45,7 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('users'); // 'users' or 'movies'
 
   // Fetch users from backend
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -91,10 +91,10 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   // Fetch movies from backend
-  const fetchMovies = async () => {
+  const fetchMovies = useCallback(async () => {
     try {
       setMoviesLoading(true);
       setMoviesError(null);
@@ -140,7 +140,7 @@ const AdminDashboard = () => {
     } finally {
       setMoviesLoading(false);
     }
-  };
+  }, [token]);
 
   // Fetch data on component mount
   useEffect(() => {
@@ -148,7 +148,7 @@ const AdminDashboard = () => {
       fetchUsers();
       fetchMovies();
     }
-  }, [token]);
+  }, [token, fetchUsers, fetchMovies]);
 
   const handleAddUser = async () => {
     if (!formData.name || !formData.email || !formData.password) {
@@ -302,46 +302,6 @@ const AdminDashboard = () => {
   };
 
   // Movie management functions
-  const handleAddMovie = async () => {
-    if (!movieFormData.title || !movieFormData.description || !movieFormData.genre || !movieFormData.movieUrl) {
-      alert('Please fill in all required fields');
-      return;
-    }
-
-    try {
-      const response = await fetch('http://localhost:5001/api/movies', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(movieFormData)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create movie');
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        await fetchMovies();
-        setMovieFormData({
-          title: '',
-          year: new Date().getFullYear(),
-          description: '',
-          genre: '',
-          movieUrl: '',
-          rating: 0
-        });
-        alert('Movie created successfully!');
-      }
-    } catch (err) {
-      console.error('Error creating movie:', err);
-      alert(`Error creating movie: ${err.message}`);
-    }
-  };
 
   const handleEditMovie = (movie) => {
     setEditingMovie(movie);
