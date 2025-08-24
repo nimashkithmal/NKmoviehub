@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLocation } from 'react-router-dom';
 
 const Home = () => {
   const { isAuthenticated, token } = useAuth();
+  const location = useLocation();
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -13,6 +15,54 @@ const Home = () => {
   const [ratingLoading, setRatingLoading] = useState({});
   const [showGenrePanel, setShowGenrePanel] = useState(false);
   const [showYearPanel, setShowYearPanel] = useState(false);
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  // Slideshow images - movie-related wallpapers
+  const slideshowImages = [
+    'https://c4.wallpaperflare.com/wallpaper/884/965/115/movies-flash-superman-wonder-woman-wallpaper-preview.jpg',
+    'https://images5.alphacoders.com/840/840870.jpg',
+    'https://wallpapercave.com/wp/wp2592669.jpg',
+    'https://wallup.net/wp-content/uploads/2019/09/06/297529-legend-of-the-seeker-models-tabrett-bethell-cara-mason-748x421.jpg',
+    'https://www.syfy.com/sites/syfy/files/styles/hero_image__large__computer__alt_1_5x/public/2021/01/legends-of-tomorrow.jpg',
+    'https://www.chromethemer.com/wallpapers/chromebook-wallpapers/images/960/marvel-logo-chromebook-wallpaper.jpg',
+    'https://wallpapers.com/images/high/4k-avengers-infinity-war-whole-cast-gx5riyd6eqklm4hf.webp',
+    'https://4kwallpapers.com/images/walls/thumbs_3t/11941.jpg',
+    'https://www.pixelstalk.net/wp-content/uploads/2016/01/Harry-Potter-7-Wallpaper-HD-Free.jpg'
+  ];
+
+  // Handle URL parameters from navbar search
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const searchParam = params.get('search');
+    const genreParam = params.get('genre');
+    const yearParam = params.get('year');
+    
+    if (searchParam) setSearchTerm(searchParam);
+    if (genreParam) setSelectedGenre(genreParam);
+    if (yearParam) setSelectedYear(yearParam);
+  }, [location.search]);
+
+  // Auto-advance slideshow
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % slideshowImages.length);
+    }, 5000); // Change slide every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [slideshowImages.length]);
+
+  // Manual slide navigation
+  const goToSlide = (index) => {
+    setCurrentSlide(index);
+  };
+
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev + 1) % slideshowImages.length);
+  };
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev - 1 + slideshowImages.length) % slideshowImages.length);
+  };
 
   // Close panels when clicking outside
   useEffect(() => {
@@ -69,18 +119,61 @@ const Home = () => {
     fetchMovies();
   }, [fetchMovies]);
 
-  const handleSearch = (e) => {
+  const handleSearch = useCallback((e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
       fetchMovies();
     }
-  };
+  }, [searchTerm, fetchMovies]);
 
-  const clearFilters = () => {
+  // Add loading state for search
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Update fetchMovies to show search loading state
+  const fetchMoviesWithLoading = useCallback(async () => {
+    if (searchTerm.trim() || selectedGenre || selectedYear) {
+      setIsSearching(true);
+    }
+    
+    try {
+      await fetchMovies();
+    } finally {
+      setIsSearching(false);
+    }
+  }, [searchTerm, selectedGenre, selectedYear, fetchMovies]);
+
+  // Immediate search for short terms (1-2 characters)
+  useEffect(() => {
+    if (searchTerm.trim().length <= 2 && searchTerm.trim()) {
+      fetchMovies();
+    }
+  }, [searchTerm]);
+
+  // Auto-search when search term or filters change (for longer terms)
+  useEffect(() => {
+    if (searchTerm.trim().length > 2) {
+      const timeoutId = setTimeout(() => {
+        fetchMovies();
+      }, 200); // Very short delay for longer terms
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [searchTerm, selectedGenre, selectedYear]);
+
+  // Immediate search for genre and year changes
+  useEffect(() => {
+    if (selectedGenre || selectedYear) {
+      fetchMovies();
+    }
+  }, [selectedGenre, selectedYear]);
+
+  const clearFilters = useCallback(() => {
     setSearchTerm('');
     setSelectedGenre('');
     setSelectedYear('');
-  };
+    // Clear URL parameters
+    window.history.pushState({}, '', '/');
+  }, []);
 
   const genres = [
     'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary',
@@ -216,287 +309,255 @@ const Home = () => {
   }, [movies, isAuthenticated, token, fetchUserRatings]);
 
   return (
+    
     <div>
-      
       {/* Movie Browsing Section */}
       <div className="card">
+        {/* Slideshow Wallpaper */}
+        <div className="slideshow-container">
+          <div className="slideshow-wrapper">
+            {slideshowImages.map((image, index) => (
+              <div
+                key={index}
+                className={`slide ${index === currentSlide ? 'active' : ''}`}
+                style={{
+                  backgroundImage: `url(${image})`,
+                  transform: `translateX(${(index - currentSlide) * 100}%)`
+                }}
+              />
+            ))}
+          </div>
+          
+          {/* Text Overlay */}
+          <div className="slideshow-overlay">
+            <div className="slideshow-content">
+              <h3>🎬 Welcome to NK Movie Hub</h3>
+              <p>Discover thousands of amazing films from every genre, era, and culture</p>
+              <div className="slideshow-features">
+                <span className="feature-tag">✨ Latest Releases</span>
+                <span className="feature-tag">🎭 All Genres</span>
+                <span className="feature-tag">⭐ User Ratings</span>
+              </div>
+              
+              
+            </div>
+          </div>
+          
+          {/* Navigation Arrows */}
+          <button className="slideshow-nav prev" onClick={prevSlide}>
+            ‹
+          </button>
+          <button className="slideshow-nav next" onClick={nextSlide}>
+            ›
+          </button>
+          
+          {/* Slide Indicators */}
+          <div className="slide-indicators">
+            {slideshowImages.map((_, index) => (
+              <button
+                key={index}
+                className={`indicator ${index === currentSlide ? 'active' : ''}`}
+                onClick={() => goToSlide(index)}
+              />
+            ))}
+          </div>
+        </div>
         <h2>Browse Movies</h2>
         
-        {/* Search and Filters */}
-        <div className="movie-filters">
-          <form onSubmit={handleSearch} className="search-form">
-            {/* Search Bar */}
-            <div className="search-section">
-              <div className="search-input-wrapper">
-                <input
-                  type="text"
-                  placeholder="Search movies by title, description, or genre..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="search-input"
-                />
-                <button type="submit" className="search-btn">
-                  🔍 Search
-                </button>
-              </div>
-            </div>
-
-            {/* Filter Controls */}
-            <div className="filter-controls">
-              {/* Genre Select */}
-              <div className="filter-select-group">
-                <label className="filter-label">Genre</label>
-                <div className="select-button-wrapper">
-                  <button
-                    type="button"
-                    className={`select-button ${selectedGenre ? 'has-selection' : ''}`}
-                    onClick={() => setShowGenrePanel(!showGenrePanel)}
+        {/* Filter Summary */}
+        {(searchTerm || selectedGenre || selectedYear) && (
+          <div className="filter-summary-display">
+            <div className="active-filters">
+              {searchTerm && (
+                <span className="filter-tag">
+                  🔍 Search: {searchTerm}
+                  <button 
+                    className="remove-filter-btn"
+                    onClick={() => {
+                      setSearchTerm('');
+                      const params = new URLSearchParams(location.search);
+                      params.delete('search');
+                      window.history.pushState({}, '', params.toString() ? `/?${params.toString()}` : '/');
+                    }}
                   >
-                    <span className="select-button-text">
-                      {selectedGenre || 'All Genres'}
-                    </span>
-                    <span className={`select-arrow ${showGenrePanel ? 'rotated' : ''}`}>
-                      ▼
-                    </span>
+                    ×
                   </button>
-                  
-                  {showGenrePanel && (
-                    <div className="select-panel genre-panel">
-                      <div className="panel-header">
-                        <h4>Select Genre</h4>
-                        <button
-                          type="button"
-                          className="close-panel-btn"
-                          onClick={() => setShowGenrePanel(false)}
-                        >
-                          ×
-                        </button>
-                      </div>
-                      <div className="panel-options">
-                        <button
-                          type="button"
-                          className={`panel-option ${selectedGenre === '' ? 'selected' : ''}`}
-                          onClick={() => {
-                            setSelectedGenre('');
-                            setShowGenrePanel(false);
-                          }}
-                        >
-                          All Genres
-                        </button>
-                        {genres.map(genre => (
-                          <button
-                            key={genre}
-                            type="button"
-                            className={`panel-option ${selectedGenre === genre ? 'selected' : ''}`}
-                            onClick={() => {
-                              setSelectedGenre(genre);
-                              setShowGenrePanel(false);
-                            }}
-                          >
-                            {genre}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Year Select */}
-              <div className="filter-select-group">
-                <label className="filter-label">Release Year</label>
-                <div className="select-button-wrapper">
-                  <button
-                    type="button"
-                    className={`select-button ${selectedYear ? 'has-selection' : ''}`}
-                    onClick={() => setShowYearPanel(!showYearPanel)}
+                </span>
+              )}
+              {selectedGenre && (
+                <span className="filter-tag">
+                  🎭 Genre: {selectedGenre}
+                  <button 
+                    className="remove-filter-btn"
+                    onClick={() => {
+                      setSelectedGenre('');
+                      const params = new URLSearchParams(location.search);
+                      params.delete('genre');
+                      window.history.pushState({}, '', params.toString() ? `/?${params.toString()}` : '/');
+                    }}
                   >
-                    <span className="select-button-text">
-                      {selectedYear || 'All Years'}
-                    </span>
-                    <span className={`select-arrow ${showYearPanel ? 'rotated' : ''}`}>
-                      ▼
-                    </span>
+                    ×
                   </button>
-                  
-                  {showYearPanel && (
-                    <div className="select-panel year-panel">
-                      <div className="panel-header">
-                        <h4>Select Year</h4>
-                        <button
-                          type="button"
-                          className="close-panel-btn"
-                          onClick={() => setShowYearPanel(false)}
-                        >
-                          ×
-                        </button>
-                      </div>
-                      <div className="panel-options">
-                        <button
-                          type="button"
-                          className={`panel-option ${selectedYear === '' ? 'selected' : ''}`}
-                          onClick={() => {
-                            setSelectedYear('');
-                            setShowYearPanel(false);
-                          }}
-                        >
-                          All Years
-                        </button>
-                        {years.map(year => (
-                          <button
-                            key={year}
-                            type="button"
-                            className={`panel-option ${selectedYear === year ? 'selected' : ''}`}
-                            onClick={() => {
-                              setSelectedYear(year);
-                              setShowYearPanel(false);
-                            }}
-                          >
-                            {year}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+                </span>
+              )}
+              {selectedYear && (
+                <span className="filter-tag">
+                  📅 Year: {selectedYear}
+                  <button 
+                    className="remove-filter-btn"
+                    onClick={() => {
+                      setSelectedYear('');
+                      const params = new URLSearchParams(location.search);
+                      params.delete('year');
+                      window.history.pushState({}, '', params.toString() ? `/?${params.toString()}` : '/');
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              )}
             </div>
-
-            {/* Action Buttons */}
-            <div className="filter-actions">
-              <button 
-                type="button" 
-                className="btn btn-secondary clear-btn"
-                onClick={clearFilters}
-              >
-                🗑️ Clear All Filters
-              </button>
-              <div className="filter-summary">
-                {searchTerm && <span className="filter-tag">Search: {searchTerm}</span>}
-                {selectedGenre && <span className="filter-tag">Genre: {selectedGenre}</span>}
-                {selectedYear && <span className="filter-tag">Year: {selectedYear}</span>}
-              </div>
-            </div>
-          </form>
-        </div>
-
-        {/* Movies Display */}
-        {loading ? (
-          <div className="loading-state">
-            <div className="loading-spinner"></div>
-            <h3>Loading movies...</h3>
-            <p>Please wait while we fetch the latest movies from our collection.</p>
-          </div>
-        ) : error ? (
-          <div className="error-state">
-            <h3>Error loading movies</h3>
-            <p>{error}</p>
             <button 
-              className="btn btn-primary"
-              onClick={fetchMovies}
+              className="clear-all-filters-btn"
+              onClick={clearFilters}
             >
-              Try Again
+              ✕ Clear All
             </button>
           </div>
-        ) : movies.length === 0 ? (
-          <div className="empty-state">
-            <h3>No movies found</h3>
-            <p>{searchTerm || selectedGenre || selectedYear ? 'Try adjusting your search terms or filters.' : 'No movies have been added to the collection yet.'}</p>
-            {!searchTerm && !selectedGenre && !selectedYear && (
+        )}
+
+        {/* Search Status Indicator */}
+        {isSearching && (
+          <div className="search-status-home">
+            <span className="search-indicator-home">🔍 Searching...</span>
+          </div>
+        )}
+
+        {/* Movies Display */}
+        <div id="movies-section">
+          {loading ? (
+            <div className="loading-state">
+              <div className="loading-spinner"></div>
+              <h3>Loading movies...</h3>
+              <p>Please wait while we fetch the latest movies from our collection.</p>
+            </div>
+          ) : error ? (
+            <div className="error-state">
+              <h3>Error loading movies</h3>
+              <p>{error}</p>
               <button 
                 className="btn btn-primary"
                 onClick={fetchMovies}
               >
                 Refresh Movies
               </button>
-            )}
-          </div>
-        ) : (
-          <div className="movies-grid">
-            {movies.map(movie => (
-              <div key={movie._id} className="movie-card">
-                <div className="movie-image">
-                  {movie.imageUrl ? (
-                    <img src={movie.imageUrl} alt={movie.title} />
-                  ) : (
-                    <div className="movie-placeholder">
-                      <span>🎬</span>
-                    </div>
-                  )}
-                </div>
-                <div className="movie-info">
-                  <h3>{movie.title}</h3>
-                  <div className="movie-meta">
-                    <span className="movie-year">{movie.year}</span>
-                    <span className="movie-genre">{movie.genre}</span>
-                    <div className="movie-rating-info">
-                      <div className="rating-row">
-                        <span className="movie-rating imdb-rating">
-                          🎬 IMDB: {movie.imdbRating ? movie.imdbRating.toFixed(1) : '0.0'}/10
-                        </span>
-                        <span className="movie-rating user-rating">
-                          ⭐ Users: {movie.averageRating ? movie.averageRating.toFixed(1) : '0.0'}/10
-                        </span>
+            </div>
+          ) : (
+            <div className="movies-grid">
+              {movies.map(movie => (
+                <div key={movie._id} className="movie-card">
+                  <div className="movie-image">
+                    {movie.imageUrl ? (
+                      <img src={movie.imageUrl} alt={movie.title} />
+                    ) : (
+                      <div className="movie-placeholder">
+                        <span>🎬</span>
                       </div>
-                      <span className="rating-count">
-                        ({movie.totalRatings || 0} user ratings)
-                      </span>
-                    </div>
+                    )}
                   </div>
-                  <p className="movie-description">
-                    {movie.description.length > 100 
-                      ? movie.description.substring(0, 100) + '...' 
-                      : movie.description
-                    }
-                  </p>
-                  
-                  {/* Rating Section */}
-                  {isAuthenticated && (
-                    <div className="movie-rating-section">
-                      <div className="rating-stars">
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(star => (
-                          <button
-                            key={star}
-                            type="button"
-                            className={`rating-star ${userRatings[movie._id]?.rating >= star ? 'active' : ''}`}
-                            onClick={() => handleRateMovie(movie._id, star)}
-                            disabled={ratingLoading[movie._id]}
-                          >
-                            {star}
-                          </button>
-                        ))}
-                      </div>
-                      {userRatings[movie._id]?.hasRated && (
-                        <div className="user-rating">
-                          <small>Your rating: {userRatings[movie._id].rating}/10</small>
+                  <div className="movie-info">
+                    <h3>{movie.title}</h3>
+                    <div className="movie-meta">
+                      <span className="movie-year">{movie.year}</span>
+                      <span className="movie-genre">{movie.genre}</span>
+                      <div className="movie-rating-info">
+                        <div className="rating-row">
+                          <span className="movie-rating imdb-rating">
+                            🎬 IMDB: {movie.imdbRating ? movie.imdbRating.toFixed(1) : '0.0'}/10
+                          </span>
+                          <span className="movie-rating user-rating">
+                            ⭐ Users: {movie.averageRating ? movie.averageRating.toFixed(1) : '0.0'}/10
+                          </span>
                         </div>
+                        <span className="rating-count">
+                          ({movie.totalRatings || 0} user ratings)
+                        </span>
+                      </div>
+                    </div>
+                    <p className="movie-description">
+                      {movie.description.length > 100 
+                        ? movie.description.substring(0, 100) + '...' 
+                        : movie.description
+                      }
+                    </p>
+                    
+                    {/* Rating Section */}
+                    {isAuthenticated && (
+                      <div className="movie-rating-section">
+                        <div className="rating-stars">
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(star => (
+                            <button
+                              key={star}
+                              type="button"
+                              className={`rating-star ${userRatings[movie._id]?.rating >= star ? 'active' : ''}`}
+                              onClick={() => handleRateMovie(movie._id, star)}
+                              disabled={ratingLoading[movie._id]}
+                            >
+                              {star}
+                            </button>
+                          ))}
+                        </div>
+                        {userRatings[movie._id]?.hasRated && (
+                          <div className="user-rating">
+                            <small>Your rating: {userRatings[movie._id].rating}/10</small>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    <div className="movie-actions">
+                      {isAuthenticated ? (
+                        <>
+                          <a 
+                            href={movie.movieUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="btn btn-primary watch-btn"
+                          >
+                            🎬 Watch Movie
+                          </a>
+                          <a 
+                            href={movie.downloadUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="btn btn-secondary download-btn"
+                          >
+                            ⬇️ Download
+                          </a>
+                        </>
+                      ) : (
+                        <>
+                          <button 
+                            className="btn btn-primary watch-btn"
+                            onClick={() => showNotification('Please login to watch movies', 'warning')}
+                          >
+                            🎬 Watch Movie
+                          </button>
+                          <button 
+                            className="btn btn-secondary download-btn"
+                            onClick={() => showNotification('Please login to download movies', 'warning')}
+                          >
+                            ⬇️ Download
+                          </button>
+                        </>
                       )}
                     </div>
-                  )}
-                  
-                  <div className="movie-actions">
-                    <a 
-                      href={movie.movieUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="btn btn-primary watch-btn"
-                    >
-                      🎬 Watch Movie
-                    </a>
-                    <a 
-                      href={movie.downloadUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="btn btn-secondary download-btn"
-                    >
-                      ⬇️ Download
-                    </a>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

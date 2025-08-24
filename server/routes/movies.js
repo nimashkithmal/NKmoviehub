@@ -35,8 +35,13 @@ router.get('/', async (req, res) => {
     // Build filter object
     const filter = { status: 'active' };
     
-    if (search) {
-      filter.$text = { $search: search };
+    if (search && search.trim()) {
+      // Use regex search instead of $text for better compatibility
+      filter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { genre: { $regex: search, $options: 'i' } }
+      ];
     }
     
     if (genre) {
