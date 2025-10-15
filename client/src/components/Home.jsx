@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
+import Header from './Header';
 
 const Home = () => {
   const { isAuthenticated, token } = useAuth();
@@ -311,6 +312,9 @@ const Home = () => {
   return (
     
     <div>
+      {/* Header Navigation */}
+      <Header />
+      
       {/* Movie Browsing Section */}
       <div className="card">
         {/* Slideshow Wallpaper */}
