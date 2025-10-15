@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import ContactManagement from './ContactManagement';
 
 const AdminDashboard = () => {
   const { user, token } = useAuth();
@@ -43,7 +44,7 @@ const AdminDashboard = () => {
     averageRating: 0,
     newMoviesThisMonth: 0
   });
-  const [activeTab, setActiveTab] = useState('users'); // 'users' or 'movies'
+  const [activeTab, setActiveTab] = useState('users'); // 'users', 'movies', or 'contacts'
 
   // Notification system
   const showNotification = (message, type = 'info') => {
@@ -631,6 +632,12 @@ const AdminDashboard = () => {
           onClick={() => setActiveTab('movies')}
         >
           Movie Management
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'contacts' ? 'active' : ''}`}
+          onClick={() => setActiveTab('contacts')}
+        >
+          Contact Management
         </button>
       </div>
 
@@ -1267,6 +1274,11 @@ const AdminDashboard = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Contact Management Section */}
+      {activeTab === 'contacts' && (
+        <ContactManagement />
       )}
     </div>
   );

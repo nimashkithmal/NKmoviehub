@@ -44,6 +44,12 @@ const Header = () => {
       dropdown: null
     },
     {
+      icon: '📞',
+      text: 'CONTACT US',
+      path: '/#contact',
+      dropdown: null
+    },
+    {
       icon: '📁',
       text: 'GENRES',
       path: '/genres',
@@ -77,6 +83,15 @@ const Header = () => {
           const moviesSection = document.getElementById('movies-section');
           if (moviesSection) {
             moviesSection.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 100);
+      } else if (category.path === '/#contact') {
+        // Navigate to home and scroll to contact section
+        navigate('/');
+        setTimeout(() => {
+          const contactSection = document.getElementById('contact');
+          if (contactSection) {
+            contactSection.scrollIntoView({ behavior: 'smooth' });
           }
         }, 100);
       }

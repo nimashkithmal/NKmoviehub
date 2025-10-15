@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
 import Header from './Header';
 import MovieGrid from './MovieGrid';
+import ContactSection from './ContactSection';
 import './MovieGrid.css';
 
 const Home = () => {
@@ -437,6 +438,9 @@ const Home = () => {
           )}
         </div>
       </div>
+      
+      {/* Contact Us Section */}
+      <ContactSection />
     </div>
   );
 };

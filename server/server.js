@@ -2,13 +2,16 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/users');
-const movieRoutes = require('./routes/movies');
 
 // Load environment variables
 const path = require('path');
 dotenv.config({ path: path.join(__dirname, 'config.env') });
+
+// Debug environment variables
+console.log('🔍 Environment variables debug:');
+console.log('EMAIL_USER:', process.env.EMAIL_USER);
+console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'Not set');
+console.log('Config file path:', path.join(__dirname, 'config.env'));
 
 // Validate required environment variables
 const requiredEnvVars = ['JWT_SECRET', 'MONGODB_URI'];
@@ -26,6 +29,19 @@ if (!process.env.CLOUDINARY_CLOUD_NAME) {
   process.env.CLOUDINARY_API_SECRET = '0N4n4B6JfqHrY_Pev2vEbn8P80U';
   console.log('⚠️  Using fallback Cloudinary environment variables');
 }
+
+// Fallback: manually set email environment variables if dotenv fails
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  process.env.EMAIL_USER = 'qwe730375@gmail.com';
+  process.env.EMAIL_PASS = 'rvwp miid gpqr clri';
+  console.log('⚠️  Using fallback email environment variables');
+}
+
+// Import routes after environment variables are set
+const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
+const movieRoutes = require('./routes/movies');
+const contactRoutes = require('./routes/contacts');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -53,6 +69,7 @@ mongoose.connect(process.env.MONGODB_URI, {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/movies', movieRoutes);
+app.use('/api/contacts', contactRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
