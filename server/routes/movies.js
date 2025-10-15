@@ -30,7 +30,7 @@ cloudinary.config({
 // @access  Public
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 12, search = '', genre = '', year = '', status = 'active' } = req.query;
+    const { page = 1, limit = 1000, search = '', genre = '', year = '', status = 'active' } = req.query;
     
     // Build filter object
     const filter = { status: 'active' };
@@ -91,7 +91,7 @@ router.get('/', async (req, res) => {
 // @access  Private/Admin
 router.get('/admin', protect, restrictToAdmin, async (req, res) => {
   try {
-    const { page = 1, limit = 20, search = '', genre = '', status = '' } = req.query;
+    const { page = 1, limit = 1000, search = '', genre = '', status = '' } = req.query;
     
     // Build filter object
     const filter = {};
@@ -138,6 +138,34 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while fetching movies'
+    });
+  }
+});
+
+// @route   GET /api/movies/filters
+// @desc    Get unique genres and years for filtering
+// @access  Public
+router.get('/filters', async (req, res) => {
+  try {
+    // Get unique genres
+    const genres = await Movie.distinct('genre', { status: 'active' });
+    
+    // Get unique years, sorted descending
+    const years = await Movie.distinct('year', { status: 'active' });
+    const sortedYears = years.sort((a, b) => b - a);
+    
+    res.json({
+      success: true,
+      data: {
+        genres: genres.sort(),
+        years: sortedYears
+      }
+    });
+  } catch (error) {
+    console.error('Get filters error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching filters'
     });
   }
 });

@@ -308,22 +308,22 @@ code {
 /* Beautiful Logo Styles - Dark Theme */
 .brand-container {
   display: flex;
-  align-items: center;
-  gap: var(--space-md);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
   text-decoration: none;
   transition: all var(--transition-normal);
-  padding: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
   border-radius: var(--radius-lg);
   min-width: 0;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--gray-200);
+  border: 1px solid var(--gray-300);
 }
 
 .brand-container:hover {
   transform: scale(1.02);
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: var(--gray-100);
+  border-color: var(--primary-color);
 }
 
 /* Logo Icon */
@@ -380,36 +380,39 @@ code {
 /* Brand Text */
 .brand-text {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-xs);
+  align-items: baseline;
+  gap: 2px;
   flex-shrink: 0;
   min-width: 0;
+  font-family: 'Arial', sans-serif;
+  font-weight: 900;
+  font-size: var(--font-size-3xl);
+  line-height: 1;
 }
 
-.brand-main {
-  font-size: var(--font-size-2xl);
-  font-weight: 800;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  line-height: 1;
-  margin: 0;
-  letter-spacing: -0.02em;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  display: block;
-  white-space: nowrap;
+.brand-nk {
+  color: var(--primary-color);
+  font-size: var(--font-size-3xl);
+}
+
+.brand-movie {
+  color: var(--white);
+  font-size: var(--font-size-3xl);
+}
+
+.brand-hub {
+  color: #ef4444;
+  font-size: var(--font-size-3xl);
 }
 
 .brand-tagline {
   font-size: var(--font-size-xs);
-  color: var(--gray-400);
-  font-weight: 500;
+  color: var(--gray-500);
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   margin: 0;
-  opacity: 0.8;
+  font-family: 'Arial', sans-serif;
 }
 
 /* Logo Badge */
@@ -482,6 +485,7 @@ code {
   list-style: none;
   gap: var(--space-xl);
   align-items: center;
+  margin-left: auto;
 }
 
 .navbar-nav a {
@@ -513,6 +517,32 @@ code {
 
 .navbar-nav a:hover::after {
   width: 100%;
+}
+
+/* Navbar Icon Button */
+.navbar-icon-btn {
+  background: var(--primary-color);
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  box-shadow: var(--shadow-sm);
+}
+
+.navbar-icon-btn:hover {
+  background: var(--primary-dark);
+  transform: scale(1.1);
+  box-shadow: var(--shadow-md);
+}
+
+.navbar-icon {
+  font-size: var(--font-size-lg);
+  color: var(--white);
 }
 
 /* Table Styles - Dark Theme */

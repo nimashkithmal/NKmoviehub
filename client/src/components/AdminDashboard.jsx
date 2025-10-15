@@ -131,7 +131,7 @@ const AdminDashboard = () => {
       setMoviesLoading(true);
       setMoviesError(null);
       
-      const response = await fetch('http://localhost:5001/api/movies/admin', {
+      const response = await fetch('http://localhost:5001/api/movies/admin?limit=1000', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
 import Header from './Header';
+import MovieGrid from './MovieGrid';
+import './MovieGrid.css';
 
 const Home = () => {
   const { isAuthenticated, token } = useAuth();
@@ -38,9 +40,10 @@ const Home = () => {
     const genreParam = params.get('genre');
     const yearParam = params.get('year');
     
-    if (searchParam) setSearchTerm(searchParam);
-    if (genreParam) setSelectedGenre(genreParam);
-    if (yearParam) setSelectedYear(yearParam);
+    // Always update the states based on URL parameters
+    setSearchTerm(searchParam || '');
+    setSelectedGenre(genreParam || '');
+    setSelectedYear(yearParam || '');
   }, [location.search]);
 
   // Auto-advance slideshow
@@ -88,7 +91,7 @@ const Home = () => {
       setLoading(true);
       setError(null);
       
-      let url = 'http://localhost:5001/api/movies?limit=20';
+      let url = 'http://localhost:5001/api/movies?limit=1000';
       if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
       if (selectedGenre) url += `&genre=${encodeURIComponent(selectedGenre)}`;
       if (selectedYear) url += `&year=${selectedYear}`;
@@ -120,35 +123,14 @@ const Home = () => {
     fetchMovies();
   }, [fetchMovies]);
 
-  const handleSearch = useCallback((e) => {
-    e.preventDefault();
-    if (searchTerm.trim()) {
-      fetchMovies();
-    }
-  }, [searchTerm, fetchMovies]);
 
-  // Add loading state for search
-  const [isSearching, setIsSearching] = useState(false);
-
-  // Update fetchMovies to show search loading state
-  const fetchMoviesWithLoading = useCallback(async () => {
-    if (searchTerm.trim() || selectedGenre || selectedYear) {
-      setIsSearching(true);
-    }
-    
-    try {
-      await fetchMovies();
-    } finally {
-      setIsSearching(false);
-    }
-  }, [searchTerm, selectedGenre, selectedYear, fetchMovies]);
 
   // Immediate search for short terms (1-2 characters)
   useEffect(() => {
     if (searchTerm.trim().length <= 2 && searchTerm.trim()) {
       fetchMovies();
     }
-  }, [searchTerm]);
+  }, [searchTerm, fetchMovies]);
 
   // Auto-search when search term or filters change (for longer terms)
   useEffect(() => {
@@ -159,14 +141,14 @@ const Home = () => {
 
       return () => clearTimeout(timeoutId);
     }
-  }, [searchTerm, selectedGenre, selectedYear]);
+  }, [searchTerm, selectedGenre, selectedYear, fetchMovies]);
 
   // Immediate search for genre and year changes
   useEffect(() => {
     if (selectedGenre || selectedYear) {
       fetchMovies();
     }
-  }, [selectedGenre, selectedYear]);
+  }, [selectedGenre, selectedYear, fetchMovies]);
 
   const clearFilters = useCallback(() => {
     setSearchTerm('');
@@ -176,13 +158,6 @@ const Home = () => {
     window.history.pushState({}, '', '/');
   }, []);
 
-  const genres = [
-    'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary',
-    'Drama', 'Family', 'Fantasy', 'Horror', 'Mystery', 'Romance',
-    'Sci-Fi', 'Thriller', 'War', 'Western'
-  ];
-
-  const years = Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i);
 
   // Fetch user ratings for movies
   const fetchUserRatings = useCallback(async () => {
@@ -430,12 +405,6 @@ const Home = () => {
           </div>
         )}
 
-        {/* Search Status Indicator */}
-        {isSearching && (
-          <div className="search-status-home">
-            <span className="search-indicator-home">🔍 Searching...</span>
-          </div>
-        )}
 
         {/* Movies Display */}
         <div id="movies-section">
@@ -457,109 +426,14 @@ const Home = () => {
               </button>
             </div>
           ) : (
-            <div className="movies-grid">
-              {movies.map(movie => (
-                <div key={movie._id} className="movie-card">
-                  <div className="movie-image">
-                    {movie.imageUrl ? (
-                      <img src={movie.imageUrl} alt={movie.title} />
-                    ) : (
-                      <div className="movie-placeholder">
-                        <span>🎬</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="movie-info">
-                    <h3>{movie.title}</h3>
-                    <div className="movie-meta">
-                      <span className="movie-year">{movie.year}</span>
-                      <span className="movie-genre">{movie.genre}</span>
-                      <div className="movie-rating-info">
-                        <div className="rating-row">
-                          <span className="movie-rating imdb-rating">
-                            🎬 IMDB: {movie.imdbRating ? movie.imdbRating.toFixed(1) : '0.0'}/10
-                          </span>
-                          <span className="movie-rating user-rating">
-                            ⭐ Users: {movie.averageRating ? movie.averageRating.toFixed(1) : '0.0'}/10
-                          </span>
-                        </div>
-                        <span className="rating-count">
-                          ({movie.totalRatings || 0} user ratings)
-                        </span>
-                      </div>
-                    </div>
-                    <p className="movie-description">
-                      {movie.description.length > 100 
-                        ? movie.description.substring(0, 100) + '...' 
-                        : movie.description
-                      }
-                    </p>
-                    
-                    {/* Rating Section */}
-                    {isAuthenticated && (
-                      <div className="movie-rating-section">
-                        <div className="rating-stars">
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(star => (
-                            <button
-                              key={star}
-                              type="button"
-                              className={`rating-star ${userRatings[movie._id]?.rating >= star ? 'active' : ''}`}
-                              onClick={() => handleRateMovie(movie._id, star)}
-                              disabled={ratingLoading[movie._id]}
-                            >
-                              {star}
-                            </button>
-                          ))}
-                        </div>
-                        {userRatings[movie._id]?.hasRated && (
-                          <div className="user-rating">
-                            <small>Your rating: {userRatings[movie._id].rating}/10</small>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    <div className="movie-actions">
-                      {isAuthenticated ? (
-                        <>
-                          <a 
-                            href={movie.movieUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="btn btn-primary watch-btn"
-                          >
-                            🎬 Watch Movie
-                          </a>
-                          <a 
-                            href={movie.downloadUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="btn btn-secondary download-btn"
-                          >
-                            ⬇️ Download
-                          </a>
-                        </>
-                      ) : (
-                        <>
-                          <button 
-                            className="btn btn-primary watch-btn"
-                            onClick={() => showNotification('Please login to watch movies', 'warning')}
-                          >
-                            🎬 Watch Movie
-                          </button>
-                          <button 
-                            className="btn btn-secondary download-btn"
-                            onClick={() => showNotification('Please login to download movies', 'warning')}
-                          >
-                            ⬇️ Download
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <MovieGrid 
+              movies={movies}
+              onRateMovie={handleRateMovie}
+              userRatings={userRatings}
+              ratingLoading={ratingLoading}
+              isAuthenticated={isAuthenticated}
+              showNotification={showNotification}
+            />
           )}
         </div>
       </div>
