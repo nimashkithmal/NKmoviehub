@@ -184,29 +184,6 @@ EMAIL_PASS=your-16-character-app-password
 
 **Note**: Email service is optional. The contact system will work without email configuration, but users won't receive confirmation emails or admin replies via email.
 
-## 📧 Contact System Features
-
-### User Contact Form
-- **Form Validation**: Comprehensive client-side and server-side validation
-- **Email Notifications**: Automatic confirmation emails (if email service is configured)
-- **Character Limits**: Name (100), Subject (200), Message (2000 characters)
-- **Real-time Feedback**: Visual validation indicators and error messages
-
-### Admin Contact Management
-- **Dashboard View**: Statistics cards showing total, new, and replied contacts
-- **Search & Filter**: Search contacts by name, email, subject, or message content
-- **Status Management**: Mark contacts as new, read, replied, or closed
-- **Reply System**: Send replies to users with automatic email notifications
-- **Contact History**: View complete conversation history with timestamps
-- **Bulk Operations**: Manage multiple contacts efficiently
-
-### Email Integration
-- **Gmail SMTP**: Configured for Gmail with App Password authentication
-- **HTML Templates**: Beautiful, responsive email templates
-- **Confirmation Emails**: Automatic confirmation when users submit contact forms
-- **Reply Notifications**: Send replies directly to user email addresses
-- **Error Handling**: Graceful fallback when email service is unavailable
-
 ## 🎬 Movie Features
 
 ### Dynamic Slideshow
@@ -215,14 +192,6 @@ EMAIL_PASS=your-16-character-app-password
 - **Responsive Design**: Adapts to different screen sizes
 - **Smooth Transitions**: CSS transitions for seamless slide changes
 - **Welcome Content**: Overlay text with app branding and features
-
-### Advanced Search & Filtering
-- **Real-time Search**: Search movies by title with instant results
-- **Genre Filtering**: Filter movies by multiple genres
-- **Year Filtering**: Filter movies by release year
-- **URL Parameters**: Search and filter states preserved in URL
-- **Combined Filters**: Use search and filters together for precise results
-- **Clear Filters**: Easy reset functionality for all filters
 
 ### Movie Rating System
 - **Star Ratings**: 1-5 star rating system
