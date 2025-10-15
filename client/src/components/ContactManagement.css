@@ -55,9 +55,6 @@
   border-left: 4px solid #10b981;
 }
 
-.stat-card.urgent {
-  border-left: 4px solid #ef4444;
-}
 
 .stat-icon {
   font-size: 2.5rem;
@@ -164,8 +161,7 @@
   flex-shrink: 0;
 }
 
-.status-badge,
-.priority-badge {
+.status-badge {
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-full);
   color: white;

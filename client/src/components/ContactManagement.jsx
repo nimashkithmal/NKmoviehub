@@ -9,7 +9,6 @@ const ContactManagement = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('');
   const [selectedContact, setSelectedContact] = useState(null);
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [replyMessage, setReplyMessage] = useState('');
@@ -20,7 +19,6 @@ const ContactManagement = () => {
     readContacts: 0,
     repliedContacts: 0,
     closedContacts: 0,
-    urgentContacts: 0
   });
 
   // Fetch contacts from backend
@@ -39,7 +37,6 @@ const ContactManagement = () => {
       let url = 'http://localhost:5001/api/contacts?limit=1000';
       if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
       if (statusFilter) url += `&status=${statusFilter}`;
-      if (priorityFilter) url += `&priority=${priorityFilter}`;
       
       console.log('Fetching contacts with URL:', url);
       console.log('Using token:', token ? 'Present' : 'Missing');
@@ -71,7 +68,7 @@ const ContactManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [token, searchTerm, statusFilter, priorityFilter]);
+  }, [token, searchTerm, statusFilter]);
 
   // Fetch contact statistics
   const fetchStats = useCallback(async () => {
@@ -248,15 +245,6 @@ const ContactManagement = () => {
     }
   };
 
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'urgent': return '#ef4444';
-      case 'high': return '#f59e0b';
-      case 'medium': return '#3b82f6';
-      case 'low': return '#10b981';
-      default: return '#6b7280';
-    }
-  };
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -322,13 +310,6 @@ const ContactManagement = () => {
             <p>Replied</p>
           </div>
         </div>
-        <div className="stat-card urgent">
-          <div className="stat-icon">⚠️</div>
-          <div className="stat-content">
-            <h3>{stats.urgentContacts}</h3>
-            <p>Urgent</p>
-          </div>
-        </div>
       </div>
 
       {/* Filters */}
@@ -353,19 +334,6 @@ const ContactManagement = () => {
             <option value="read">Read</option>
             <option value="replied">Replied</option>
             <option value="closed">Closed</option>
-          </select>
-        </div>
-        <div className="filter-group">
-          <select
-            value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
-            className="filter-select"
-          >
-            <option value="">All Priority</option>
-            <option value="urgent">Urgent</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
           </select>
         </div>
         <button 
@@ -409,12 +377,6 @@ const ContactManagement = () => {
                     style={{ backgroundColor: getStatusColor(contact.status) }}
                   >
                     {contact.status}
-                  </span>
-                  <span 
-                    className="priority-badge"
-                    style={{ backgroundColor: getPriorityColor(contact.priority) }}
-                  >
-                    {contact.priority}
                   </span>
                 </div>
               </div>

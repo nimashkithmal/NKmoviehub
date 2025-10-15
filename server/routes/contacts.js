@@ -70,7 +70,7 @@ router.post('/', [
 // @access  Private/Admin
 router.get('/', protect, restrictToAdmin, async (req, res) => {
   try {
-    const { page = 1, limit = 20, status = '', priority = '', search = '' } = req.query;
+    const { page = 1, limit = 20, status = '', search = '' } = req.query;
     
     // Build filter object
     const filter = {};
@@ -79,9 +79,6 @@ router.get('/', protect, restrictToAdmin, async (req, res) => {
       filter.status = status;
     }
     
-    if (priority) {
-      filter.priority = priority;
-    }
     
     if (search) {
       filter.$or = [
@@ -188,7 +185,6 @@ router.get('/:id', protect, restrictToAdmin, async (req, res) => {
 // @access  Private/Admin
 router.put('/:id', protect, restrictToAdmin, [
   body('status').optional().isIn(['new', 'read', 'replied', 'closed']).withMessage('Invalid status'),
-  body('priority').optional().isIn(['low', 'medium', 'high', 'urgent']).withMessage('Invalid priority'),
   body('tags').optional().isArray().withMessage('Tags must be an array')
 ], async (req, res) => {
   try {
@@ -201,11 +197,10 @@ router.put('/:id', protect, restrictToAdmin, [
       });
     }
 
-    const { status, priority, tags } = req.body;
+    const { status, tags } = req.body;
     const updateData = {};
     
     if (status) updateData.status = status;
-    if (priority) updateData.priority = priority;
     if (tags) updateData.tags = tags;
 
     const contact = await Contact.findByIdAndUpdate(

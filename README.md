@@ -2,6 +2,10 @@
 
 A full-stack movie rating and review application built with React.js frontend and Node.js backend.
 
+## 🏠 Home Page
+
+![NKMovieHUB Home Page](Screenshot%202025-10-15%20at%2016.37.15.png)
+
 ## 🚀 Features
 
 - **User Authentication**: Secure login and registration system

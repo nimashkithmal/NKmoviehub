@@ -31,11 +31,6 @@ const contactSchema = new mongoose.Schema({
     enum: ['new', 'read', 'replied', 'closed'],
     default: 'new'
   },
-  priority: {
-    type: String,
-    enum: ['low', 'medium', 'high', 'urgent'],
-    default: 'medium'
-  },
   adminReply: {
     message: {
       type: String,
@@ -82,7 +77,6 @@ contactSchema.statics.getStats = async function() {
         readContacts: { $sum: { $cond: [{ $eq: ['$status', 'read'] }, 1, 0] } },
         repliedContacts: { $sum: { $cond: [{ $eq: ['$status', 'replied'] }, 1, 0] } },
         closedContacts: { $sum: { $cond: [{ $eq: ['$status', 'closed'] }, 1, 0] } },
-        urgentContacts: { $sum: { $cond: [{ $eq: ['$priority', 'urgent'] }, 1, 0] } }
       }
     }
   ]);
@@ -93,7 +87,6 @@ contactSchema.statics.getStats = async function() {
     readContacts: 0,
     repliedContacts: 0,
     closedContacts: 0,
-    urgentContacts: 0
   };
 };
 

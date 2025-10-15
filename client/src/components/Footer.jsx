@@ -58,7 +58,7 @@ const Footer = () => {
             <div className="footer-copyright">
               <div className="copyright-info">
                 <p>NKMovieHUB</p>
-                <p>Author: Nimash kithmal | Contact: nimashkithmal13@gmail.com</p>
+                <p>Author: Nimash kithmal | Contact: qwe730375@gmail.com</p>
                 <p>Established: 2024 | All Rights Reserved</p>
               </div>
             </div>
