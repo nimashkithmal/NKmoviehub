@@ -14,6 +14,7 @@ const MovieDetail = () => {
   const [userRating, setUserRating] = useState(null);
   const [ratingLoading, setRatingLoading] = useState(false);
   const [showPlayer, setShowPlayer] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     fetchMovieDetails();
@@ -107,6 +108,53 @@ const MovieDetail = () => {
       showNotification('Failed to rate movie. Please try again.', 'error');
     } finally {
       setRatingLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!movie || !movie.movieUrl) {
+      showNotification('Movie URL not available', 'error');
+      return;
+    }
+
+    if (!isAuthenticated) {
+      showNotification('Please login to download movies', 'warning');
+      return;
+    }
+
+    try {
+      setDownloading(true);
+      
+      // Check if it's YouTube or Vimeo (can't download directly)
+      if (movie.movieUrl.includes('youtube.com') || movie.movieUrl.includes('youtu.be') || movie.movieUrl.includes('vimeo.com')) {
+        showNotification('Direct download is not available for YouTube or Vimeo videos', 'warning');
+        setDownloading(false);
+        return;
+      }
+
+      // Create download URL with token in query parameter (server will verify it)
+      const downloadUrl = `http://localhost:5001/api/movies/${id}/download?token=${encodeURIComponent(token)}`;
+      
+      // Create a temporary anchor element and trigger download
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `${movie.title.replace(/[^a-z0-9]/gi, '_')}.mp4`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showNotification('Download started!', 'success');
+      
+      // Reset downloading state after a delay
+      setTimeout(() => {
+        setDownloading(false);
+      }, 2000);
+
+    } catch (err) {
+      console.error('Error downloading movie:', err);
+      showNotification(err.message || 'Failed to download movie. Please try again.', 'error');
+      setDownloading(false);
     }
   };
 
@@ -279,20 +327,23 @@ const MovieDetail = () => {
             {isAuthenticated ? (
               <>
                 {movie.movieUrl && (
-                  <button 
-                    className="btn btn-primary btn-large"
-                    onClick={() => setShowPlayer(true)}
-                  >
-                    🎬 Watch Movie
-                  </button>
-                )}
-                {movie.downloadUrl && (
-                  <button 
-                    className="btn btn-secondary btn-large"
-                    onClick={() => window.open(movie.downloadUrl, '_blank')}
-                  >
-                    ⬇️ Download
-                  </button>
+                  <>
+                    <button 
+                      className="btn btn-primary btn-large"
+                      onClick={() => setShowPlayer(true)}
+                    >
+                      🎬 Watch Movie
+                    </button>
+                    {!movie.movieUrl.includes('youtube.com') && !movie.movieUrl.includes('youtu.be') && !movie.movieUrl.includes('vimeo.com') && (
+                      <button 
+                        className="btn btn-secondary btn-large"
+                        onClick={handleDownload}
+                        disabled={downloading}
+                      >
+                        {downloading ? '⬇️ Downloading...' : '⬇️ Download Movie'}
+                      </button>
+                    )}
+                  </>
                 )}
               </>
             ) : (
@@ -307,7 +358,7 @@ const MovieDetail = () => {
                   className="btn btn-secondary btn-large"
                   onClick={() => showNotification('Please login to download movies', 'warning')}
                 >
-                  ⬇️ Download
+                  ⬇️ Download Movie
                 </button>
               </>
             )}

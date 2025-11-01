@@ -29,7 +29,6 @@ const AdminDashboard = () => {
     description: '',
     genre: '',
     movieUrl: '',
-    downloadUrl: '',
     imdbRating: 0
   });
   const [stats, setStats] = useState({
@@ -344,7 +343,6 @@ const AdminDashboard = () => {
       description: movie.description,
       genre: movie.genre,
       movieUrl: movie.movieUrl,
-      downloadUrl: movie.downloadUrl,
       imdbRating: movie.imdbRating
     });
   };
@@ -381,7 +379,6 @@ const AdminDashboard = () => {
           description: '',
           genre: '',
           movieUrl: '',
-          downloadUrl: '',
           imdbRating: 0
         });
         showNotification('Movie updated successfully!', 'success');
@@ -448,17 +445,15 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleUpdateAdminFields = async (movieId, imdbRating, downloadUrl, imageFile) => {
+  const handleUpdateAdminFields = async (movieId, imdbRating, imageFile) => {
     try {
       const updateData = {};
       if (imdbRating !== null && imdbRating !== undefined) updateData.imdbRating = imdbRating;
-      if (downloadUrl !== null && downloadUrl !== undefined) updateData.downloadUrl = downloadUrl;
       if (imageFile !== null && imageFile !== undefined) updateData.imageFile = imageFile;
       
       console.log('Sending update data:', {
         movieId,
         hasImdbRating: imdbRating !== null && imdbRating !== undefined,
-        hasDownloadUrl: downloadUrl !== null && downloadUrl !== undefined,
         hasImageFile: imageFile !== null && imageFile !== undefined,
         imageFileLength: imageFile ? imageFile.length : 0
       });
@@ -535,7 +530,7 @@ const AdminDashboard = () => {
         
         // Update the movie image
         console.log('Calling handleUpdateAdminFields with image...');
-        const result = await handleUpdateAdminFields(movieId, undefined, undefined, base64Image);
+        const result = await handleUpdateAdminFields(movieId, undefined, base64Image);
         console.log('Result from handleUpdateAdminFields:', result);
         
         if (result && result.success) {
@@ -871,7 +866,6 @@ const AdminDashboard = () => {
                   <th>Genre</th>
                   <th>IMDB Rating</th>
                   <th>User Rating</th>
-                  <th>Download URL</th>
                   <th>Status</th>
                   <th>Added By</th>
                   <th>Actions</th>
@@ -937,7 +931,7 @@ const AdminDashboard = () => {
                           onClick={() => {
                             const newRating = prompt('Enter new IMDB rating (0-10):', movie.imdbRating);
                             if (newRating !== null && !isNaN(newRating) && newRating >= 0 && newRating <= 10) {
-                              handleUpdateAdminFields(movie._id, parseFloat(newRating), undefined);
+                              handleUpdateAdminFields(movie._id, parseFloat(newRating));
                             }
                           }}
                         >
@@ -959,35 +953,6 @@ const AdminDashboard = () => {
                       <small style={{ fontSize: '10px', color: '#6c757d' }}>
                         ({movie.totalRatings || 0} ratings)
                       </small>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <a 
-                          href={movie.downloadUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          style={{ 
-                            color: '#007bff', 
-                            textDecoration: 'none',
-                            fontSize: '12px',
-                            wordBreak: 'break-all'
-                          }}
-                        >
-                          {movie.downloadUrl ? 'Download Link' : 'N/A'}
-                        </a>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '2px 6px', fontSize: '10px' }}
-                          onClick={() => {
-                            const newUrl = prompt('Enter new download URL:', movie.downloadUrl);
-                            if (newUrl !== null && newUrl.trim() !== '') {
-                              handleUpdateAdminFields(movie._id, undefined, newUrl.trim());
-                            }
-                          }}
-                        >
-                          Edit
-                        </button>
-                      </div>
                     </td>
                     <td>
                       <span style={{ 
@@ -1228,15 +1193,6 @@ const AdminDashboard = () => {
                 value={movieFormData.movieUrl}
                 onChange={(e) => setMovieFormData({...movieFormData, movieUrl: e.target.value})}
                 placeholder="https://example.com/movie"
-              />
-            </div>
-            <div className="form-group">
-              <label>Download URL</label>
-              <input
-                type="url"
-                value={movieFormData.downloadUrl}
-                onChange={(e) => setMovieFormData({...movieFormData, downloadUrl: e.target.value})}
-                placeholder="https://example.com/download"
               />
             </div>
             <div className="form-group">

@@ -4,6 +4,7 @@ const Movie = require('../models/Movie');
 const Rating = require('../models/Rating');
 const { protect, restrictToAdmin } = require('../middleware/auth');
 const cloudinary = require('cloudinary').v2;
+const fetch = require('node-fetch');
 
 const router = express.Router();
 
@@ -203,6 +204,148 @@ router.get('/stats', protect, restrictToAdmin, async (req, res) => {
   }
 });
 
+// Helper function to extract Google Drive file ID
+const extractGoogleDriveFileId = (url) => {
+  const patterns = [
+    /\/file\/d\/([a-zA-Z0-9_-]+)/,
+    /id=([a-zA-Z0-9_-]+)/,
+    /\/d\/([a-zA-Z0-9_-]+)/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+};
+
+// Helper function to convert Google Drive URL to direct download URL
+const getGoogleDriveDownloadUrl = (url) => {
+  const fileId = extractGoogleDriveFileId(url);
+  if (fileId) {
+    return `https://drive.google.com/uc?export=download&id=${fileId}`;
+  }
+  return null;
+};
+
+// @route   GET /api/movies/:id/download
+// @desc    Download a movie file
+// @access  Private
+router.get('/:id/download', protect, async (req, res) => {
+  try {
+    console.log('Download request received for movie ID:', req.params.id);
+    const movie = await Movie.findById(req.params.id);
+    
+    if (!movie) {
+      console.log('Movie not found:', req.params.id);
+      return res.status(404).json({
+        success: false,
+        message: 'Movie not found'
+      });
+    }
+
+    if (!movie.movieUrl) {
+      console.log('Movie URL not available for movie:', movie._id);
+      return res.status(400).json({
+        success: false,
+        message: 'Movie URL not available'
+      });
+    }
+
+    console.log('Processing download for:', movie.title, 'URL:', movie.movieUrl);
+
+    // For YouTube/Vimeo, return error (can't download directly)
+    if (movie.movieUrl.includes('youtube.com') || movie.movieUrl.includes('youtu.be') || movie.movieUrl.includes('vimeo.com')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Direct download is not available for YouTube or Vimeo videos'
+      });
+    }
+
+    let downloadUrl = movie.movieUrl;
+    let filename = `${movie.title.replace(/[^a-z0-9]/gi, '_')}.mp4`;
+
+    // Handle Google Drive URLs - redirect directly (can't stream easily)
+    if (movie.movieUrl.includes('drive.google.com')) {
+      const fileId = extractGoogleDriveFileId(movie.movieUrl);
+      if (fileId) {
+        // Use direct download URL for Google Drive
+        downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+        console.log('Google Drive download URL:', downloadUrl);
+        // Redirect to Google Drive download
+        return res.redirect(downloadUrl);
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid Google Drive URL. Make sure the file is shared publicly.'
+        });
+      }
+    }
+
+    // For direct file URLs, stream the file
+    try {
+      console.log('Fetching file from:', downloadUrl);
+      const response = await fetch(downloadUrl);
+      
+      if (!response.ok) {
+        console.error('Failed to fetch file:', response.status, response.statusText);
+        throw new Error(`Failed to fetch file: ${response.statusText}`);
+      }
+
+      // Try to get filename from Content-Disposition header
+      const contentDisposition = response.headers.get('content-disposition');
+      if (contentDisposition && contentDisposition.includes('filename=')) {
+        const matches = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (matches && matches[1]) {
+          filename = matches[1].replace(/['"]/g, '').trim();
+        }
+      } else {
+        // Try to determine filename from URL
+        const urlParts = downloadUrl.split('/');
+        const urlFilename = urlParts[urlParts.length - 1].split('?')[0];
+        if (urlFilename && urlFilename.includes('.')) {
+          filename = urlFilename;
+        }
+      }
+
+      console.log('Downloading file as:', filename);
+
+      // Set response headers for download
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+      
+      const contentType = response.headers.get('content-type');
+      if (contentType) {
+        res.setHeader('Content-Type', contentType);
+      }
+      
+      const contentLength = response.headers.get('content-length');
+      if (contentLength) {
+        res.setHeader('Content-Length', contentLength);
+      }
+
+      // Stream the file to the client
+      if (response.body) {
+        response.body.pipe(res);
+      } else {
+        // Fallback: redirect to download URL
+        res.redirect(downloadUrl);
+      }
+
+    } catch (fetchError) {
+      console.error('Download fetch error:', fetchError);
+      // If streaming fails, redirect to the URL directly
+      res.redirect(downloadUrl);
+    }
+
+  } catch (error) {
+    console.error('Download movie error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while downloading movie: ' + error.message
+    });
+  }
+});
+
 // @route   GET /api/movies/:id
 // @desc    Get movie by ID (public)
 // @access  Public
@@ -240,7 +383,6 @@ router.post('/', protect, restrictToAdmin, [
   body('description').trim().isLength({ min: 10, max: 1000 }).withMessage('Description must be between 10 and 1000 characters'),
   body('genre').trim().isLength({ min: 2, max: 50 }).withMessage('Genre must be between 2 and 50 characters'),
   body('movieUrl').isURL().withMessage('Please provide a valid movie URL'),
-  body('downloadUrl').isURL().withMessage('Please provide a valid download URL'),
   body('imdbRating').isFloat({ min: 0, max: 10 }).withMessage('IMDB rating must be between 0 and 10'),
   body('imageFile').notEmpty().withMessage('Movie image is required')
 ], async (req, res) => {
@@ -251,7 +393,6 @@ router.post('/', protect, restrictToAdmin, [
       genre: req.body.genre,
       hasImageFile: !!req.body.imageFile,
       imageFileLength: req.body.imageFile ? req.body.imageFile.length : 0,
-      hasDownloadUrl: !!req.body.downloadUrl,
       hasImdbRating: req.body.imdbRating !== undefined,
       fullBody: JSON.stringify(req.body, null, 2)
     });
@@ -267,7 +408,7 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
 
-    const { title, year, description, genre, movieUrl, downloadUrl, imdbRating, imageFile } = req.body;
+    const { title, year, description, genre, movieUrl, imdbRating, imageFile } = req.body;
 
     // Additional validation for edge cases
     if (title && title.trim() === '') {
@@ -298,22 +439,14 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
     
-    if (downloadUrl && downloadUrl.trim() === '') {
-      return res.status(400).json({
-        success: false,
-        message: 'Download URL cannot be empty'
-      });
-    }
-
     // Validate required fields
-    if (!title || !year || !description || !genre || !movieUrl || !downloadUrl || imdbRating === undefined || !imageFile) {
+    if (!title || !year || !description || !genre || !movieUrl || imdbRating === undefined || !imageFile) {
       console.log('Missing required fields:', { 
         title: title || 'MISSING', 
         year: year || 'MISSING', 
         description: description || 'MISSING', 
         genre: genre || 'MISSING', 
         movieUrl: movieUrl || 'MISSING', 
-        downloadUrl: downloadUrl || 'MISSING', 
         imdbRating: imdbRating !== undefined ? imdbRating : 'MISSING', 
         hasImageFile: !!imageFile 
       });
@@ -324,7 +457,6 @@ router.post('/', protect, restrictToAdmin, [
       if (!description) missingFields.push('description');
       if (!genre) missingFields.push('genre');
       if (!movieUrl) missingFields.push('movieUrl');
-      if (!downloadUrl) missingFields.push('downloadUrl');
       if (imdbRating === undefined) missingFields.push('imdbRating');
       if (!imageFile) missingFields.push('imageFile');
       
@@ -386,7 +518,6 @@ router.post('/', protect, restrictToAdmin, [
       description,
       genre,
       movieUrl,
-      downloadUrl,
       imdbRating: parseFloat(imdbRating),
       imageUrl,
       addedBy: req.user.id
@@ -397,7 +528,6 @@ router.post('/', protect, restrictToAdmin, [
       year: movie.year,
       genre: movie.genre,
       hasImageUrl: !!movie.imageUrl,
-      hasDownloadUrl: !!movie.downloadUrl,
       imdbRating: movie.imdbRating
     });
 
@@ -511,20 +641,18 @@ router.put('/:id', protect, restrictToAdmin, [
 });
 
 // @route   PUT /api/movies/:id/update-admin-fields
-// @desc    Update IMDB rating, download URL, and image (admin only)
+// @desc    Update IMDB rating and image (admin only)
 // @access  Private/Admin
 router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
   body('imdbRating').optional().isFloat({ min: 0, max: 10 }).withMessage('IMDB rating must be between 0 and 10'),
-  body('downloadUrl').optional().isURL().withMessage('Please provide a valid download URL'),
   body('imageFile').optional().notEmpty().withMessage('Image file cannot be empty if provided')
 ], async (req, res) => {
   try {
-    const { imdbRating, downloadUrl, imageFile } = req.body;
+    const { imdbRating, imageFile } = req.body;
     const movieId = req.params.id;
 
     console.log('Updating admin fields for movie:', movieId, {
       hasImdbRating: imdbRating !== undefined,
-      hasDownloadUrl: downloadUrl !== undefined,
       hasImageFile: !!imageFile,
       imageFileType: typeof imageFile,
       imageFileLength: imageFile ? imageFile.length : 0,
@@ -639,16 +767,11 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
     if (imdbRating !== undefined) {
       movie.imdbRating = parseFloat(imdbRating);
     }
-    
-    if (downloadUrl !== undefined) {
-      movie.downloadUrl = downloadUrl;
-    }
 
     console.log('Saving movie with updated data...');
     console.log('Updated movie data:', {
       imageUrl: movie.imageUrl,
-      imdbRating: movie.imdbRating,
-      downloadUrl: movie.downloadUrl
+      imdbRating: movie.imdbRating
     });
 
     try {

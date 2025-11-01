@@ -303,6 +303,17 @@
   background: var(--secondary-dark);
 }
 
+.btn-secondary.btn-large:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-secondary.btn-large:disabled:hover {
+  transform: none;
+  box-shadow: var(--shadow-lg);
+}
+
 /* Loading and Error States */
 .loading-state,
 .error-state {

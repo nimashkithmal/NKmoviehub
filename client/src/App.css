@@ -834,17 +834,6 @@ main {
   box-shadow: var(--shadow-xl);
 }
 
-.download-btn {
-  background: var(--gradient-secondary);
-  color: var(--white);
-  box-shadow: var(--shadow-md);
-}
-
-.download-btn:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-xl);
-}
-
 /* Rating System Styles */
 .movie-rating-info {
   display: flex;
@@ -2723,7 +2712,7 @@ html {
   flex-wrap: wrap;
 }
 
-.showcase-watch-btn, .showcase-download-btn {
+.showcase-watch-btn {
   padding: var(--space-md) var(--space-xl);
   font-size: var(--font-size-lg);
   font-weight: 600;
@@ -2733,31 +2722,15 @@ html {
   border: 2px solid transparent;
   position: relative;
   overflow: hidden;
-}
-
-.showcase-watch-btn {
   background: var(--gradient-primary);
   color: var(--white);
   box-shadow: var(--shadow-lg);
 }
 
-.showcase-download-btn {
-  background: var(--gradient-secondary);
-  color: var(--white);
-  box-shadow: var(--shadow-lg);
-}
-
-.showcase-watch-btn:hover, .showcase-download-btn:hover {
+.showcase-watch-btn:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-2xl);
-}
-
-.showcase-watch-btn:hover {
   background: var(--gradient-primary-hover);
-}
-
-.showcase-download-btn:hover {
-  background: var(--gradient-secondary-hover);
 }
 
 /* Navigation Controls */

@@ -345,7 +345,7 @@
   flex-wrap: wrap;
 }
 
-.watch-btn, .download-btn {
+.watch-btn {
   padding: var(--space-sm) var(--space-md);
   border: none;
   border-radius: var(--radius-lg);
@@ -361,9 +361,6 @@
   justify-content: center;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.watch-btn {
   background: var(--gradient-primary);
   color: var(--white);
   box-shadow: var(--shadow-md);
@@ -373,18 +370,6 @@
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
   background: var(--primary-dark);
-}
-
-.download-btn {
-  background: var(--gradient-secondary);
-  color: var(--white);
-  box-shadow: var(--shadow-md);
-}
-
-.download-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-  background: var(--secondary-dark);
 }
 
 /* Movie Info Section */
@@ -609,7 +594,7 @@
     gap: var(--space-xs);
   }
   
-  .watch-btn, .download-btn {
+  .watch-btn {
     min-width: auto;
     width: 100%;
     padding: var(--space-sm);
@@ -723,8 +708,7 @@
 }
 
 .rating-star:focus,
-.watch-btn:focus,
-.download-btn:focus {
+.watch-btn:focus {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
 }

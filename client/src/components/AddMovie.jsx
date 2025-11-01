@@ -13,7 +13,6 @@ const AddMovie = () => {
     description: '',
     genre: '',
     movieUrl: '',
-    downloadUrl: '',
     imdbRating: 0,
     imageFile: null
   });
@@ -63,12 +62,6 @@ const AddMovie = () => {
       errors.movieUrl = 'Movie URL is required';
     } else if (!isValidUrl(formData.movieUrl)) {
       errors.movieUrl = 'Please enter a valid URL';
-    }
-    
-    if (!formData.downloadUrl.trim()) {
-      errors.downloadUrl = 'Download URL is required';
-    } else if (!isValidUrl(formData.downloadUrl)) {
-      errors.downloadUrl = 'Please enter a valid URL';
     }
     
     if (formData.imdbRating < 0 || formData.imdbRating > 10) {
@@ -158,7 +151,6 @@ const AddMovie = () => {
         genre: requestData.genre,
         hasImageFile: !!requestData.imageFile,
         imageFileLength: requestData.imageFile ? requestData.imageFile.length : 0,
-        hasDownloadUrl: !!requestData.downloadUrl,
         hasImdbRating: requestData.imdbRating !== undefined,
         token: token ? 'Present' : 'Missing'
       });
@@ -244,7 +236,6 @@ const AddMovie = () => {
       description: '',
       genre: '',
       movieUrl: '',
-      downloadUrl: '',
       imdbRating: 0,
       imageFile: null
     });
@@ -367,42 +358,22 @@ const AddMovie = () => {
             </div>
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="movieUrl">Movie URL (Watch) *</label>
-              <input
-                type="url"
-                id="movieUrl"
-                name="movieUrl"
-                value={formData.movieUrl}
-                onChange={handleInputChange}
-                placeholder="https://example.com/watch/movie"
-                required
-                className={getFieldError('movieUrl') ? 'form-error' : isFieldValid('movieUrl') ? 'form-valid' : ''}
-              />
-              <small>URL where users can watch the movie</small>
-              {getFieldError('movieUrl') && (
-                <small className="error-message">{getFieldError('movieUrl')}</small>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="downloadUrl">Movie Download URL *</label>
-              <input
-                type="url"
-                id="downloadUrl"
-                name="downloadUrl"
-                value={formData.downloadUrl}
-                onChange={handleInputChange}
-                placeholder="https://example.com/download/movie"
-                required
-                className={getFieldError('downloadUrl') ? 'form-error' : isFieldValid('downloadUrl') ? 'form-valid' : ''}
-              />
-              <small>URL where users can download the movie</small>
-              {getFieldError('downloadUrl') && (
-                <small className="error-message">{getFieldError('downloadUrl')}</small>
-              )}
-            </div>
+          <div className="form-group">
+            <label htmlFor="movieUrl">Movie URL (Watch) *</label>
+            <input
+              type="url"
+              id="movieUrl"
+              name="movieUrl"
+              value={formData.movieUrl}
+              onChange={handleInputChange}
+              placeholder="https://example.com/watch/movie"
+              required
+              className={getFieldError('movieUrl') ? 'form-error' : isFieldValid('movieUrl') ? 'form-valid' : ''}
+            />
+            <small>URL where users can watch the movie</small>
+            {getFieldError('movieUrl') && (
+              <small className="error-message">{getFieldError('movieUrl')}</small>
+            )}
           </div>
 
           <div className="form-group">
