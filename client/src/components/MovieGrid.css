@@ -294,68 +294,47 @@
   font-size: var(--font-size-sm);
   color: var(--primary-color);
   font-weight: 600;
-  margin-bottom: var(--space-sm);
+  margin-bottom: var(--space-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-.movie-description-main {
-  font-size: var(--font-size-sm);
-  color: var(--gray-500);
-  line-height: 1.5;
-  margin-bottom: var(--space-md);
-}
-
-.movie-meta-main {
-  margin-bottom: var(--space-md);
-}
-
-.subtitle-info-main {
+.movie-genre-main {
   font-size: var(--font-size-xs);
-  color: var(--gray-400);
-  margin-bottom: var(--space-xs);
-  font-weight: 500;
-}
-
-.release-date-main {
-  font-size: var(--font-size-sm);
   color: var(--gray-600);
   font-weight: 600;
+  margin-bottom: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--gray-200);
+  border-radius: var(--radius-md);
+  display: inline-block;
 }
 
-/* Ratings Display */
-.ratings-display {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  padding: var(--space-md);
-  background: var(--gray-50);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--gray-200);
-}
-
-.imdb-rating, .user-rating {
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.imdb-rating {
+.movie-imdb-main {
+  font-size: var(--font-size-sm);
   color: var(--warning-color);
-}
-
-.user-rating {
-  color: var(--success-color);
-}
-
-.rating-count {
-  font-size: var(--font-size-xs);
-  color: var(--gray-500);
-  font-style: italic;
-  text-align: center;
+  font-weight: 600;
   margin-top: var(--space-xs);
+}
+
+.movie-genre-overlay {
+  font-size: var(--font-size-sm);
+  color: var(--white);
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-md);
+  display: inline-block;
+  backdrop-filter: blur(5px);
+}
+
+.movie-imdb-overlay {
+  font-size: var(--font-size-base);
+  color: var(--warning-color);
+  font-weight: 700;
+  margin-bottom: var(--space-md);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 /* Responsive Design */

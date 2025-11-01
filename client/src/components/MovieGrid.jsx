@@ -1,6 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import MoviePlayer from './MoviePlayer';
 
 const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenticated, showNotification }) => {
+  const navigate = useNavigate();
+  const [selectedMovie, setSelectedMovie] = useState(null);
   // 30 New Movies Collection
   const sampleMovies = [
     {
@@ -429,10 +433,23 @@ const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenti
   const displayMovies = movies && movies.length > 0 ? movies : sampleMovies;
 
   return (
-    <div className="movie-grid-container">
-      <div className="movie-grid">
+    <>
+      {selectedMovie && (
+        <MoviePlayer 
+          movie={selectedMovie} 
+          onClose={() => setSelectedMovie(null)} 
+        />
+      )}
+      
+      <div className="movie-grid-container">
+        <div className="movie-grid">
         {displayMovies.map((movie, index) => (
-          <div key={movie._id} className="movie-poster-card">
+          <div 
+            key={movie._id} 
+            className="movie-poster-card"
+            onClick={() => navigate(`/movie/${movie._id}`)}
+            style={{ cursor: 'pointer' }}
+          >
             {/* Source Quality Banner */}
             <div className="source-banner">
               <span className="source-quality">{movie.source}</span>
@@ -448,116 +465,26 @@ const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenti
                 </div>
               )}
               
-              {/* Overlay on hover */}
-              <div className="poster-overlay">
-                <div className="overlay-content">
-                  <h3 className="movie-title">{movie.title}</h3>
-                  <div className="movie-year">{movie.year}</div>
-                  <div className="movie-description">
-                    {movie.description.length > 120 
-                      ? movie.description.substring(0, 120) + '...' 
-                      : movie.description
-                    }
-                  </div>
-                  <div className="movie-meta">
-                    <div className="subtitle-info">{movie.subtitle}</div>
-                    <div className="release-date">{movie.releaseDate}</div>
-                  </div>
-                  
-                  {/* Rating Section */}
-                  {isAuthenticated && (
-                    <div className="rating-section">
-                      <div className="rating-stars">
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(star => (
-                          <button
-                            key={star}
-                            type="button"
-                            className={`rating-star ${userRatings[movie._id]?.rating >= star ? 'active' : ''}`}
-                            onClick={() => onRateMovie(movie._id, star)}
-                            disabled={ratingLoading[movie._id]}
-                          >
-                            {star}
-                          </button>
-                        ))}
-                      </div>
-                      {userRatings[movie._id]?.hasRated && (
-                        <div className="user-rating-display">
-                          Your rating: {userRatings[movie._id].rating}/10
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {/* Action Buttons */}
-                  <div className="action-buttons">
-                    {isAuthenticated ? (
-                      <>
-                        <button 
-                          className="watch-btn"
-                          onClick={() => window.open(movie.movieUrl || '#', '_blank')}
-                        >
-                          🎬 Watch
-                        </button>
-                        <button 
-                          className="download-btn"
-                          onClick={() => window.open(movie.downloadUrl || '#', '_blank')}
-                        >
-                          ⬇️ Download
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button 
-                          className="watch-btn"
-                          onClick={() => showNotification('Please login to watch movies', 'warning')}
-                        >
-                          🎬 Watch
-                        </button>
-                        <button 
-                          className="download-btn"
-                          onClick={() => showNotification('Please login to download movies', 'warning')}
-                        >
-                          ⬇️ Download
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
             </div>
             
             {/* Movie Info */}
             <div className="movie-info">
               <h3 className="movie-title-main">{movie.title}</h3>
               <div className="movie-year-main">{movie.year}</div>
-              <div className="movie-description-main">
-                {movie.description.length > 100 
-                  ? movie.description.substring(0, 100) + '...' 
-                  : movie.description
-                }
-              </div>
-              <div className="movie-meta-main">
-                <div className="subtitle-info-main">{movie.subtitle}</div>
-                <div className="release-date-main">{movie.releaseDate}</div>
-              </div>
-              
-              {/* Ratings Display */}
-              <div className="ratings-display">
-                <div className="imdb-rating">
-                  🎬 IMDB: {movie.imdbRating ? movie.imdbRating.toFixed(1) : '0.0'}/10
+              {movie.genre && (
+                <div className="movie-genre-main">{movie.genre}</div>
+              )}
+              {movie.imdbRating && (
+                <div className="movie-imdb-main">
+                  🎬 IMDB: {movie.imdbRating.toFixed(1)}/10
                 </div>
-                <div className="user-rating">
-                  ⭐ Users: {movie.averageRating ? movie.averageRating.toFixed(1) : '0.0'}/10
-                </div>
-                <div className="rating-count">
-                  ({movie.totalRatings || 0} ratings)
-                </div>
-              </div>
+              )}
             </div>
           </div>
         ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

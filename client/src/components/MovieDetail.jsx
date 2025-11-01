@@ -1,0 +1,323 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import MoviePlayer from './MoviePlayer';
+import './MovieDetail.css';
+
+const MovieDetail = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { isAuthenticated, token } = useAuth();
+  const [movie, setMovie] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [userRating, setUserRating] = useState(null);
+  const [ratingLoading, setRatingLoading] = useState(false);
+  const [showPlayer, setShowPlayer] = useState(false);
+
+  useEffect(() => {
+    fetchMovieDetails();
+    if (isAuthenticated) {
+      fetchUserRating();
+    }
+  }, [id, isAuthenticated, token]);
+
+  const fetchMovieDetails = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch(`http://localhost:5001/api/movies/${id}`);
+      
+      if (!response.ok) {
+        throw new Error('Movie not found');
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setMovie(result.data.movie);
+      } else {
+        throw new Error(result.message || 'Failed to fetch movie');
+      }
+    } catch (err) {
+      console.error('Error fetching movie:', err);
+      setError(err.message || 'Failed to load movie. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchUserRating = async () => {
+    if (!isAuthenticated) return;
+    
+    try {
+      const response = await fetch(`http://localhost:5001/api/movies/${id}/rating`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setUserRating(result.data);
+      }
+    } catch (err) {
+      console.error('Error fetching user rating:', err);
+    }
+  };
+
+  const handleRateMovie = async (rating, review = '') => {
+    if (!isAuthenticated) {
+      showNotification('Please login to rate movies', 'warning');
+      return;
+    }
+    
+    try {
+      setRatingLoading(true);
+      
+      const response = await fetch(`http://localhost:5001/api/movies/${id}/rate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ rating, review })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setUserRating({
+          rating,
+          review,
+          hasRated: true
+        });
+        setMovie(prev => ({
+          ...prev,
+          averageRating: result.data.movie.averageRating,
+          totalRatings: result.data.movie.totalRatings
+        }));
+        showNotification(result.message || 'Rating submitted successfully!', 'success');
+      } else {
+        const errorData = await response.json();
+        showNotification(errorData.message || 'Failed to rate movie', 'error');
+      }
+    } catch (err) {
+      console.error('Error rating movie:', err);
+      showNotification('Failed to rate movie. Please try again.', 'error');
+    } finally {
+      setRatingLoading(false);
+    }
+  };
+
+  const showNotification = (message, type = 'info') => {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+      <div class="notification-content">
+        <span class="notification-message">${message}</span>
+        <button class="notification-close">×</button>
+      </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 5000);
+    
+    const closeBtn = notification.querySelector('.notification-close');
+    closeBtn.addEventListener('click', () => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="movie-detail-container">
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <h3>Loading movie details...</h3>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !movie) {
+    return (
+      <div className="movie-detail-container">
+        <div className="error-state">
+          <h3>Error loading movie</h3>
+          <p>{error || 'Movie not found'}</p>
+          <button 
+            className="btn btn-primary"
+            onClick={() => navigate('/')}
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {showPlayer && movie && (
+        <MoviePlayer 
+          movie={movie} 
+          onClose={() => setShowPlayer(false)} 
+        />
+      )}
+      
+      <div className="movie-detail-container">
+        <button 
+          className="back-button"
+          onClick={() => navigate(-1)}
+        >
+          ← Back
+        </button>
+
+      <div className="movie-detail-content">
+        <div className="movie-detail-poster">
+          {movie.imageUrl ? (
+            <img src={movie.imageUrl} alt={movie.title} />
+          ) : (
+            <div className="movie-placeholder-large">
+              <span>🎬</span>
+            </div>
+          )}
+        </div>
+
+        <div className="movie-detail-info">
+          <h1 className="movie-detail-title">{movie.title}</h1>
+          
+          <div className="movie-detail-meta">
+            <div className="meta-item">
+              <span className="meta-label">Year:</span>
+              <span className="meta-value">{movie.year}</span>
+            </div>
+            {movie.genre && (
+              <div className="meta-item">
+                <span className="meta-label">Genre:</span>
+                <span className="meta-value">{movie.genre}</span>
+              </div>
+            )}
+            {movie.releaseDate && (
+              <div className="meta-item">
+                <span className="meta-label">Release Date:</span>
+                <span className="meta-value">{movie.releaseDate}</span>
+              </div>
+            )}
+            {movie.source && (
+              <div className="meta-item">
+                <span className="meta-label">Source:</span>
+                <span className="meta-value">{movie.source}</span>
+              </div>
+            )}
+            {movie.subtitle && (
+              <div className="meta-item">
+                <span className="meta-label">Subtitle:</span>
+                <span className="meta-value">{movie.subtitle}</span>
+              </div>
+            )}
+          </div>
+
+          {movie.description && (
+            <div className="movie-detail-description">
+              <h3>Description</h3>
+              <p>{movie.description}</p>
+            </div>
+          )}
+
+          <div className="movie-detail-ratings">
+            <div className="rating-item">
+              <span className="rating-label">🎬 IMDB Rating:</span>
+              <span className="rating-value">
+                {movie.imdbRating ? movie.imdbRating.toFixed(1) : 'N/A'}/10
+              </span>
+            </div>
+            <div className="rating-item">
+              <span className="rating-label">⭐ User Rating:</span>
+              <span className="rating-value">
+                {movie.averageRating ? movie.averageRating.toFixed(1) : '0.0'}/10
+                <span className="rating-count">
+                  ({movie.totalRatings || 0} ratings)
+                </span>
+              </span>
+            </div>
+          </div>
+
+          {isAuthenticated && (
+            <div className="movie-detail-rate-section">
+              <h3>Rate this movie</h3>
+              {userRating?.hasRated && (
+                <p className="user-rating-note">
+                  Your rating: {userRating.rating}/10
+                </p>
+              )}
+              <div className="rating-stars-large">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(star => (
+                  <button
+                    key={star}
+                    type="button"
+                    className={`rating-star-large ${userRating?.rating >= star ? 'active' : ''}`}
+                    onClick={() => handleRateMovie(star)}
+                    disabled={ratingLoading}
+                  >
+                    {star}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="movie-detail-actions">
+            {isAuthenticated ? (
+              <>
+                {movie.movieUrl && (
+                  <button 
+                    className="btn btn-primary btn-large"
+                    onClick={() => setShowPlayer(true)}
+                  >
+                    🎬 Watch Movie
+                  </button>
+                )}
+                {movie.downloadUrl && (
+                  <button 
+                    className="btn btn-secondary btn-large"
+                    onClick={() => window.open(movie.downloadUrl, '_blank')}
+                  >
+                    ⬇️ Download
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <button 
+                  className="btn btn-primary btn-large"
+                  onClick={() => showNotification('Please login to watch movies', 'warning')}
+                >
+                  🎬 Watch Movie
+                </button>
+                <button 
+                  className="btn btn-secondary btn-large"
+                  onClick={() => showNotification('Please login to download movies', 'warning')}
+                >
+                  ⬇️ Download
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      </div>
+    </>
+  );
+};
+
+export default MovieDetail;
+

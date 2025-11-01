@@ -1,0 +1,327 @@
+/* Movie Player Overlay */
+.movie-player-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(10px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Movie Player Container */
+.movie-player-container {
+  width: 100%;
+  max-width: 1400px;
+  background: var(--gray-100);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-2xl);
+  overflow: hidden;
+  animation: slideUp 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Movie Player Header */
+.movie-player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-lg) var(--space-xl);
+  background: var(--gray-200);
+  border-bottom: 1px solid var(--gray-300);
+}
+
+.movie-player-title {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: var(--gray-900);
+  margin: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.movie-player-close {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: var(--gray-300);
+  color: var(--gray-700);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-normal);
+  margin-left: var(--space-md);
+  flex-shrink: 0;
+}
+
+.movie-player-close:hover {
+  background: var(--error-color);
+  color: var(--white);
+  transform: rotate(90deg);
+}
+
+/* Movie Player Video Wrapper */
+.movie-player-video-wrapper {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%; /* 16:9 aspect ratio */
+  background: #000;
+}
+
+.movie-player-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+/* Video Loading Overlay */
+.video-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-lg);
+  z-index: 10;
+}
+
+.video-loading-overlay .loading-spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top: 4px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.video-loading-overlay p {
+  color: var(--white);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+/* Video Error Overlay */
+.video-error-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-lg);
+  z-index: 10;
+  padding: var(--space-xl);
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 4rem;
+}
+
+.video-error-overlay h3 {
+  color: var(--white);
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  margin: 0;
+}
+
+.video-error-overlay p {
+  color: var(--gray-400);
+  font-size: var(--font-size-base);
+  margin: 0;
+}
+
+.error-url-info {
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  max-width: 90%;
+  word-break: break-all;
+}
+
+.error-url-info small {
+  color: var(--gray-500);
+  font-size: var(--font-size-xs);
+}
+
+.retry-button {
+  padding: var(--space-md) var(--space-xl);
+  background: var(--gradient-primary);
+  color: var(--white);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  margin-top: var(--space-md);
+}
+
+.retry-button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  background: var(--primary-dark);
+}
+
+/* Video Play Overlay */
+.video-play-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  z-index: 10;
+  cursor: pointer;
+}
+
+.play-button-large {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  font-size: 3rem;
+  color: var(--gray-700);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-normal);
+  box-shadow: var(--shadow-xl);
+}
+
+.play-button-large:hover {
+  background: var(--white);
+  transform: scale(1.1);
+  box-shadow: var(--shadow-2xl);
+}
+
+.video-play-overlay p {
+  color: var(--white);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+  margin: 0;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 968px) {
+  .movie-player-container {
+    max-width: 95%;
+    max-height: 85vh;
+  }
+
+  .movie-player-header {
+    padding: var(--space-md) var(--space-lg);
+  }
+
+  .movie-player-title {
+    font-size: var(--font-size-lg);
+  }
+
+  .movie-player-close {
+    width: 35px;
+    height: 35px;
+    font-size: var(--font-size-xl);
+  }
+}
+
+@media (max-width: 768px) {
+  .movie-player-overlay {
+    padding: var(--space-md);
+  }
+
+  .movie-player-container {
+    max-width: 100%;
+    max-height: 90vh;
+    border-radius: var(--radius-lg);
+  }
+
+  .movie-player-header {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .movie-player-title {
+    font-size: var(--font-size-base);
+  }
+
+  .movie-player-close {
+    width: 32px;
+    height: 32px;
+    font-size: var(--font-size-lg);
+  }
+}
+
+@media (max-width: 480px) {
+  .movie-player-overlay {
+    padding: 0;
+  }
+
+  .movie-player-container {
+    border-radius: 0;
+    max-height: 100vh;
+  }
+
+  .movie-player-header {
+    padding: var(--space-sm);
+  }
+}
+
