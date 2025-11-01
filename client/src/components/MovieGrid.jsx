@@ -448,13 +448,8 @@ const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenti
             key={movie._id} 
             className="movie-poster-card"
             onClick={() => navigate(`/movie/${movie._id}`)}
-            style={{ cursor: 'pointer' }}
+            style={{ cursor: 'pointer', '--index': index }}
           >
-            {/* Source Quality Banner */}
-            <div className="source-banner">
-              <span className="source-quality">{movie.source}</span>
-            </div>
-            
             {/* Movie Poster */}
             <div className="movie-poster">
               {movie.imageUrl ? (
