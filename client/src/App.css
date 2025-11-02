@@ -1554,6 +1554,69 @@ html {
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  position: relative;
+}
+
+.header-container::after {
+  content: '';
+  flex: 0 0 60px;
+}
+
+/* Mobile Menu Toggle in Header */
+.movie-header .menu-toggle-wrapper {
+  display: block; /* Always visible */
+  position: absolute;
+  right: var(--space-xl);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10001;
+}
+
+.movie-header .mobile-menu-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 8px;
+  transition: all 0.3s ease;
+  min-width: 40px;
+  min-height: 40px;
+  justify-content: center;
+  align-items: center;
+}
+
+.movie-header .mobile-menu-toggle:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+.movie-header .mobile-menu-toggle.active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: var(--primary-color);
+}
+
+.movie-header .mobile-menu-toggle span {
+  width: 22px;
+  height: 2.5px;
+  background: var(--white);
+  border-radius: 2px;
+  transition: all 0.3s ease;
+  transform-origin: center;
+}
+
+.movie-header .mobile-menu-toggle.active span:nth-child(1) {
+  transform: rotate(45deg) translate(6px, 6px);
+}
+
+.movie-header .mobile-menu-toggle.active span:nth-child(2) {
+  opacity: 0;
+}
+
+.movie-header .mobile-menu-toggle.active span:nth-child(3) {
+  transform: rotate(-45deg) translate(6px, -6px);
 }
 
 .header-container::-webkit-scrollbar {
@@ -1971,6 +2034,21 @@ html {
     font-size: 11px;
     letter-spacing: 0.6px;
   }
+  
+  .movie-header .menu-toggle-wrapper {
+    /* Always visible */
+  }
+  
+  .movie-header .mobile-menu-toggle {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px;
+  }
+  
+  .movie-header .mobile-menu-toggle span {
+    width: 20px;
+    height: 2px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1997,6 +2075,21 @@ html {
   .category-text {
     font-size: 10px;
     letter-spacing: 0.5px;
+  }
+  
+  .movie-header .menu-toggle-wrapper {
+    right: var(--space-md);
+  }
+  
+  .movie-header .mobile-menu-toggle {
+    min-width: 34px;
+    min-height: 34px;
+    padding: 6px;
+  }
+  
+  .movie-header .mobile-menu-toggle span {
+    width: 18px;
+    height: 2px;
   }
   
   .header-dropdown {
