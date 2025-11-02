@@ -384,7 +384,8 @@ router.post('/', protect, restrictToAdmin, [
   body('genre').trim().isLength({ min: 2, max: 50 }).withMessage('Genre must be between 2 and 50 characters'),
   body('movieUrl').isURL().withMessage('Please provide a valid movie URL'),
   body('imdbRating').isFloat({ min: 0, max: 10 }).withMessage('IMDB rating must be between 0 and 10'),
-  body('imageFile').notEmpty().withMessage('Movie image is required')
+  body('imageFile').optional().notEmpty().withMessage('Movie image is required if imageFiles is not provided'),
+  body('imageFiles').optional().isArray({ min: 1 }).withMessage('At least one image is required')
 ], async (req, res) => {
   try {
     console.log('Received movie creation request:', {
@@ -392,11 +393,30 @@ router.post('/', protect, restrictToAdmin, [
       year: req.body.year,
       genre: req.body.genre,
       hasImageFile: !!req.body.imageFile,
+      hasImageFiles: !!(req.body.imageFiles && Array.isArray(req.body.imageFiles) && req.body.imageFiles.length > 0),
+      imageFilesCount: req.body.imageFiles ? req.body.imageFiles.length : 0,
       imageFileLength: req.body.imageFile ? req.body.imageFile.length : 0,
       hasImdbRating: req.body.imdbRating !== undefined,
       fullBody: JSON.stringify(req.body, null, 2)
     });
 
+    const { title, year, description, genre, movieUrl, imdbRating, imageFile, imageFiles } = req.body;
+    
+    // Custom validation: at least one image must be provided (either imageFile or imageFiles)
+    if (!imageFile && (!imageFiles || !Array.isArray(imageFiles) || imageFiles.length === 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: [{
+          type: 'field',
+          value: undefined,
+          msg: 'At least one image is required (imageFile or imageFiles)',
+          path: 'imageFile',
+          location: 'body'
+        }]
+      });
+    }
+    
     // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -407,8 +427,6 @@ router.post('/', protect, restrictToAdmin, [
         errors: errors.array()
       });
     }
-
-    const { title, year, description, genre, movieUrl, imdbRating, imageFile } = req.body;
 
     // Additional validation for edge cases
     if (title && title.trim() === '') {
@@ -439,8 +457,9 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
     
-    // Validate required fields
-    if (!title || !year || !description || !genre || !movieUrl || imdbRating === undefined || !imageFile) {
+    // Validate required fields - check for either imageFile or imageFiles
+    const hasImageFile = imageFile || (imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0);
+    if (!title || !year || !description || !genre || !movieUrl || imdbRating === undefined || !hasImageFile) {
       console.log('Missing required fields:', { 
         title: title || 'MISSING', 
         year: year || 'MISSING', 
@@ -448,7 +467,8 @@ router.post('/', protect, restrictToAdmin, [
         genre: genre || 'MISSING', 
         movieUrl: movieUrl || 'MISSING', 
         imdbRating: imdbRating !== undefined ? imdbRating : 'MISSING', 
-        hasImageFile: !!imageFile 
+        hasImageFile: !!imageFile,
+        hasImageFiles: !!(imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0)
       });
       
       const missingFields = [];
@@ -458,7 +478,7 @@ router.post('/', protect, restrictToAdmin, [
       if (!genre) missingFields.push('genre');
       if (!movieUrl) missingFields.push('movieUrl');
       if (imdbRating === undefined) missingFields.push('imdbRating');
-      if (!imageFile) missingFields.push('imageFile');
+      if (!hasImageFile) missingFields.push('imageFile or imageFiles');
       
       return res.status(400).json({
         success: false,
@@ -466,48 +486,68 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
 
-    // Upload image to Cloudinary
+    // Upload images to Cloudinary
     let imageUrl;
+    let images = [];
+    
+    // Support both single imageFile and array of imageFiles
+    const imagesToUpload = imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0 
+      ? imageFiles 
+      : (imageFile ? [imageFile] : []);
+    
+    if (imagesToUpload.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one image is required'
+      });
+    }
+    
     try {
-      console.log('Starting Cloudinary upload...');
-      console.log('Image file type:', typeof imageFile);
-      console.log('Image file starts with data:image:', imageFile ? imageFile.startsWith('data:image/') : 'N/A');
+      console.log('Starting Cloudinary upload for', imagesToUpload.length, 'image(s)...');
       
-      // Handle base64 image data
-      let uploadData = imageFile;
+      // Upload all images
+      for (let i = 0; i < imagesToUpload.length; i++) {
+        const imgFile = imagesToUpload[i];
+        console.log(`Uploading image ${i + 1}/${imagesToUpload.length}...`);
+        
+        // Validate image format
+        if (typeof imgFile !== 'string' || !imgFile.startsWith('data:image/')) {
+          console.log('Invalid image format at index', i);
+          continue; // Skip invalid images
+        }
+        
+        const uploadResult = await cloudinary.uploader.upload(imgFile, {
+          folder: 'nkmoviehub',
+          transformation: [
+            { width: 500, height: 750, crop: 'fill' },
+            { quality: 'auto' }
+          ]
+        });
+        
+        const uploadedUrl = uploadResult.secure_url;
+        images.push(uploadedUrl);
+        
+        // Set first image as imageUrl (for backward compatibility)
+        if (i === 0) {
+          imageUrl = uploadedUrl;
+        }
+        
+        console.log(`Image ${i + 1} uploaded successfully:`, uploadedUrl);
+      }
       
-      // If it's a base64 string, use it directly
-      if (typeof imageFile === 'string' && imageFile.startsWith('data:image/')) {
-        uploadData = imageFile;
-        console.log('Using base64 image data for upload');
-      } else {
-        console.log('Image data format not recognized');
+      if (images.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid image format. Please provide a valid image file.'
+          message: 'Failed to upload any valid images'
         });
       }
       
-      console.log('Uploading to Cloudinary...');
-      const uploadResult = await cloudinary.uploader.upload(uploadData, {
-        folder: 'nkmoviehub',
-        transformation: [
-          { width: 500, height: 750, crop: 'fill' },
-          { quality: 'auto' }
-        ]
-      });
-      console.log('Cloudinary upload successful:', uploadResult.secure_url);
-      imageUrl = uploadResult.secure_url;
+      console.log(`Successfully uploaded ${images.length} image(s)`);
     } catch (uploadError) {
       console.error('Cloudinary upload error:', uploadError);
-      console.error('Error details:', {
-        message: uploadError.message,
-        code: uploadError.code,
-        statusCode: uploadError.http_code
-      });
       return res.status(500).json({
         success: false,
-        message: 'Failed to upload image: ' + uploadError.message
+        message: 'Failed to upload images: ' + uploadError.message
       });
     }
 
@@ -520,6 +560,7 @@ router.post('/', protect, restrictToAdmin, [
       movieUrl,
       imdbRating: parseFloat(imdbRating),
       imageUrl,
+      images: images, // Store array of images
       addedBy: req.user.id
     });
 
@@ -562,7 +603,8 @@ router.put('/:id', protect, restrictToAdmin, [
   body('year').optional().isInt({ min: 1900, max: new Date().getFullYear() + 5 }).withMessage('Please provide a valid year'),
   body('description').optional().trim().isLength({ min: 10, max: 1000 }).withMessage('Description must be between 10 and 1000 characters'),
   body('genre').optional().trim().isLength({ min: 2, max: 50 }).withMessage('Genre must be between 2 and 50 characters'),
-  body('movieUrl').optional().isURL().withMessage('Please provide a valid movie URL')
+  body('movieUrl').optional().isURL().withMessage('Please provide a valid movie URL'),
+  body('imdbRating').optional().isFloat({ min: 0, max: 10 }).withMessage('IMDB rating must be between 0 and 10')
 ], async (req, res) => {
   try {
     // Check for validation errors
@@ -575,7 +617,20 @@ router.put('/:id', protect, restrictToAdmin, [
       });
     }
 
-    const { title, year, description, genre, movieUrl, imageFile } = req.body;
+    const { title, year, description, genre, movieUrl, imdbRating, imageFile, imageFiles, images } = req.body;
+    
+    console.log('Received update request body:', {
+      title,
+      year,
+      description,
+      genre,
+      movieUrl,
+      imdbRating,
+      imdbRatingType: typeof imdbRating,
+      hasImageFiles: !!(imageFiles && Array.isArray(imageFiles)),
+      hasImages: !!(images && Array.isArray(images))
+    });
+    
     const updateData = {};
 
     if (title) updateData.title = title;
@@ -583,26 +638,101 @@ router.put('/:id', protect, restrictToAdmin, [
     if (description) updateData.description = description;
     if (genre) updateData.genre = genre;
     if (movieUrl) updateData.movieUrl = movieUrl;
+    
+    // Always update imdbRating if provided (including 0)
+    // The frontend always sends imdbRating, so we should process it
+    if (imdbRating !== undefined && imdbRating !== null) {
+      // Handle both number and string inputs
+      let parsedRating;
+      if (typeof imdbRating === 'number') {
+        parsedRating = imdbRating;
+      } else if (typeof imdbRating === 'string' && imdbRating.trim() !== '') {
+        parsedRating = parseFloat(imdbRating);
+      } else {
+        parsedRating = NaN;
+      }
+      
+      // Only update if it's a valid number in range (including 0)
+      if (!isNaN(parsedRating) && parsedRating >= 0 && parsedRating <= 10) {
+        updateData.imdbRating = parsedRating;
+        console.log('✓ Including IMDB rating in update:', updateData.imdbRating, '(type:', typeof updateData.imdbRating + ')');
+      } else {
+        console.log('✗ IMDB rating invalid or out of range:', imdbRating, '-> parsed:', parsedRating);
+      }
+    } else {
+      console.log('✗ IMDB rating not provided (undefined or null):', imdbRating);
+    }
 
-    // Handle image update if provided
-    if (imageFile) {
+    // Check if movie exists first
+    const existingMovie = await Movie.findById(req.params.id);
+    if (!existingMovie) {
+      return res.status(404).json({
+        success: false,
+        message: 'Movie not found'
+      });
+    }
+
+    // Handle images update - support multiple ways:
+    // 1. images array (direct URLs) - existing images that should be kept
+    // 2. imageFiles array (base64 to upload) - new images to upload
+    // 3. imageFile (single base64, backward compatibility)
+    // Get existing images from movie
+    const existingImages = existingMovie.images && existingMovie.images.length > 0 ? existingMovie.images : [];
+    
+    // Upload new images if provided
+    let uploadedImages = [];
+    if (imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0) {
       try {
-        // Handle base64 image data
-        let uploadData = imageFile;
-        
-        // If it's a base64 string, use it directly
-        if (typeof imageFile === 'string' && imageFile.startsWith('data:image/')) {
-          uploadData = imageFile;
+        for (const imgFile of imageFiles) {
+          if (typeof imgFile === 'string' && imgFile.startsWith('data:image/')) {
+            const uploadResult = await cloudinary.uploader.upload(imgFile, {
+              folder: 'nkmoviehub',
+              transformation: [
+                { width: 500, height: 750, crop: 'fill' },
+                { quality: 'auto' }
+              ]
+            });
+            uploadedImages.push(uploadResult.secure_url);
+          }
         }
-        
-        const uploadResult = await cloudinary.uploader.upload(uploadData, {
-          folder: 'nkmoviehub',
-          transformation: [
-            { width: 500, height: 750, crop: 'fill' },
-            { quality: 'auto' }
-          ]
+      } catch (uploadError) {
+        console.error('Cloudinary upload error:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload new images'
         });
-        updateData.imageUrl = uploadResult.secure_url;
+      }
+    }
+    
+    // Determine final images array
+    if (images && Array.isArray(images)) {
+      // If images array is provided, use it (filtered existing URLs)
+      // Merge with newly uploaded images
+      updateData.images = [...uploadedImages, ...images.filter(img => !uploadedImages.includes(img))];
+    } else if (uploadedImages.length > 0) {
+      // If only new images were uploaded, merge with existing
+      updateData.images = [...uploadedImages, ...existingImages.filter(img => !uploadedImages.includes(img))];
+    }
+    
+    // Handle single imageFile (backward compatibility)
+    if (imageFile && !imageFiles) {
+      try {
+        if (typeof imageFile === 'string' && imageFile.startsWith('data:image/')) {
+          const uploadResult = await cloudinary.uploader.upload(imageFile, {
+            folder: 'nkmoviehub',
+            transformation: [
+              { width: 500, height: 750, crop: 'fill' },
+              { quality: 'auto' }
+            ]
+          });
+          const newImageUrl = uploadResult.secure_url;
+          // Add to images array or create new one
+          if (!updateData.images) {
+            updateData.images = existingImages.length > 0 ? existingImages : [];
+          }
+          updateData.images = [newImageUrl, ...updateData.images.filter(img => img !== newImageUrl)];
+          updateData.imageUrl = newImageUrl;
+        }
       } catch (uploadError) {
         console.error('Cloudinary upload error:', uploadError);
         return res.status(500).json({
@@ -611,10 +741,25 @@ router.put('/:id', protect, restrictToAdmin, [
         });
       }
     }
+    
+    // Update imageUrl to first image if images array is set
+    if (updateData.images && updateData.images.length > 0) {
+      updateData.imageUrl = updateData.images[0];
+    } else if (images && Array.isArray(images) && images.length === 0) {
+      // Explicitly set empty if all images were removed
+      updateData.imageUrl = null;
+      updateData.images = [];
+    }
 
+    console.log('Final updateData before database update:', JSON.stringify(updateData, null, 2));
+    console.log('updateData.imdbRating:', updateData.imdbRating, 'Type:', typeof updateData.imdbRating);
+    console.log('updateData keys:', Object.keys(updateData));
+    console.log('Has imdbRating in updateData?', 'imdbRating' in updateData);
+
+    // Use findByIdAndUpdate with the update object directly (MongoDB will handle it correctly)
     const movie = await Movie.findByIdAndUpdate(
       req.params.id,
-      updateData,
+      updateData,  // Direct object works fine, but $set is also valid
       { new: true, runValidators: true }
     ).populate('addedBy', 'name email');
 
@@ -624,6 +769,8 @@ router.put('/:id', protect, restrictToAdmin, [
         message: 'Movie not found'
       });
     }
+
+    console.log('Movie after update - IMDB rating:', movie.imdbRating, 'Type:', typeof movie.imdbRating);
 
     res.json({
       success: true,
@@ -648,7 +795,7 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
   body('imageFile').optional().notEmpty().withMessage('Image file cannot be empty if provided')
 ], async (req, res) => {
   try {
-    const { imdbRating, imageFile } = req.body;
+    const { imdbRating, imageFile, imageFiles } = req.body;
     const movieId = req.params.id;
 
     console.log('Updating admin fields for movie:', movieId, {
@@ -678,44 +825,68 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
       });
     }
 
-    // Handle image upload if provided
-    if (imageFile) {
+    // Handle image upload if provided - support both single and multiple images
+    if (imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0) {
+      try {
+        console.log(`Starting upload of ${imageFiles.length} image(s) to Cloudinary...`);
+        
+        const uploadedImages = [];
+        for (let i = 0; i < imageFiles.length; i++) {
+          const imgFile = imageFiles[i];
+          
+          // Validate image format
+          if (typeof imgFile !== 'string' || !imgFile.startsWith('data:image/')) {
+            console.error(`Invalid image format at index ${i}`);
+            continue; // Skip invalid images
+          }
+          
+          const uploadResult = await cloudinary.uploader.upload(imgFile, {
+            folder: 'nkmoviehub',
+            transformation: [
+              { width: 500, height: 750, crop: 'fill' },
+              { quality: 'auto' }
+            ]
+          });
+          
+          uploadedImages.push(uploadResult.secure_url);
+          console.log(`Image ${i + 1}/${imageFiles.length} uploaded successfully`);
+          
+          // Set first image as imageUrl (for backward compatibility)
+          if (i === 0) {
+            movie.imageUrl = uploadResult.secure_url;
+          }
+        }
+        
+        if (uploadedImages.length > 0) {
+          // Merge with existing images, avoiding duplicates
+          const existingImages = movie.images && movie.images.length > 0 ? movie.images : [];
+          movie.images = [...uploadedImages, ...existingImages.filter(img => !uploadedImages.includes(img))];
+          console.log(`Total images after update: ${movie.images.length}`);
+        } else {
+          return res.status(400).json({
+            success: false,
+            message: 'Failed to upload any valid images'
+          });
+        }
+        
+      } catch (uploadError) {
+        console.error('Image upload error:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload images: ' + uploadError.message
+        });
+      }
+    } else if (imageFile) {
+      // Single image upload (backward compatibility)
       try {
         console.log('Starting image update to Cloudinary...');
-        console.log('Image file received:', {
-          type: typeof imageFile,
-          length: imageFile.length,
-          startsWithData: imageFile.startsWith('data:image/'),
-          firstChars: imageFile.substring(0, 100)
-        });
-        
-        // Validate image format
-        console.log('Validating image format...');
-        console.log('Image type:', typeof imageFile);
-        console.log('Image starts with data:image/:', imageFile ? imageFile.startsWith('data:image/') : false);
-        console.log('Image length:', imageFile ? imageFile.length : 0);
         
         if (typeof imageFile !== 'string' || !imageFile.startsWith('data:image/')) {
-          console.error('Image validation failed:', {
-            type: typeof imageFile,
-            startsWithData: imageFile ? imageFile.startsWith('data:image/') : false
-          });
           return res.status(400).json({
             success: false,
             message: 'Invalid image format. Please provide a valid image file.'
           });
         }
-        
-        console.log('Image validation passed');
-
-        // Store old image URL for potential cleanup
-        const oldImageUrl = movie.imageUrl;
-
-        console.log('Uploading to Cloudinary...');
-        console.log('Cloudinary config:', {
-          cloud_name: cloudinary.config().cloud_name,
-          api_key: cloudinary.config().api_key ? '***' + cloudinary.config().api_key.slice(-4) : 'undefined'
-        });
         
         // Upload new image to Cloudinary
         const uploadResult = await cloudinary.uploader.upload(imageFile, {
@@ -726,36 +897,16 @@ router.put('/:id/update-admin-fields', protect, restrictToAdmin, [
           ]
         });
         
-        console.log('Image updated successfully:', uploadResult.secure_url);
-        console.log('Upload result:', {
-          public_id: uploadResult.public_id,
-          secure_url: uploadResult.secure_url,
-          format: uploadResult.format,
-          bytes: uploadResult.bytes
-        });
         movie.imageUrl = uploadResult.secure_url;
         
-        // Optional: Delete old image from Cloudinary
-        if (oldImageUrl && oldImageUrl.includes('cloudinary.com')) {
-          try {
-            const urlParts = oldImageUrl.split('/');
-            const fileNameWithExt = urlParts[urlParts.length - 1];
-            const publicId = `nkmoviehub/${fileNameWithExt.split('.')[0]}`;
-            await cloudinary.uploader.destroy(publicId);
-            console.log('Old image deleted from Cloudinary');
-          } catch (deleteError) {
-            console.warn('Could not delete old image:', deleteError.message);
-            // Continue anyway - not critical
-          }
-        }
+        // Add to images array or create new one
+        const existingImages = movie.images && movie.images.length > 0 ? movie.images : [];
+        movie.images = [uploadResult.secure_url, ...existingImages.filter(img => img !== uploadResult.secure_url)];
+        
+        console.log('Image updated successfully:', uploadResult.secure_url);
         
       } catch (uploadError) {
         console.error('Image upload error:', uploadError);
-        console.error('Error details:', {
-          name: uploadError.name,
-          message: uploadError.message,
-          stack: uploadError.stack
-        });
         return res.status(500).json({
           success: false,
           message: 'Failed to upload image: ' + uploadError.message

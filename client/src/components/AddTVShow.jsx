@@ -14,11 +14,11 @@ const AddTVShow = () => {
     genre: '',
     showUrl: '',
     imdbRating: 0,
-    imageFile: null,
+    imageFiles: [],
     numberOfSeasons: 0
   });
   const [seasons, setSeasons] = useState([]); // Array of { seasonNumber, episodeCount, episodes: [...] }
-  const [imagePreview, setImagePreview] = useState(null);
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
 
   const handleInputChange = (e) => {
@@ -89,8 +89,8 @@ const AddTVShow = () => {
       errors.imdbRating = 'IMDB rating must be between 0 and 10';
     }
     
-    if (!formData.imageFile) {
-      errors.imageFile = 'TV Show poster is required';
+    if (!formData.imageFiles || formData.imageFiles.length === 0) {
+      errors.imageFiles = 'At least one TV show poster is required';
     }
     
     setValidationErrors(errors);
@@ -173,33 +173,53 @@ const AddTVShow = () => {
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const validFiles = [];
+    const newPreviews = [];
+
+    files.forEach((file) => {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        setError('Please select a valid image file');
+        setError(`File ${file.name} is not a valid image file`);
         return;
       }
       
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        setError('Image size should be less than 5MB');
+        setError(`Image ${file.name} size should be less than 5MB`);
         return;
       }
 
-      setFormData(prev => ({
-        ...prev,
-        imageFile: file
-      }));
+      validFiles.push(file);
 
       // Create preview
       const reader = new FileReader();
       reader.onload = () => {
-        setImagePreview(reader.result);
+        newPreviews.push(reader.result);
+        if (newPreviews.length === validFiles.length) {
+          setImagePreviews(prev => [...prev, ...newPreviews]);
+        }
       };
       reader.readAsDataURL(file);
+    });
+
+    if (validFiles.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        imageFiles: [...prev.imageFiles, ...validFiles]
+      }));
       setError('');
     }
+  };
+
+  const removeImage = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      imageFiles: prev.imageFiles.filter((_, i) => i !== index)
+    }));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e) => {
@@ -215,8 +235,10 @@ const AddTVShow = () => {
     setError('');
 
     try {
-      // Convert image to base64 for Cloudinary upload
-      const base64Image = await convertImageToBase64(formData.imageFile);
+      // Convert all images to base64 for Cloudinary upload
+      const base64Images = await Promise.all(
+        formData.imageFiles.map(file => convertImageToBase64(file))
+      );
       
       // Flatten all episodes from all seasons into a single array with sequential episode numbers
       let globalEpisodeNumber = 1;
@@ -246,7 +268,7 @@ const AddTVShow = () => {
         description: formData.description,
         genre: formData.genre,
         imdbRating: formData.imdbRating,
-        imageFile: base64Image,
+        imageFiles: base64Images, // Send array of base64 images
         numberOfSeasons: formData.numberOfSeasons || (seasons.length > 0 ? seasons.length : 1)
       };
       
@@ -360,11 +382,11 @@ const AddTVShow = () => {
       genre: '',
       showUrl: '',
       imdbRating: 0,
-      imageFile: null,
+      imageFiles: [],
       numberOfSeasons: 0
     });
     setSeasons([]);
-    setImagePreview(null);
+    setImagePreviews([]);
     setError('');
     setValidationErrors({});
   };
@@ -643,36 +665,70 @@ const AddTVShow = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="imageFile">TV Show Poster *</label>
+            <label htmlFor="imageFiles">TV Show Posters *</label>
             <input
               type="file"
-              id="imageFile"
-              name="imageFile"
+              id="imageFiles"
+              name="imageFiles"
               onChange={handleImageChange}
               accept="image/*"
+              multiple
               required
-              className={getFieldError('imageFile') ? 'form-error' : isFieldValid('imageFile') ? 'form-valid' : ''}
+              className={getFieldError('imageFiles') ? 'form-error' : isFieldValid('imageFiles') ? 'form-valid' : ''}
             />
-            <small>Max size: 5MB. Supported formats: JPG, PNG, GIF</small>
-            {getFieldError('imageFile') && (
-              <small className="error-message">{getFieldError('imageFile')}</small>
+            <small>Max size per image: 5MB. Supported formats: JPG, PNG, GIF. You can select multiple images.</small>
+            {getFieldError('imageFiles') && (
+              <small className="error-message">{getFieldError('imageFiles')}</small>
             )}
           </div>
 
-          {imagePreview && (
-            <div className="image-preview">
-              <h4>Image Preview:</h4>
-              <img 
-                src={imagePreview} 
-                alt="Preview" 
-                style={{ 
-                  maxWidth: '200px', 
-                  maxHeight: '300px', 
-                  objectFit: 'cover',
-                  borderRadius: '8px',
-                  border: '2px solid #ddd'
-                }} 
-              />
+          {imagePreviews.length > 0 && (
+            <div className="image-preview-section">
+              <h4>Image Previews ({imagePreviews.length}):</h4>
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', 
+                gap: '15px',
+                marginTop: '15px'
+              }}>
+                {imagePreviews.map((preview, index) => (
+                  <div key={index} style={{ position: 'relative' }}>
+                    <img 
+                      src={preview} 
+                      alt={`Preview ${index + 1}`} 
+                      style={{ 
+                        width: '100%', 
+                        height: '225px', 
+                        objectFit: 'cover',
+                        borderRadius: '8px',
+                        border: '2px solid #ddd'
+                      }} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      style={{
+                        position: 'absolute',
+                        top: '5px',
+                        right: '5px',
+                        background: 'red',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: '25px',
+                        height: '25px',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

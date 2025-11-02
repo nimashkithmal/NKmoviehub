@@ -13,9 +13,11 @@ const TVShowDetail = () => {
   const [error, setError] = useState(null);
   const [selectedEpisode, setSelectedEpisode] = useState(null);
   const [showPlayer, setShowPlayer] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   useEffect(() => {
     fetchTVShowDetails();
+    setSelectedImageIndex(0); // Reset image index when TV show changes
   }, [id]);
 
   const fetchTVShowDetails = async () => {
@@ -225,8 +227,63 @@ const TVShowDetail = () => {
 
         <div className="movie-detail-content">
           <div className="movie-detail-poster">
-            {tvShow.imageUrl ? (
-              <img src={tvShow.imageUrl} alt={tvShow.title} />
+            {/* Image Gallery */}
+            {tvShow.images && tvShow.images.length > 0 ? (
+              <div className="movie-image-gallery">
+                <div className="movie-main-image">
+                  <img 
+                    src={tvShow.images[selectedImageIndex] || tvShow.images[0]} 
+                    alt={tvShow.title}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      const placeholder = e.target.parentElement.querySelector('.movie-placeholder-large') || document.createElement('div');
+                      placeholder.className = 'movie-placeholder-large';
+                      placeholder.innerHTML = '<span>📺</span>';
+                      if (!e.target.parentElement.querySelector('.movie-placeholder-large')) {
+                        e.target.parentElement.appendChild(placeholder);
+                      } else {
+                        e.target.parentElement.querySelector('.movie-placeholder-large').style.display = 'flex';
+                      }
+                    }}
+                  />
+                </div>
+                {tvShow.images.length > 1 && (
+                  <div className="movie-image-thumbnails">
+                    {tvShow.images.map((imageUrl, index) => (
+                      <div 
+                        key={index}
+                        className={`thumbnail-item ${index === selectedImageIndex ? 'active' : ''}`}
+                        onClick={() => setSelectedImageIndex(index)}
+                      >
+                        <img 
+                          src={imageUrl} 
+                          alt={`${tvShow.title} ${index + 1}`}
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="150"%3E%3Crect width="100" height="150" fill="%231a1a1a"/%3E%3Ctext x="50" y="75" font-size="20" fill="white" text-anchor="middle" dominant-baseline="middle"%3E📺%3C/text%3E%3C/svg%3E';
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : tvShow.imageUrl ? (
+              <img 
+                src={tvShow.imageUrl} 
+                alt={tvShow.title}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  const placeholder = e.target.parentElement.querySelector('.movie-placeholder-large') || document.createElement('div');
+                  placeholder.className = 'movie-placeholder-large';
+                  placeholder.innerHTML = '<span>📺</span>';
+                  if (!e.target.parentElement.querySelector('.movie-placeholder-large')) {
+                    e.target.parentElement.appendChild(placeholder);
+                  } else {
+                    e.target.parentElement.querySelector('.movie-placeholder-large').style.display = 'flex';
+                  }
+                }}
+              />
             ) : (
               <div className="movie-placeholder-large">
                 <span>📺</span>

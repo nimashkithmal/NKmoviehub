@@ -36,6 +36,8 @@ const AdminDashboard = () => {
     movieUrl: '',
     imdbRating: 0
   });
+  const [movieImageFiles, setMovieImageFiles] = useState([]);
+  const [movieImagePreviews, setMovieImagePreviews] = useState([]);
   const [tvShowFormData, setTVShowFormData] = useState({
     title: '',
     year: new Date().getFullYear(),
@@ -46,6 +48,8 @@ const AdminDashboard = () => {
     episodeCount: 0,
     numberOfSeasons: 0
   });
+  const [tvShowImageFiles, setTVShowImageFiles] = useState([]);
+  const [tvShowImagePreviews, setTVShowImagePreviews] = useState([]);
   const [tvShowEpisodes, setTVShowEpisodes] = useState([]);
   const [tvShowSeasons, setTVShowSeasons] = useState([]);
   const [stats, setStats] = useState({
@@ -418,6 +422,15 @@ const AdminDashboard = () => {
       movieUrl: movie.movieUrl || '',
       imdbRating: movie.imdbRating || 0
     });
+    // Set existing images as previews
+    if (movie.images && movie.images.length > 0) {
+      setMovieImagePreviews(movie.images);
+    } else if (movie.imageUrl) {
+      setMovieImagePreviews([movie.imageUrl]);
+    } else {
+      setMovieImagePreviews([]);
+    }
+    setMovieImageFiles([]); // Reset new files
   };
 
   const handleUpdateMovie = async () => {
@@ -427,13 +440,82 @@ const AdminDashboard = () => {
     }
 
     try {
+      const updateData = {
+        title: movieFormData.title,
+        year: movieFormData.year,
+        description: movieFormData.description,
+        genre: movieFormData.genre,
+        movieUrl: movieFormData.movieUrl
+      };
+      
+      // Always include imdbRating in the update
+      // Get the current value from form data
+      const ratingValue = movieFormData.imdbRating;
+      let ratingToSend;
+      
+      // Determine what rating value to send
+      if (ratingValue === undefined || ratingValue === null || ratingValue === '') {
+        // If empty/invalid, keep existing value
+        ratingToSend = editingMovie?.imdbRating ?? 0;
+      } else {
+        // Try to parse as number
+        const parsedRating = parseFloat(ratingValue);
+        if (!isNaN(parsedRating) && parsedRating >= 0 && parsedRating <= 10) {
+          ratingToSend = parsedRating;
+        } else {
+          // Invalid number, keep existing value
+          ratingToSend = editingMovie?.imdbRating ?? 0;
+        }
+      }
+      
+      // Always include imdbRating in update (even if 0)
+      updateData.imdbRating = ratingToSend;
+      
+      console.log('IMDB Rating update:', {
+        formValue: ratingValue,
+        sending: ratingToSend,
+        existing: editingMovie?.imdbRating,
+        type: typeof ratingToSend
+      });
+      
+      // Handle image updates
+      // If new images are added, convert them to base64
+      if (movieImageFiles.length > 0) {
+        const base64Images = await Promise.all(
+          movieImageFiles.map(file => convertImageToBase64(file))
+        );
+        updateData.imageFiles = base64Images;
+      }
+      
+      // If images were removed (previews changed), send the updated images array
+      if (movieImagePreviews.length > 0 && editingMovie && (editingMovie.images || editingMovie.imageUrl)) {
+        // Compare existing images with previews to detect removals
+        const existingImageUrls = editingMovie.images || (editingMovie.imageUrl ? [editingMovie.imageUrl] : []);
+        const remainingUrls = movieImagePreviews.filter(preview => 
+          typeof preview === 'string' && preview.startsWith('http')
+        );
+        // Always send the updated images array if previews differ from existing
+        if (remainingUrls.length > 0) {
+          updateData.images = remainingUrls;
+        } else if (existingImageUrls.length > 0 && remainingUrls.length === 0) {
+          // If all images were removed
+          updateData.images = [];
+        }
+      } else if (movieImagePreviews.length === 0 && editingMovie && (editingMovie.images || editingMovie.imageUrl)) {
+        // All images were removed
+        updateData.images = [];
+      }
+      
+      console.log('Updating movie with data:', updateData);
+      console.log('IMDB Rating in updateData:', updateData.imdbRating, 'Type:', typeof updateData.imdbRating);
+      
       const response = await fetch(`http://localhost:5001/api/movies/${editingMovie._id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(movieFormData)
+        body: JSON.stringify(updateData)
       });
 
       if (!response.ok) {
@@ -454,11 +536,63 @@ const AdminDashboard = () => {
           movieUrl: '',
           imdbRating: 0
         });
+        setMovieImageFiles([]);
+        setMovieImagePreviews([]);
         showNotification('Movie updated successfully!', 'success');
       }
     } catch (err) {
       console.error('Error updating movie:', err);
       showNotification(`Error updating movie: ${err.message}`, 'error');
+    }
+  };
+
+  const handleMovieImageChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const validFiles = [];
+    const newPreviews = [];
+
+    files.forEach((file) => {
+      if (!file.type.startsWith('image/')) {
+        showNotification(`File ${file.name} is not a valid image file`, 'error');
+        return;
+      }
+      
+      if (file.size > 5 * 1024 * 1024) {
+        showNotification(`Image ${file.name} size should be less than 5MB`, 'error');
+        return;
+      }
+
+      validFiles.push(file);
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        newPreviews.push(reader.result);
+        if (newPreviews.length === validFiles.length) {
+          setMovieImagePreviews(prev => [...prev, ...newPreviews]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (validFiles.length > 0) {
+      setMovieImageFiles(prev => [...prev, ...validFiles]);
+    }
+  };
+
+  const removeMovieImage = (index) => {
+    // If index is in existing images (from database), we need to handle differently
+    const existingCount = editingMovie?.images?.length || (editingMovie?.imageUrl ? 1 : 0);
+    if (index < existingCount) {
+      // Removing existing image - we'll mark it for removal by not including it in the update
+      // For now, just remove from preview
+      setMovieImagePreviews(prev => prev.filter((_, i) => i !== index));
+    } else {
+      // Removing newly added file
+      const fileIndex = index - existingCount;
+      setMovieImageFiles(prev => prev.filter((_, i) => i !== fileIndex));
+      setMovieImagePreviews(prev => prev.filter((_, i) => i !== index));
     }
   };
 
@@ -518,17 +652,22 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleUpdateAdminFields = async (movieId, imdbRating, imageFile) => {
+  const handleUpdateAdminFields = async (movieId, imdbRating, imageFile, imageFiles) => {
     try {
       const updateData = {};
       if (imdbRating !== null && imdbRating !== undefined) updateData.imdbRating = imdbRating;
-      if (imageFile !== null && imageFile !== undefined) updateData.imageFile = imageFile;
+      if (imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0) {
+        updateData.imageFiles = imageFiles;
+      } else if (imageFile !== null && imageFile !== undefined) {
+        updateData.imageFile = imageFile; // Backward compatibility
+      }
       
       console.log('Sending update data:', {
         movieId,
         hasImdbRating: imdbRating !== null && imdbRating !== undefined,
         hasImageFile: imageFile !== null && imageFile !== undefined,
-        imageFileLength: imageFile ? imageFile.length : 0
+        hasImageFiles: imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0,
+        imageFilesCount: imageFiles ? imageFiles.length : 0
       });
 
       const response = await fetch(`http://localhost:5001/api/movies/${movieId}/update-admin-fields`, {
@@ -554,7 +693,7 @@ const AdminDashboard = () => {
       
       if (result.success) {
         // Only refresh movies list for non-image updates to avoid double refresh
-        if (!imageFile) {
+        if (!imageFile && (!imageFiles || imageFiles.length === 0)) {
           await fetchMovies();
         }
         showNotification('Movie updated successfully!', 'success');
@@ -571,20 +710,31 @@ const AdminDashboard = () => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
+    input.multiple = true; // Allow multiple files
     
     input.onchange = async (event) => {
-      const file = event.target.files[0];
-      if (!file) return;
+      const files = Array.from(event.target.files || []);
+      if (files.length === 0) return;
 
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        showNotification('Please select a valid image file', 'error');
-        return;
+      const validFiles = [];
+      for (const file of files) {
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          showNotification(`File ${file.name} is not a valid image file`, 'error');
+          continue;
+        }
+        
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          showNotification(`Image ${file.name} size should be less than 5MB`, 'error');
+          continue;
+        }
+        
+        validFiles.push(file);
       }
-      
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        showNotification('Image size should be less than 5MB', 'error');
+
+      if (validFiles.length === 0) {
+        showNotification('No valid image files selected', 'error');
         return;
       }
 
@@ -592,38 +742,39 @@ const AdminDashboard = () => {
         // Show loading state
         const updateBtn = document.querySelector(`[data-movie-id="${movieId}"] .update-image-btn`);
         if (updateBtn) {
-          updateBtn.textContent = '🔄 Uploading...';
+          updateBtn.textContent = `🔄 Uploading ${validFiles.length} image(s)...`;
           updateBtn.disabled = true;
         }
 
-        // Convert to base64
-        const base64Image = await convertImageToBase64(file);
-        console.log('Base64 image created, length:', base64Image.length);
-        console.log('Base64 starts with data:image/:', base64Image.startsWith('data:image/'));
+        // Convert all images to base64
+        const base64Images = await Promise.all(
+          validFiles.map(file => convertImageToBase64(file))
+        );
+        console.log(`Base64 images created: ${base64Images.length} images`);
         
-        // Update the movie image
-        console.log('Calling handleUpdateAdminFields with image...');
-        const result = await handleUpdateAdminFields(movieId, undefined, base64Image);
+        // Update the movie images
+        console.log('Calling handleUpdateAdminFields with images...');
+        const result = await handleUpdateAdminFields(movieId, undefined, undefined, base64Images);
         console.log('Result from handleUpdateAdminFields:', result);
         
         if (result && result.success) {
-          // Refresh the movies list to show the updated image
+          // Refresh the movies list to show the updated images
           console.log('Image update successful, refreshing movies list...');
           await fetchMovies();
-          showNotification('Image updated successfully!', 'success');
+          showNotification(`${validFiles.length} image(s) updated successfully!`, 'success');
         } else {
-          const errorMsg = result?.message || 'Failed to update image. Please try again.';
+          const errorMsg = result?.message || 'Failed to update images. Please try again.';
           console.error('Image update failed:', errorMsg);
-          showNotification(`Failed to update image: ${errorMsg}`, 'error');
+          showNotification(`Failed to update images: ${errorMsg}`, 'error');
         }
       } catch (error) {
-        console.error('Error processing image:', error);
-        showNotification('Failed to process image. Please try again.', 'error');
+        console.error('Error processing images:', error);
+        showNotification('Failed to process images. Please try again.', 'error');
       } finally {
         // Reset button state
         const updateBtn = document.querySelector(`[data-movie-id="${movieId}"] .update-image-btn`);
         if (updateBtn) {
-          updateBtn.textContent = '📷 Update';
+          updateBtn.textContent = '🖼️ Update Images';
           updateBtn.disabled = false;
         }
       }
@@ -703,6 +854,16 @@ const AdminDashboard = () => {
       episodeCount: episodeCount,
       numberOfSeasons: numberOfSeasons
     });
+    
+    // Set existing images as previews
+    if (tvShow.images && tvShow.images.length > 0) {
+      setTVShowImagePreviews(tvShow.images);
+    } else if (tvShow.imageUrl) {
+      setTVShowImagePreviews([tvShow.imageUrl]);
+    } else {
+      setTVShowImagePreviews([]);
+    }
+    setTVShowImageFiles([]); // Reset new files
     
     // Group episodes by seasons
     if (tvShow.episodes && tvShow.episodes.length > 0 && numberOfSeasons > 0) {
@@ -808,6 +969,26 @@ const AdminDashboard = () => {
         episodes: episodesData.length > 0 ? episodesData : undefined,
         episodeCount: episodesData.length > 0 ? episodesData.length : tvShowFormData.episodeCount
       };
+      
+      // If new images are added, convert them to base64
+      if (tvShowImageFiles.length > 0) {
+        const base64Images = await Promise.all(
+          tvShowImageFiles.map(file => convertImageToBase64(file))
+        );
+        updateData.imageFiles = base64Images;
+      }
+      
+      // If images were removed (previews changed), send the updated images array
+      if (tvShowImagePreviews.length > 0 && editingTVShow.images) {
+        // Compare existing images with previews to detect removals
+        const existingImageUrls = editingTVShow.images || (editingTVShow.imageUrl ? [editingTVShow.imageUrl] : []);
+        const remainingUrls = tvShowImagePreviews.filter(preview => 
+          typeof preview === 'string' && preview.startsWith('http')
+        );
+        if (remainingUrls.length !== existingImageUrls.length) {
+          updateData.images = remainingUrls;
+        }
+      }
 
       // Remove showUrl if episodes are provided and showUrl is empty
       if (episodesData.length > 0 && !tvShowFormData.showUrl.trim()) {
@@ -851,6 +1032,8 @@ const AdminDashboard = () => {
         });
         setTVShowEpisodes([]);
         setTVShowSeasons([]);
+        setTVShowImageFiles([]);
+        setTVShowImagePreviews([]);
         showNotification('TV Show updated successfully!', 'success');
       } else {
         throw new Error(result.message || 'Update failed');
@@ -1238,20 +1421,31 @@ const AdminDashboard = () => {
                 {filteredMovies.map(movie => (
                   <tr key={movie._id} data-movie-id={movie._id}>
                     <td>
-                      <div className="movie-image-update">
+                      {movie.images && movie.images.length > 0 ? (
+                        <img 
+                          src={movie.images[0]} 
+                          alt={movie.title}
+                          className="movie-thumbnail"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="150"%3E%3Crect width="100" height="150" fill="%231a1a1a"/%3E%3Ctext x="50" y="75" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle"%3E🎬%3C/text%3E%3C/svg%3E';
+                          }}
+                        />
+                      ) : movie.imageUrl ? (
                         <img 
                           src={movie.imageUrl} 
                           alt={movie.title}
                           className="movie-thumbnail"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="150"%3E%3Crect width="100" height="150" fill="%231a1a1a"/%3E%3Ctext x="50" y="75" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle"%3E🎬%3C/text%3E%3C/svg%3E';
+                          }}
                         />
-                        <button 
-                          className="update-image-btn"
-                          data-movie-id={movie._id}
-                          onClick={() => handleImageUpdate(movie._id)}
-                        >
-                          📷 Update
-                        </button>
-                      </div>
+                      ) : (
+                        <div style={{ width: '80px', height: '120px', background: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '24px' }}>
+                          🎬
+                        </div>
+                      )}
                     </td>
                     <td>
                       <div>
@@ -1278,29 +1472,15 @@ const AdminDashboard = () => {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span style={{ 
-                          padding: '4px 8px', 
-                          borderRadius: '4px', 
-                          backgroundColor: movie.imdbRating >= 7 ? '#28a745' : movie.imdbRating >= 5 ? '#ffc107' : '#dc3545',
-                          color: 'white',
-                          fontSize: '12px'
-                        }}>
-                          {movie.imdbRating}/10
-                        </span>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '2px 6px', fontSize: '10px' }}
-                          onClick={() => {
-                            const newRating = prompt('Enter new IMDB rating (0-10):', movie.imdbRating);
-                            if (newRating !== null && !isNaN(newRating) && newRating >= 0 && newRating <= 10) {
-                              handleUpdateAdminFields(movie._id, parseFloat(newRating));
-                            }
-                          }}
-                        >
-                          Edit
-                        </button>
-                      </div>
+                      <span style={{ 
+                        padding: '4px 8px', 
+                        borderRadius: '4px', 
+                        backgroundColor: movie.imdbRating >= 7 ? '#28a745' : movie.imdbRating >= 5 ? '#ffc107' : '#dc3545',
+                        color: 'white',
+                        fontSize: '12px'
+                      }}>
+                        {movie.imdbRating}/10
+                      </span>
                     </td>
                     <td>
                       <span style={{ 
@@ -1440,12 +1620,33 @@ const AdminDashboard = () => {
                 {filteredTVShows.map(tvShow => (
                   <tr key={tvShow._id}>
                     <td>
-                      <img 
-                        src={tvShow.imageUrl} 
-                        alt={tvShow.title}
-                        className="movie-thumbnail"
-                        style={{ width: '80px', height: '120px', objectFit: 'cover' }}
-                      />
+                      {tvShow.images && tvShow.images.length > 0 ? (
+                        <img 
+                          src={tvShow.images[0]} 
+                          alt={tvShow.title}
+                          className="movie-thumbnail"
+                          style={{ width: '80px', height: '120px', objectFit: 'cover' }}
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="150"%3E%3Crect width="100" height="150" fill="%231a1a1a"/%3E%3Ctext x="50" y="75" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle"%3E📺%3C/text%3E%3C/svg%3E';
+                          }}
+                        />
+                      ) : tvShow.imageUrl ? (
+                        <img 
+                          src={tvShow.imageUrl} 
+                          alt={tvShow.title}
+                          className="movie-thumbnail"
+                          style={{ width: '80px', height: '120px', objectFit: 'cover' }}
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="150"%3E%3Crect width="100" height="150" fill="%231a1a1a"/%3E%3Ctext x="50" y="75" font-size="24" fill="white" text-anchor="middle" dominant-baseline="middle"%3E📺%3C/text%3E%3C/svg%3E';
+                          }}
+                        />
+                      ) : (
+                        <div style={{ width: '80px', height: '120px', background: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '24px' }}>
+                          📺
+                        </div>
+                      )}
                     </td>
                     <td>
                       <div>
@@ -1730,10 +1931,37 @@ const AdminDashboard = () => {
               <label>IMDB Rating (0-10)</label>
               <input
                 type="number"
-                value={movieFormData.imdbRating || ''}
+                value={movieFormData.imdbRating !== undefined && movieFormData.imdbRating !== null && movieFormData.imdbRating !== '' 
+                  ? movieFormData.imdbRating 
+                  : ''}
                 onChange={(e) => {
-                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0;
-                  setMovieFormData({...movieFormData, imdbRating: val});
+                  const inputVal = e.target.value;
+                  // Allow empty temporarily while typing, but parse valid numbers immediately
+                  if (inputVal === '') {
+                    setMovieFormData({...movieFormData, imdbRating: ''});
+                  } else {
+                    const numVal = parseFloat(inputVal);
+                    // Only update if it's a valid number in range
+                    if (!isNaN(numVal) && numVal >= 0 && numVal <= 10) {
+                      setMovieFormData({...movieFormData, imdbRating: numVal});
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  // On blur, ensure we have a valid number
+                  const inputVal = e.target.value;
+                  if (inputVal === '' || isNaN(parseFloat(inputVal))) {
+                    // Reset to existing value if empty/invalid
+                    setMovieFormData({...movieFormData, imdbRating: editingMovie?.imdbRating || 0});
+                  } else {
+                    const numVal = parseFloat(inputVal);
+                    if (!isNaN(numVal) && numVal >= 0 && numVal <= 10) {
+                      setMovieFormData({...movieFormData, imdbRating: numVal});
+                    } else {
+                      // Invalid range, reset to existing
+                      setMovieFormData({...movieFormData, imdbRating: editingMovie?.imdbRating || 0});
+                    }
+                  }
                 }}
                 min="0"
                 max="10"
@@ -1749,6 +1977,66 @@ const AdminDashboard = () => {
                 rows="4"
               />
             </div>
+            <div className="form-group">
+              <label>Add More Images (Optional)</label>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleMovieImageChange}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+              />
+              <small>Select one or more images to add to the movie. Max 5MB per image.</small>
+            </div>
+            {movieImagePreviews.length > 0 && (
+              <div className="form-group">
+                <label>Current Images ({movieImagePreviews.length})</label>
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', 
+                  gap: '10px',
+                  marginTop: '10px'
+                }}>
+                  {movieImagePreviews.map((preview, index) => (
+                    <div key={index} style={{ position: 'relative' }}>
+                      <img 
+                        src={preview} 
+                        alt={`Preview ${index + 1}`} 
+                        style={{ 
+                          width: '100%', 
+                          height: '150px', 
+                          objectFit: 'cover',
+                          borderRadius: '5px',
+                          border: '2px solid #ddd'
+                        }} 
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeMovieImage(index)}
+                        style={{
+                          position: 'absolute',
+                          top: '5px',
+                          right: '5px',
+                          background: 'red',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '20px',
+                          height: '20px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="form-actions">
               <button 
                 className="btn btn-primary"
@@ -1758,7 +2046,11 @@ const AdminDashboard = () => {
               </button>
               <button 
                 className="btn btn-secondary"
-                onClick={() => setEditingMovie(null)}
+                onClick={() => {
+                  setEditingMovie(null);
+                  setMovieImageFiles([]);
+                  setMovieImagePreviews([]);
+                }}
               >
                 Cancel
               </button>
@@ -1967,6 +2259,107 @@ const AdminDashboard = () => {
                 rows="4"
               />
             </div>
+            <div className="form-group">
+              <label>Add More Images (Optional)</label>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  if (files.length === 0) return;
+
+                  const validFiles = [];
+                  const newPreviews = [];
+
+                  files.forEach((file) => {
+                    if (!file.type.startsWith('image/')) {
+                      showNotification(`File ${file.name} is not a valid image file`, 'error');
+                      return;
+                    }
+                    
+                    if (file.size > 5 * 1024 * 1024) {
+                      showNotification(`Image ${file.name} size should be less than 5MB`, 'error');
+                      return;
+                    }
+
+                    validFiles.push(file);
+
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      newPreviews.push(reader.result);
+                      if (newPreviews.length === validFiles.length) {
+                        setTVShowImagePreviews(prev => [...prev, ...newPreviews]);
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  });
+
+                  if (validFiles.length > 0) {
+                    setTVShowImageFiles(prev => [...prev, ...validFiles]);
+                  }
+                }}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+              />
+              <small>Select one or more images to add to the TV show. Max 5MB per image.</small>
+            </div>
+            {tvShowImagePreviews.length > 0 && (
+              <div className="form-group">
+                <label>Current Images ({tvShowImagePreviews.length})</label>
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', 
+                  gap: '10px',
+                  marginTop: '10px'
+                }}>
+                  {tvShowImagePreviews.map((preview, index) => (
+                    <div key={index} style={{ position: 'relative' }}>
+                      <img 
+                        src={preview} 
+                        alt={`Preview ${index + 1}`} 
+                        style={{ 
+                          width: '100%', 
+                          height: '150px', 
+                          objectFit: 'cover',
+                          borderRadius: '5px',
+                          border: '2px solid #ddd'
+                        }} 
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTVShowImagePreviews(prev => prev.filter((_, i) => i !== index));
+                          // If it's a newly added file, remove from files array too
+                          const existingCount = editingTVShow?.images?.length || (editingTVShow?.imageUrl ? 1 : 0);
+                          if (index >= existingCount) {
+                            const fileIndex = index - existingCount;
+                            setTVShowImageFiles(prev => prev.filter((_, i) => i !== fileIndex));
+                          }
+                        }}
+                        style={{
+                          position: 'absolute',
+                          top: '5px',
+                          right: '5px',
+                          background: 'red',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '20px',
+                          height: '20px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="form-actions">
               <button 
                 className="btn btn-primary"
@@ -1976,7 +2369,11 @@ const AdminDashboard = () => {
               </button>
               <button 
                 className="btn btn-secondary"
-                onClick={() => setEditingTVShow(null)}
+                onClick={() => {
+                  setEditingTVShow(null);
+                  setTVShowImageFiles([]);
+                  setTVShowImagePreviews([]);
+                }}
               >
                 Cancel
               </button>

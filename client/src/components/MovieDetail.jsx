@@ -15,12 +15,14 @@ const MovieDetail = () => {
   const [ratingLoading, setRatingLoading] = useState(false);
   const [showPlayer, setShowPlayer] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   useEffect(() => {
     fetchMovieDetails();
     if (isAuthenticated) {
       fetchUserRating();
     }
+    setSelectedImageIndex(0); // Reset image index when movie changes
   }, [id, isAuthenticated, token]);
 
   const fetchMovieDetails = async () => {
@@ -231,8 +233,63 @@ const MovieDetail = () => {
 
       <div className="movie-detail-content">
         <div className="movie-detail-poster">
-          {movie.imageUrl ? (
-            <img src={movie.imageUrl} alt={movie.title} />
+          {/* Image Gallery */}
+          {movie.images && movie.images.length > 0 ? (
+            <div className="movie-image-gallery">
+              <div className="movie-main-image">
+                <img 
+                  src={movie.images[selectedImageIndex] || movie.images[0]} 
+                  alt={movie.title}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    const placeholder = e.target.parentElement.querySelector('.movie-placeholder-large') || document.createElement('div');
+                    placeholder.className = 'movie-placeholder-large';
+                    placeholder.innerHTML = '<span>🎬</span>';
+                    if (!e.target.parentElement.querySelector('.movie-placeholder-large')) {
+                      e.target.parentElement.appendChild(placeholder);
+                    } else {
+                      e.target.parentElement.querySelector('.movie-placeholder-large').style.display = 'flex';
+                    }
+                  }}
+                />
+              </div>
+              {movie.images.length > 1 && (
+                <div className="movie-image-thumbnails">
+                  {movie.images.map((imageUrl, index) => (
+                    <div 
+                      key={index}
+                      className={`thumbnail-item ${index === selectedImageIndex ? 'active' : ''}`}
+                      onClick={() => setSelectedImageIndex(index)}
+                    >
+                      <img 
+                        src={imageUrl} 
+                        alt={`${movie.title} ${index + 1}`}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="150"%3E%3Crect width="100" height="150" fill="%231a1a1a"/%3E%3Ctext x="50" y="75" font-size="20" fill="white" text-anchor="middle" dominant-baseline="middle"%3E🎬%3C/text%3E%3C/svg%3E';
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : movie.imageUrl ? (
+            <img 
+              src={movie.imageUrl} 
+              alt={movie.title}
+              onError={(e) => {
+                e.target.style.display = 'none';
+                const placeholder = e.target.parentElement.querySelector('.movie-placeholder-large') || document.createElement('div');
+                placeholder.className = 'movie-placeholder-large';
+                placeholder.innerHTML = '<span>🎬</span>';
+                if (!e.target.parentElement.querySelector('.movie-placeholder-large')) {
+                  e.target.parentElement.appendChild(placeholder);
+                } else {
+                  e.target.parentElement.querySelector('.movie-placeholder-large').style.display = 'flex';
+                }
+              }}
+            />
           ) : (
             <div className="movie-placeholder-large">
               <span>🎬</span>

@@ -224,7 +224,8 @@ router.post('/', protect, restrictToAdmin, [
   body('episodeCount').optional().isInt({ min: 0 }).withMessage('Episode count must be a non-negative integer'),
   body('numberOfSeasons').optional().isInt({ min: 1 }).withMessage('Number of seasons must be at least 1'),
   body('imdbRating').isFloat({ min: 0, max: 10 }).withMessage('IMDB rating must be between 0 and 10'),
-  body('imageFile').notEmpty().withMessage('TV Show image is required')
+  body('imageFile').optional().notEmpty().withMessage('TV Show image is required if imageFiles is not provided'),
+  body('imageFiles').optional().isArray({ min: 1 }).withMessage('At least one image is required')
 ], async (req, res) => {
   try {
     console.log('Received TV show creation request:', {
@@ -249,13 +250,14 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
 
-    const { title, year, description, genre, showUrl, imdbRating, imageFile, episodeCount, numberOfSeasons, episodes } = req.body;
+    const { title, year, description, genre, showUrl, imdbRating, imageFile, imageFiles, episodeCount, numberOfSeasons, episodes } = req.body;
 
     // Validate required fields (showUrl is now optional if episodes are provided)
-    if (!title || !year || !description || !genre || imdbRating === undefined || !imageFile) {
+    const hasImageFile = imageFile || (imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0);
+    if (!title || !year || !description || !genre || imdbRating === undefined || !hasImageFile) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: title, year, description, genre, imdbRating, and imageFile are required'
+        message: 'Missing required fields: title, year, description, genre, imdbRating, and at least one image are required'
       });
     }
 
@@ -269,33 +271,68 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
 
-    // Upload image to Cloudinary
+    // Upload images to Cloudinary
     let imageUrl;
+    let images = [];
+    
+    // Support both single imageFile and array of imageFiles
+    const imagesToUpload = imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0 
+      ? imageFiles 
+      : (imageFile ? [imageFile] : []);
+    
+    if (imagesToUpload.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one image is required'
+      });
+    }
+    
     try {
-      let uploadData = imageFile;
+      console.log('Starting Cloudinary upload for', imagesToUpload.length, 'image(s)...');
       
-      if (typeof imageFile === 'string' && imageFile.startsWith('data:image/')) {
-        uploadData = imageFile;
-      } else {
+      // Upload all images
+      for (let i = 0; i < imagesToUpload.length; i++) {
+        const imgFile = imagesToUpload[i];
+        console.log(`Uploading image ${i + 1}/${imagesToUpload.length}...`);
+        
+        // Validate image format
+        if (typeof imgFile !== 'string' || !imgFile.startsWith('data:image/')) {
+          console.log('Invalid image format at index', i);
+          continue; // Skip invalid images
+        }
+        
+        const uploadResult = await cloudinary.uploader.upload(imgFile, {
+          folder: 'nkmoviehub/tvshows',
+          transformation: [
+            { width: 500, height: 750, crop: 'fill' },
+            { quality: 'auto' }
+          ]
+        });
+        
+        const uploadedUrl = uploadResult.secure_url;
+        images.push(uploadedUrl);
+        
+        // Set first image as imageUrl (for backward compatibility)
+        if (i === 0) {
+          imageUrl = uploadedUrl;
+        }
+        
+        console.log(`Image ${i + 1} uploaded successfully:`, uploadedUrl);
+      }
+      
+      if (images.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid image format. Please provide a valid image file.'
+          message: 'Failed to upload any valid images'
         });
       }
       
-      const uploadResult = await cloudinary.uploader.upload(uploadData, {
-        folder: 'nkmoviehub/tvshows',
-        transformation: [
-          { width: 500, height: 750, crop: 'fill' },
-          { quality: 'auto' }
-        ]
-      });
-      imageUrl = uploadResult.secure_url;
+      console.log(`Successfully uploaded ${images.length} image(s)`);
     } catch (uploadError) {
       console.error('Cloudinary upload error:', uploadError);
       return res.status(500).json({
         success: false,
-        message: 'Failed to upload image: ' + uploadError.message
+        message: 'Failed to upload images: ' + uploadError.message
       });
     }
 
@@ -364,6 +401,7 @@ router.post('/', protect, restrictToAdmin, [
       episodes: processedEpisodes, // Always set episodes array (even if empty)
       imdbRating: parseFloat(imdbRating),
       imageUrl,
+      images: images, // Store array of images
       addedBy: req.user.id
     };
     
@@ -477,7 +515,7 @@ router.put('/:id', protect, restrictToAdmin, [
       });
     }
 
-    const { title, year, description, genre, showUrl, imdbRating, imageFile, episodeCount, numberOfSeasons, episodes } = req.body;
+    const { title, year, description, genre, showUrl, imdbRating, imageFile, imageFiles, images, episodeCount, numberOfSeasons, episodes } = req.body;
     const updateData = {};
 
     if (title !== undefined && title !== null && title !== '') updateData.title = title;
@@ -511,23 +549,67 @@ router.put('/:id', protect, restrictToAdmin, [
       updateData.episodeCount = parseInt(episodeCount);
     }
 
-    // Handle image update if provided
-    if (imageFile) {
+    // Handle images update - support multiple ways:
+    // 1. images array (direct URLs)
+    // 2. imageFiles array (base64 to upload)
+    // 3. imageFile (single base64, backward compatibility)
+    if (images && Array.isArray(images)) {
+      // Direct URLs provided
+      updateData.images = images;
+      if (images.length > 0 && !updateData.imageUrl) {
+        updateData.imageUrl = images[0];
+      }
+    } else if (imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0) {
+      // Upload multiple new images
       try {
-        let uploadData = imageFile;
-        
-        if (typeof imageFile === 'string' && imageFile.startsWith('data:image/')) {
-          uploadData = imageFile;
+        const uploadedImages = [];
+        for (const imgFile of imageFiles) {
+          if (typeof imgFile === 'string' && imgFile.startsWith('data:image/')) {
+            const uploadResult = await cloudinary.uploader.upload(imgFile, {
+              folder: 'nkmoviehub/tvshows',
+              transformation: [
+                { width: 500, height: 750, crop: 'fill' },
+                { quality: 'auto' }
+              ]
+            });
+            uploadedImages.push(uploadResult.secure_url);
+          }
         }
-        
-        const uploadResult = await cloudinary.uploader.upload(uploadData, {
-          folder: 'nkmoviehub/tvshows',
-          transformation: [
-            { width: 500, height: 750, crop: 'fill' },
-            { quality: 'auto' }
-          ]
+        if (uploadedImages.length > 0) {
+          // Merge with existing images, avoiding duplicates
+          const tvShow = await TVShow.findById(req.params.id);
+          const existingImages = tvShow && tvShow.images && tvShow.images.length > 0 ? tvShow.images : [];
+          updateData.images = [...uploadedImages, ...existingImages.filter(img => !uploadedImages.includes(img))];
+          updateData.imageUrl = uploadedImages[0];
+        }
+      } catch (uploadError) {
+        console.error('Cloudinary upload error:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload new images'
         });
-        updateData.imageUrl = uploadResult.secure_url;
+      }
+    } else if (imageFile) {
+      // Single image upload (backward compatibility)
+      try {
+        if (typeof imageFile === 'string' && imageFile.startsWith('data:image/')) {
+          const uploadResult = await cloudinary.uploader.upload(imageFile, {
+            folder: 'nkmoviehub/tvshows',
+            transformation: [
+              { width: 500, height: 750, crop: 'fill' },
+              { quality: 'auto' }
+            ]
+          });
+          updateData.imageUrl = uploadResult.secure_url;
+          // Add to images array or create new one
+          const tvShow = await TVShow.findById(req.params.id);
+          if (tvShow) {
+            const existingImages = tvShow.images && tvShow.images.length > 0 ? tvShow.images : [];
+            updateData.images = [uploadResult.secure_url, ...existingImages.filter(img => img !== uploadResult.secure_url)];
+          } else {
+            updateData.images = [uploadResult.secure_url];
+          }
+        }
       } catch (uploadError) {
         console.error('Cloudinary upload error:', uploadError);
         return res.status(500).json({

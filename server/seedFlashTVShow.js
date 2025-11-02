@@ -284,7 +284,7 @@ const seedFlashTVShow = async () => {
       year: 2014,
       description: "After being struck by lightning, Barry Allen wakes up from his coma to discover he's been given the power of super speed, becoming the Flash. He fights crime in Central City alongside other metahumans as a member of Team Flash, facing numerous villains including the Reverse-Flash, Zoom, Savitar, and others.",
       genre: "Action",
-      imageUrl: "https://via.placeholder.com/300x450/ff6600/ffffff?text=The+Flash",
+      imageUrl: "https://image.tmdb.org/t/p/w500/wHa6KOJAoNTFLFtp7wguUJKSnju.jpg",
       showUrl: "https://example.com/flash/s01e01",
       episodeCount: episodes.length,
       numberOfSeasons: 9,

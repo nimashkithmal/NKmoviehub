@@ -19,8 +19,38 @@ const TVShowGrid = ({ tvShows }) => {
           >
             {/* TV Show Poster */}
             <div className="movie-poster">
-              {tvShow.imageUrl ? (
-                <img src={tvShow.imageUrl} alt={tvShow.title} />
+              {tvShow.images && tvShow.images.length > 0 ? (
+                <img 
+                  src={tvShow.images[0]} 
+                  alt={tvShow.title}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    const placeholder = e.target.parentElement.querySelector('.movie-placeholder') || document.createElement('div');
+                    placeholder.className = 'movie-placeholder';
+                    placeholder.innerHTML = '<span>📺</span>';
+                    if (!e.target.parentElement.querySelector('.movie-placeholder')) {
+                      e.target.parentElement.appendChild(placeholder);
+                    } else {
+                      e.target.parentElement.querySelector('.movie-placeholder').style.display = 'flex';
+                    }
+                  }}
+                />
+              ) : tvShow.imageUrl ? (
+                <img 
+                  src={tvShow.imageUrl} 
+                  alt={tvShow.title}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    const placeholder = e.target.parentElement.querySelector('.movie-placeholder') || document.createElement('div');
+                    placeholder.className = 'movie-placeholder';
+                    placeholder.innerHTML = '<span>📺</span>';
+                    if (!e.target.parentElement.querySelector('.movie-placeholder')) {
+                      e.target.parentElement.appendChild(placeholder);
+                    } else {
+                      e.target.parentElement.querySelector('.movie-placeholder').style.display = 'flex';
+                    }
+                  }}
+                />
               ) : (
                 <div className="movie-placeholder">
                   <span>📺</span>

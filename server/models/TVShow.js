@@ -23,6 +23,13 @@ const tvShowSchema = new mongoose.Schema({
     type: String,
     required: [true, 'TV Show image is required']
   },
+  images: {
+    type: [String],
+    default: function() {
+      // If images array is empty but imageUrl exists, use imageUrl as first image
+      return this.imageUrl ? [this.imageUrl] : [];
+    }
+  },
   showUrl: {
     type: String,
     required: false,

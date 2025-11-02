@@ -452,8 +452,38 @@ const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenti
           >
             {/* Movie Poster */}
             <div className="movie-poster">
-              {movie.imageUrl ? (
-                <img src={movie.imageUrl} alt={movie.title} />
+              {movie.images && movie.images.length > 0 ? (
+                <img 
+                  src={movie.images[0]} 
+                  alt={movie.title}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    const placeholder = e.target.parentElement.querySelector('.movie-placeholder') || document.createElement('div');
+                    placeholder.className = 'movie-placeholder';
+                    placeholder.innerHTML = '<span>🎬</span>';
+                    if (!e.target.parentElement.querySelector('.movie-placeholder')) {
+                      e.target.parentElement.appendChild(placeholder);
+                    } else {
+                      e.target.parentElement.querySelector('.movie-placeholder').style.display = 'flex';
+                    }
+                  }}
+                />
+              ) : movie.imageUrl ? (
+                <img 
+                  src={movie.imageUrl} 
+                  alt={movie.title}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    const placeholder = e.target.parentElement.querySelector('.movie-placeholder') || document.createElement('div');
+                    placeholder.className = 'movie-placeholder';
+                    placeholder.innerHTML = '<span>🎬</span>';
+                    if (!e.target.parentElement.querySelector('.movie-placeholder')) {
+                      e.target.parentElement.appendChild(placeholder);
+                    } else {
+                      e.target.parentElement.querySelector('.movie-placeholder').style.display = 'flex';
+                    }
+                  }}
+                />
               ) : (
                 <div className="movie-placeholder">
                   <span>🎬</span>

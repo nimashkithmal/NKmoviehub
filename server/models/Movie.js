@@ -23,6 +23,13 @@ const movieSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Movie image is required']
   },
+  images: {
+    type: [String],
+    default: function() {
+      // If images array is empty but imageUrl exists, use imageUrl as first image
+      return this.imageUrl ? [this.imageUrl] : [];
+    }
+  },
   movieUrl: {
     type: String,
     required: [true, 'Movie URL is required'],
