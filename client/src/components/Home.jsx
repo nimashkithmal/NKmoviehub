@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
 import Header from './Header';
 import MovieGrid from './MovieGrid';
+import TVShowGrid from './TVShowGrid';
 import ContactSection from './ContactSection';
 import './MovieGrid.css';
 
@@ -10,6 +11,7 @@ const Home = () => {
   const { isAuthenticated, token } = useAuth();
   const location = useLocation();
   const [movies, setMovies] = useState([]);
+  const [tvShows, setTVShows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,6 +22,7 @@ const Home = () => {
   const [showGenrePanel, setShowGenrePanel] = useState(false);
   const [showYearPanel, setShowYearPanel] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [contentType, setContentType] = useState('movies'); // 'movies' or 'tvshows'
 
   // Slideshow images - movie-related wallpapers
   const slideshowImages = [
@@ -40,11 +43,13 @@ const Home = () => {
     const searchParam = params.get('search');
     const genreParam = params.get('genre');
     const yearParam = params.get('year');
+    const typeParam = params.get('type');
     
     // Always update the states based on URL parameters
     setSearchTerm(searchParam || '');
     setSelectedGenre(genreParam || '');
     setSelectedYear(yearParam || '');
+    setContentType(typeParam === 'tvshows' ? 'tvshows' : 'movies');
   }, [location.search]);
 
   // Auto-advance slideshow
@@ -119,37 +124,84 @@ const Home = () => {
     }
   }, [searchTerm, selectedGenre, selectedYear]);
 
-  // Fetch movies on component mount and when filters change
+  // Fetch TV shows from backend
+  const fetchTVShows = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      let url = 'http://localhost:5001/api/tvshows?limit=1000';
+      if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
+      if (selectedGenre) url += `&genre=${encodeURIComponent(selectedGenre)}`;
+      if (selectedYear) url += `&year=${selectedYear}`;
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setTVShows(result.data.tvShows);
+      } else {
+        throw new Error(result.message || 'Failed to fetch TV shows');
+      }
+    } catch (err) {
+      console.error('Error fetching TV shows:', err);
+      setError(err.message || 'Failed to load TV shows. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm, selectedGenre, selectedYear]);
+
+  // Fetch content based on type
   useEffect(() => {
-    fetchMovies();
-  }, [fetchMovies]);
-
-
+    if (contentType === 'tvshows') {
+      fetchTVShows();
+    } else {
+      fetchMovies();
+    }
+  }, [contentType, fetchMovies, fetchTVShows]);
 
   // Immediate search for short terms (1-2 characters)
   useEffect(() => {
     if (searchTerm.trim().length <= 2 && searchTerm.trim()) {
-      fetchMovies();
+      if (contentType === 'tvshows') {
+        fetchTVShows();
+      } else {
+        fetchMovies();
+      }
     }
-  }, [searchTerm, fetchMovies]);
+  }, [searchTerm, contentType, fetchMovies, fetchTVShows]);
 
   // Auto-search when search term or filters change (for longer terms)
   useEffect(() => {
     if (searchTerm.trim().length > 2) {
       const timeoutId = setTimeout(() => {
-        fetchMovies();
-      }, 200); // Very short delay for longer terms
+        if (contentType === 'tvshows') {
+          fetchTVShows();
+        } else {
+          fetchMovies();
+        }
+      }, 200);
 
       return () => clearTimeout(timeoutId);
     }
-  }, [searchTerm, selectedGenre, selectedYear, fetchMovies]);
+  }, [searchTerm, selectedGenre, selectedYear, contentType, fetchMovies, fetchTVShows]);
 
   // Immediate search for genre and year changes
   useEffect(() => {
     if (selectedGenre || selectedYear) {
-      fetchMovies();
+      if (contentType === 'tvshows') {
+        fetchTVShows();
+      } else {
+        fetchMovies();
+      }
     }
-  }, [selectedGenre, selectedYear, fetchMovies]);
+  }, [selectedGenre, selectedYear, contentType, fetchMovies, fetchTVShows]);
 
   const clearFilters = useCallback(() => {
     setSearchTerm('');
@@ -342,7 +394,7 @@ const Home = () => {
             ))}
           </div>
         </div>
-        <h2>Browse Movies</h2>
+        <h2>{contentType === 'tvshows' ? 'Browse TV Shows' : 'Browse Movies'}</h2>
         
         {/* Filter Summary */}
         {(searchTerm || selectedGenre || selectedYear) && (
@@ -407,25 +459,27 @@ const Home = () => {
         )}
 
 
-        {/* Movies Display */}
+        {/* Content Display */}
         <div id="movies-section">
           {loading ? (
             <div className="loading-state">
               <div className="loading-spinner"></div>
-              <h3>Loading movies...</h3>
-              <p>Please wait while we fetch the latest movies from our collection.</p>
+              <h3>Loading {contentType === 'tvshows' ? 'TV shows' : 'movies'}...</h3>
+              <p>Please wait while we fetch the latest {contentType === 'tvshows' ? 'TV shows' : 'movies'} from our collection.</p>
             </div>
           ) : error ? (
             <div className="error-state">
-              <h3>Error loading movies</h3>
+              <h3>Error loading {contentType === 'tvshows' ? 'TV shows' : 'movies'}</h3>
               <p>{error}</p>
               <button 
                 className="btn btn-primary"
-                onClick={fetchMovies}
+                onClick={contentType === 'tvshows' ? fetchTVShows : fetchMovies}
               >
-                Refresh Movies
+                Refresh {contentType === 'tvshows' ? 'TV Shows' : 'Movies'}
               </button>
             </div>
+          ) : contentType === 'tvshows' ? (
+            <TVShowGrid tvShows={tvShows} />
           ) : (
             <MovieGrid 
               movies={movies}

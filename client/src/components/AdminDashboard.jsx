@@ -8,15 +8,20 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [movies, setMovies] = useState([]);
+  const [tvShows, setTVShows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [moviesLoading, setMoviesLoading] = useState(false);
+  const [tvShowsLoading, setTVShowsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [moviesError, setMoviesError] = useState(null);
+  const [tvShowsError, setTVShowsError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [movieSearchTerm, setMovieSearchTerm] = useState('');
+  const [tvShowSearchTerm, setTVShowSearchTerm] = useState('');
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [editingMovie, setEditingMovie] = useState(null);
+  const [editingTVShow, setEditingTVShow] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -31,6 +36,18 @@ const AdminDashboard = () => {
     movieUrl: '',
     imdbRating: 0
   });
+  const [tvShowFormData, setTVShowFormData] = useState({
+    title: '',
+    year: new Date().getFullYear(),
+    description: '',
+    genre: '',
+    showUrl: '',
+    imdbRating: 0,
+    episodeCount: 0,
+    numberOfSeasons: 0
+  });
+  const [tvShowEpisodes, setTVShowEpisodes] = useState([]);
+  const [tvShowSeasons, setTVShowSeasons] = useState([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -43,7 +60,13 @@ const AdminDashboard = () => {
     averageRating: 0,
     newMoviesThisMonth: 0
   });
-  const [activeTab, setActiveTab] = useState('users'); // 'users', 'movies', or 'contacts'
+  const [tvShowStats, setTVShowStats] = useState({
+    totalTVShows: 0,
+    activeTVShows: 0,
+    averageRating: 0,
+    newTVShowsThisMonth: 0
+  });
+  const [activeTab, setActiveTab] = useState('users'); // 'users', 'movies', 'tvshows', or 'contacts'
 
   // Notification system
   const showNotification = (message, type = 'info') => {
@@ -174,13 +197,63 @@ const AdminDashboard = () => {
     }
   }, [token]);
 
+  // Fetch TV shows from backend
+  const fetchTVShows = useCallback(async () => {
+    try {
+      setTVShowsLoading(true);
+      setTVShowsError(null);
+      
+      const response = await fetch('http://localhost:5001/api/tvshows/admin?limit=1000', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setTVShows(result.data.tvShows);
+        
+        // Calculate TV show stats
+        const totalTVShows = result.data.tvShows.length;
+        const activeTVShows = result.data.tvShows.filter(t => t.status === 'active').length;
+        const averageImdbRating = result.data.tvShows.reduce((sum, t) => sum + t.imdbRating, 0) / totalTVShows || 0;
+        const newTVShowsThisMonth = result.data.tvShows.filter(t => {
+          const tvShowDate = new Date(t.createdAt);
+          const now = new Date();
+          return tvShowDate.getMonth() === now.getMonth() && tvShowDate.getFullYear() === now.getFullYear();
+        }).length;
+
+        setTVShowStats({
+          totalTVShows,
+          activeTVShows,
+          averageRating: Math.round(averageImdbRating * 10) / 10,
+          newTVShowsThisMonth
+        });
+      } else {
+        throw new Error(result.message || 'Failed to fetch TV shows');
+      }
+    } catch (err) {
+      console.error('Error fetching TV shows:', err);
+      setTVShowsError(err.message);
+    } finally {
+      setTVShowsLoading(false);
+    }
+  }, [token]);
+
   // Fetch data on component mount
   useEffect(() => {
     if (token) {
       fetchUsers();
       fetchMovies();
+      fetchTVShows();
     }
-  }, [token, fetchUsers, fetchMovies]);
+  }, [token, fetchUsers, fetchMovies, fetchTVShows]);
 
   const handleAddUser = async () => {
     if (!formData.name || !formData.email || !formData.password) {
@@ -338,12 +411,12 @@ const AdminDashboard = () => {
   const handleEditMovie = (movie) => {
     setEditingMovie(movie);
     setMovieFormData({
-      title: movie.title,
-      year: movie.year,
-      description: movie.description,
-      genre: movie.genre,
-      movieUrl: movie.movieUrl,
-      imdbRating: movie.imdbRating
+      title: movie.title || '',
+      year: movie.year || new Date().getFullYear(),
+      description: movie.description || '',
+      genre: movie.genre || '',
+      movieUrl: movie.movieUrl || '',
+      imdbRating: movie.imdbRating || 0
     });
   };
 
@@ -579,6 +652,271 @@ const AdminDashboard = () => {
     movie.genre.toLowerCase().includes(movieSearchTerm.toLowerCase())
   );
 
+  const filteredTVShows = tvShows.filter(tvShow =>
+    tvShow.title.toLowerCase().includes(tvShowSearchTerm.toLowerCase()) ||
+    tvShow.year.toString().includes(tvShowSearchTerm) ||
+    tvShow.genre.toLowerCase().includes(tvShowSearchTerm.toLowerCase())
+  );
+
+  // TV Show management functions
+  // Helper function to group episodes into seasons
+  const groupEpisodesBySeasons = (episodes, numberOfSeasons) => {
+    if (!episodes || episodes.length === 0 || !numberOfSeasons || numberOfSeasons === 0) {
+      return [];
+    }
+
+    const sortedEpisodes = [...episodes].sort((a, b) => a.episodeNumber - b.episodeNumber);
+    const episodesPerSeason = Math.ceil(sortedEpisodes.length / numberOfSeasons);
+    const seasons = [];
+
+    for (let seasonNum = 1; seasonNum <= numberOfSeasons; seasonNum++) {
+      const startIdx = (seasonNum - 1) * episodesPerSeason;
+      const endIdx = Math.min(startIdx + episodesPerSeason, sortedEpisodes.length);
+      const seasonEpisodes = sortedEpisodes.slice(startIdx, endIdx);
+
+      seasons.push({
+        seasonNumber: seasonNum,
+        episodeCount: seasonEpisodes.length,
+        episodes: seasonEpisodes.map(ep => ({
+          episodeNumber: ep.episodeNumber,
+          episodeUrl: ep.episodeUrl || '',
+          episodeTitle: ep.episodeTitle || ''
+        }))
+      });
+    }
+
+    return seasons;
+  };
+
+  const handleEditTVShow = (tvShow) => {
+    setEditingTVShow(tvShow);
+    const numberOfSeasons = tvShow.numberOfSeasons || 1;
+    const episodeCount = tvShow.episodeCount || (tvShow.episodes && tvShow.episodes.length) || 0;
+    
+    setTVShowFormData({
+      title: tvShow.title || '',
+      year: tvShow.year || new Date().getFullYear(),
+      description: tvShow.description || '',
+      genre: tvShow.genre || '',
+      showUrl: tvShow.showUrl || '',
+      imdbRating: tvShow.imdbRating || 0,
+      episodeCount: episodeCount,
+      numberOfSeasons: numberOfSeasons
+    });
+    
+    // Group episodes by seasons
+    if (tvShow.episodes && tvShow.episodes.length > 0 && numberOfSeasons > 0) {
+      const seasons = groupEpisodesBySeasons(tvShow.episodes, numberOfSeasons);
+      setTVShowSeasons(seasons);
+      // Also keep flat episodes array for backward compatibility
+      setTVShowEpisodes(tvShow.episodes.map(ep => ({
+        episodeNumber: ep.episodeNumber || 0,
+        episodeUrl: ep.episodeUrl || '',
+        episodeTitle: ep.episodeTitle || ''
+      })));
+    } else {
+      setTVShowSeasons([]);
+      setTVShowEpisodes([]);
+    }
+  };
+
+  // Handle number of seasons change
+  const handleTVShowSeasonsChange = (e) => {
+    const numSeasons = parseInt(e.target.value) || 0;
+    setTVShowFormData(prev => ({ ...prev, numberOfSeasons: numSeasons }));
+    
+    // Re-group existing episodes into new season structure
+    if (numSeasons > 0 && tvShowEpisodes.length > 0) {
+      const seasons = groupEpisodesBySeasons(tvShowEpisodes, numSeasons);
+      setTVShowSeasons(seasons);
+    } else {
+      setTVShowSeasons([]);
+    }
+  };
+
+  // Handle episode count change for a specific season
+  const handleTVShowSeasonEpisodeCountChange = (seasonIndex, episodeCount) => {
+    const count = parseInt(episodeCount) || 0;
+    const updatedSeasons = [...tvShowSeasons];
+    updatedSeasons[seasonIndex] = {
+      ...updatedSeasons[seasonIndex],
+      episodeCount: count,
+      episodes: []
+    };
+    
+    // Initialize episodes for this season
+    const globalStartNumber = updatedSeasons.slice(0, seasonIndex).reduce((sum, s) => sum + s.episodeCount, 0) + 1;
+    for (let i = 1; i <= count; i++) {
+      const existingEp = updatedSeasons[seasonIndex].episodes.find(ep => ep.episodeNumber === globalStartNumber + i - 1);
+      if (existingEp) {
+        updatedSeasons[seasonIndex].episodes.push(existingEp);
+      } else {
+        updatedSeasons[seasonIndex].episodes.push({
+          episodeNumber: globalStartNumber + i - 1,
+          episodeUrl: '',
+          episodeTitle: `Season ${updatedSeasons[seasonIndex].seasonNumber} Episode ${i}`
+        });
+      }
+    }
+    
+    setTVShowSeasons(updatedSeasons);
+    // Update flat episodes array
+    const allEpisodes = updatedSeasons.flatMap(s => s.episodes).sort((a, b) => a.episodeNumber - b.episodeNumber);
+    setTVShowEpisodes(allEpisodes);
+  };
+
+  // Handle episode change for a specific season and episode
+  const handleTVShowSeasonEpisodeChange = (seasonIndex, episodeIndex, field, value) => {
+    const updatedSeasons = [...tvShowSeasons];
+    updatedSeasons[seasonIndex].episodes[episodeIndex] = {
+      ...updatedSeasons[seasonIndex].episodes[episodeIndex],
+      [field]: value
+    };
+    setTVShowSeasons(updatedSeasons);
+    // Update flat episodes array
+    const allEpisodes = updatedSeasons.flatMap(s => s.episodes).sort((a, b) => a.episodeNumber - b.episodeNumber);
+    setTVShowEpisodes(allEpisodes);
+  };
+
+  const handleUpdateTVShow = async () => {
+    // Flatten seasons back to episodes array
+    const allEpisodes = tvShowSeasons.flatMap(season => season.episodes || []).sort((a, b) => a.episodeNumber - b.episodeNumber);
+    const hasEpisodes = allEpisodes.length > 0 && allEpisodes.some(ep => ep.episodeUrl && ep.episodeUrl.trim() !== '');
+    
+    if (!tvShowFormData.title || !tvShowFormData.description || !tvShowFormData.genre) {
+      showNotification('Please fill in all required fields', 'error');
+      return;
+    }
+
+    if (!hasEpisodes && !tvShowFormData.showUrl) {
+      showNotification('Either TV Show URL or at least one episode URL is required', 'error');
+      return;
+    }
+
+    if (!editingTVShow || !editingTVShow._id) {
+      showNotification('No TV show selected for editing', 'error');
+      return;
+    }
+
+    try {
+      // Prepare episodes data from seasons
+      const episodesData = allEpisodes.filter(ep => ep.episodeUrl && ep.episodeUrl.trim() !== '');
+      
+      const updateData = {
+        ...tvShowFormData,
+        numberOfSeasons: tvShowFormData.numberOfSeasons || 1,
+        episodes: episodesData.length > 0 ? episodesData : undefined,
+        episodeCount: episodesData.length > 0 ? episodesData.length : tvShowFormData.episodeCount
+      };
+
+      // Remove showUrl if episodes are provided and showUrl is empty
+      if (episodesData.length > 0 && !tvShowFormData.showUrl.trim()) {
+        delete updateData.showUrl;
+      }
+      
+      console.log('Updating TV show:', editingTVShow._id, updateData);
+      
+      const response = await fetch(`http://localhost:5001/api/tvshows/${editingTVShow._id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      console.log('Update response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        console.error('Update error data:', errorData);
+        throw new Error(errorData.message || `Failed to update TV show: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Update result:', result);
+      
+      if (result.success) {
+        await fetchTVShows();
+        setEditingTVShow(null);
+        setTVShowFormData({
+          title: '',
+          year: new Date().getFullYear(),
+          description: '',
+          genre: '',
+          showUrl: '',
+          imdbRating: 0,
+          episodeCount: 0,
+          numberOfSeasons: 0
+        });
+        setTVShowEpisodes([]);
+        setTVShowSeasons([]);
+        showNotification('TV Show updated successfully!', 'success');
+      } else {
+        throw new Error(result.message || 'Update failed');
+      }
+    } catch (err) {
+      console.error('Error updating TV show:', err);
+      showNotification(`Error updating TV show: ${err.message}`, 'error');
+    }
+  };
+
+  const handleDeleteTVShow = async (tvShowId) => {
+    if (window.confirm('Are you sure you want to delete this TV show?')) {
+      try {
+        const response = await fetch(`http://localhost:5001/api/tvshows/${tvShowId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to delete TV show');
+        }
+
+        const result = await response.json();
+        
+        if (result.success) {
+          await fetchTVShows();
+          showNotification('TV Show deleted successfully!', 'success');
+        }
+      } catch (err) {
+        console.error('Error deleting TV show:', err);
+        showNotification(`Error deleting TV show: ${err.message}`, 'error');
+      }
+    }
+  };
+
+  const handleToggleTVShowStatus = async (tvShowId) => {
+    try {
+      const response = await fetch(`http://localhost:5001/api/tvshows/${tvShowId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update TV show status');
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        await fetchTVShows();
+        showNotification(`TV Show status updated successfully!`, 'success');
+      }
+    } catch (err) {
+      console.error('Error updating TV show status:', err);
+      showNotification(`Error updating TV show status: ${err.message}`, 'error');
+    }
+  };
+
   if (loading) {
     return (
       <div className="card">
@@ -629,6 +967,12 @@ const AdminDashboard = () => {
           Movie Management
         </button>
         <button 
+          className={`tab-button ${activeTab === 'tvshows' ? 'active' : ''}`}
+          onClick={() => setActiveTab('tvshows')}
+        >
+          TV Show Management
+        </button>
+        <button 
           className={`tab-button ${activeTab === 'contacts' ? 'active' : ''}`}
           onClick={() => setActiveTab('contacts')}
         >
@@ -654,6 +998,25 @@ const AdminDashboard = () => {
             </div>
             <div className="stat-card">
               <h3>{stats.newUsersThisMonth}</h3>
+              <p>New This Month</p>
+            </div>
+          </>
+        ) : activeTab === 'tvshows' ? (
+          <>
+            <div className="stat-card">
+              <h3>{tvShowStats.totalTVShows}</h3>
+              <p>Total TV Shows</p>
+            </div>
+            <div className="stat-card">
+              <h3>{tvShowStats.activeTVShows}</h3>
+              <p>Active TV Shows</p>
+            </div>
+            <div className="stat-card">
+              <h3>{tvShowStats.averageRating}</h3>
+              <p>Avg Rating</p>
+            </div>
+            <div className="stat-card">
+              <h3>{tvShowStats.newTVShowsThisMonth}</h3>
               <p>New This Month</p>
             </div>
           </>
@@ -999,6 +1362,171 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* TV Show Management Section */}
+      {activeTab === 'tvshows' && (
+        <div className="card">
+          <div className="dashboard-header">
+            <h2>TV Show Management</h2>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button 
+                className="btn btn-primary"
+                onClick={() => navigate('/add-tvshow')}
+              >
+                Add New TV Show
+              </button>
+            </div>
+          </div>
+
+          <div className="search-bar">
+            <input
+              type="text"
+              placeholder="Search TV shows by title, year, or genre..."
+              value={tvShowSearchTerm}
+              onChange={(e) => setTVShowSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <div className="user-actions">
+            <button 
+              className="btn btn-secondary"
+              onClick={() => setTVShowSearchTerm('')}
+            >
+              Clear Search
+            </button>
+            <button 
+              className="btn btn-secondary"
+              onClick={fetchTVShows}
+            >
+              Refresh
+            </button>
+          </div>
+
+          {tvShowsLoading ? (
+            <div className="loading-state">
+              <h3>Loading TV shows...</h3>
+              <p>Please wait while we fetch the latest TV show data.</p>
+            </div>
+          ) : tvShowsError ? (
+            <div className="error-state">
+              <h3>Error loading TV shows</h3>
+              <p>{tvShowsError}</p>
+              <button 
+                className="btn btn-primary"
+                onClick={fetchTVShows}
+              >
+                Try Again
+              </button>
+            </div>
+          ) : filteredTVShows.length === 0 ? (
+            <div className="empty-state">
+              <h3>No TV shows found</h3>
+              <p>{tvShowSearchTerm ? 'Try adjusting your search terms.' : 'No TV shows have been added yet.'}</p>
+            </div>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Image</th>
+                  <th>Title</th>
+                  <th>Year</th>
+                  <th>Genre</th>
+                  <th>IMDB Rating</th>
+                  <th>Status</th>
+                  <th>Added By</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTVShows.map(tvShow => (
+                  <tr key={tvShow._id}>
+                    <td>
+                      <img 
+                        src={tvShow.imageUrl} 
+                        alt={tvShow.title}
+                        className="movie-thumbnail"
+                        style={{ width: '80px', height: '120px', objectFit: 'cover' }}
+                      />
+                    </td>
+                    <td>
+                      <div>
+                        <strong>{tvShow.title}</strong>
+                        <br />
+                        <small style={{ color: '#6c757d' }}>
+                          {tvShow.description.length > 50 
+                            ? tvShow.description.substring(0, 50) + '...' 
+                            : tvShow.description
+                          }
+                        </small>
+                      </div>
+                    </td>
+                    <td>{tvShow.year}</td>
+                    <td>
+                      <span style={{ 
+                        padding: '4px 8px', 
+                        borderRadius: '4px', 
+                        backgroundColor: '#17a2b8',
+                        color: 'white',
+                        fontSize: '12px'
+                      }}>
+                        {tvShow.genre}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ 
+                        padding: '4px 8px', 
+                        borderRadius: '4px', 
+                        backgroundColor: tvShow.imdbRating >= 7 ? '#28a745' : tvShow.imdbRating >= 5 ? '#ffc107' : '#dc3545',
+                        color: 'white',
+                        fontSize: '12px'
+                      }}>
+                        {tvShow.imdbRating}/10
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ 
+                        padding: '4px 8px', 
+                        borderRadius: '4px', 
+                        backgroundColor: tvShow.status === 'active' ? '#28a745' : '#6c757d',
+                        color: 'white',
+                        fontSize: '12px'
+                      }}>
+                        {tvShow.status}
+                      </span>
+                    </td>
+                    <td>{tvShow.addedBy?.name || 'Unknown'}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '5px' }}>
+                        <button 
+                          className="btn btn-secondary"
+                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                          onClick={() => handleEditTVShow(tvShow)}
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          className="btn btn-secondary"
+                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                          onClick={() => handleToggleTVShowStatus(tvShow._id)}
+                        >
+                          {tvShow.status === 'active' ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button 
+                          className="btn btn-secondary"
+                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                          onClick={() => handleDeleteTVShow(tvShow._id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       {/* Add User Modal */}
       {showAddUserModal && (
         <div className="modal">
@@ -1154,8 +1682,11 @@ const AdminDashboard = () => {
               <label>Year</label>
               <input
                 type="number"
-                value={movieFormData.year}
-                onChange={(e) => setMovieFormData({...movieFormData, year: parseInt(e.target.value)})}
+                value={movieFormData.year || ''}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? new Date().getFullYear() : parseInt(e.target.value) || new Date().getFullYear();
+                  setMovieFormData({...movieFormData, year: val});
+                }}
                 min="1900"
                 max={new Date().getFullYear() + 5}
               />
@@ -1199,10 +1730,14 @@ const AdminDashboard = () => {
               <label>IMDB Rating (0-10)</label>
               <input
                 type="number"
-                value={movieFormData.imdbRating}
-                onChange={(e) => setMovieFormData({...movieFormData, imdbRating: parseInt(e.target.value)})}
+                value={movieFormData.imdbRating || ''}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0;
+                  setMovieFormData({...movieFormData, imdbRating: val});
+                }}
                 min="0"
                 max="10"
+                step="0.1"
               />
             </div>
             <div className="form-group">
@@ -1224,6 +1759,224 @@ const AdminDashboard = () => {
               <button 
                 className="btn btn-secondary"
                 onClick={() => setEditingMovie(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit TV Show Modal */}
+      {editingTVShow && (
+        <div className="modal">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3>Edit TV Show</h3>
+              <button 
+                className="close-btn"
+                onClick={() => setEditingTVShow(null)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="form-group">
+              <label>Title</label>
+              <input
+                type="text"
+                value={tvShowFormData.title}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, title: e.target.value})}
+                placeholder="Enter TV show title"
+              />
+            </div>
+            <div className="form-group">
+              <label>Year</label>
+              <input
+                type="number"
+                value={tvShowFormData.year || ''}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? new Date().getFullYear() : parseInt(e.target.value) || new Date().getFullYear();
+                  setTVShowFormData({...tvShowFormData, year: val});
+                }}
+                min="1900"
+                max={new Date().getFullYear() + 5}
+              />
+            </div>
+            <div className="form-group">
+              <label>Genre</label>
+              <select
+                value={tvShowFormData.genre}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, genre: e.target.value})}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+              >
+                <option value="">Select Genre</option>
+                <option value="Action">Action</option>
+                <option value="Adventure">Adventure</option>
+                <option value="Animation">Animation</option>
+                <option value="Comedy">Comedy</option>
+                <option value="Crime">Crime</option>
+                <option value="Documentary">Documentary</option>
+                <option value="Drama">Drama</option>
+                <option value="Family">Family</option>
+                <option value="Fantasy">Fantasy</option>
+                <option value="Horror">Horror</option>
+                <option value="Mystery">Mystery</option>
+                <option value="Romance">Romance</option>
+                <option value="Sci-Fi">Sci-Fi</option>
+                <option value="Thriller">Thriller</option>
+                <option value="War">War</option>
+                <option value="Western">Western</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Number of Seasons</label>
+              <input
+                type="number"
+                value={tvShowFormData.numberOfSeasons || ''}
+                onChange={handleTVShowSeasonsChange}
+                min="0"
+                placeholder="Enter number of seasons"
+              />
+              <small>Enter the number of seasons this TV show has.</small>
+            </div>
+
+            {tvShowSeasons.length > 0 && (
+              <div className="form-group">
+                <label>Seasons and Episodes</label>
+                <div style={{ marginTop: '10px', maxHeight: '400px', overflowY: 'auto' }}>
+                  {tvShowSeasons.map((season, seasonIndex) => (
+                    <div 
+                      key={seasonIndex} 
+                      style={{ 
+                        marginBottom: '20px', 
+                        padding: '15px', 
+                        border: '2px solid #007bff', 
+                        borderRadius: '8px',
+                        backgroundColor: '#f8f9fa'
+                      }}
+                    >
+                      <div style={{ marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '15px' }}>
+                        <h4 style={{ margin: 0, color: '#007bff' }}>Season {season.seasonNumber}</h4>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: '14px', marginRight: '10px' }}>
+                            Episodes:
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={season.episodeCount || ''}
+                            onChange={(e) => handleTVShowSeasonEpisodeCountChange(seasonIndex, e.target.value)}
+                            placeholder="e.g., 10"
+                            style={{ 
+                              padding: '6px 10px', 
+                              border: '1px solid #ccc', 
+                              borderRadius: '4px',
+                              width: '100px'
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {season.episodes && season.episodes.length > 0 && (
+                        <div style={{ marginTop: '15px' }}>
+                          {season.episodes.map((episode, episodeIndex) => (
+                            <div 
+                              key={episodeIndex} 
+                              style={{ 
+                                marginBottom: '12px', 
+                                padding: '10px', 
+                                border: '1px solid #ddd', 
+                                borderRadius: '5px',
+                                backgroundColor: '#fff'
+                              }}
+                            >
+                              <div style={{ marginBottom: '8px', fontWeight: '600', color: '#555' }}>
+                                Season {season.seasonNumber} - Episode {episode.episodeNumber}
+                              </div>
+                              <input
+                                type="text"
+                                placeholder={`Episode Title (optional)`}
+                                value={episode.episodeTitle || ''}
+                                onChange={(e) => handleTVShowSeasonEpisodeChange(seasonIndex, episodeIndex, 'episodeTitle', e.target.value)}
+                                style={{ 
+                                  width: '100%', 
+                                  marginBottom: '8px', 
+                                  padding: '8px', 
+                                  border: '1px solid #ccc', 
+                                  borderRadius: '4px' 
+                                }}
+                              />
+                              <input
+                                type="url"
+                                placeholder={`Episode URL *`}
+                                value={episode.episodeUrl || ''}
+                                onChange={(e) => handleTVShowSeasonEpisodeChange(seasonIndex, episodeIndex, 'episodeUrl', e.target.value)}
+                                style={{ 
+                                  width: '100%', 
+                                  padding: '8px', 
+                                  border: '1px solid #ccc', 
+                                  borderRadius: '4px' 
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="form-group">
+              <label>
+                TV Show URL (Watch) {tvShowSeasons.length === 0 ? '*' : '(Optional - use if no episodes)'}
+              </label>
+              <input
+                type="url"
+                value={tvShowFormData.showUrl || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, showUrl: e.target.value})}
+                placeholder="https://example.com/tvshow"
+              />
+              <small>
+                {tvShowSeasons.length === 0 
+                  ? 'URL where users can watch the TV show'
+                  : 'Single URL for the TV show (if not using individual episode URLs above)'}
+              </small>
+            </div>
+            <div className="form-group">
+              <label>IMDB Rating (0-10)</label>
+              <input
+                type="number"
+                value={tvShowFormData.imdbRating || ''}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0;
+                  setTVShowFormData({...tvShowFormData, imdbRating: val});
+                }}
+                min="0"
+                max="10"
+                step="0.1"
+              />
+            </div>
+            <div className="form-group">
+              <label>Description</label>
+              <textarea
+                value={tvShowFormData.description}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, description: e.target.value})}
+                placeholder="Enter TV show description..."
+                rows="4"
+              />
+            </div>
+            <div className="form-actions">
+              <button 
+                className="btn btn-primary"
+                onClick={handleUpdateTVShow}
+              >
+                Update TV Show
+              </button>
+              <button 
+                className="btn btn-secondary"
+                onClick={() => setEditingTVShow(null)}
               >
                 Cancel
               </button>

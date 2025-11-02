@@ -13,13 +13,19 @@ const Header = () => {
   const urlParams = new URLSearchParams(location.search);
   const currentGenre = urlParams.get('genre');
   const currentYear = urlParams.get('year');
+  const currentType = urlParams.get('type');
 
   // Fetch genres and years from API
   useEffect(() => {
     const fetchFilters = async () => {
       try {
         setLoading(true);
-        const response = await fetch('http://localhost:5001/api/movies/filters');
+        // Fetch filters based on current type (movies or tvshows)
+        const apiEndpoint = currentType === 'tvshows' 
+          ? 'http://localhost:5001/api/tvshows/filters'
+          : 'http://localhost:5001/api/movies/filters';
+        
+        const response = await fetch(apiEndpoint);
         const result = await response.json();
         
         if (result.success) {
@@ -34,13 +40,19 @@ const Header = () => {
     };
 
     fetchFilters();
-  }, []);
+  }, [currentType]);
 
   const categories = [
     {
       icon: '🎬',
       text: 'ALL MOVIES',
       path: '/',
+      dropdown: null
+    },
+    {
+      icon: '📺',
+      text: 'TV SHOWS',
+      path: '/?type=tvshows',
       dropdown: null
     },
     {
@@ -85,6 +97,17 @@ const Header = () => {
             moviesSection.scrollIntoView({ behavior: 'smooth' });
           }
         }, 100);
+      } else if (category.path === '/?type=tvshows') {
+        // Navigate to TV shows page
+        navigate('/?type=tvshows', { replace: true });
+        
+        // Scroll to content section
+        setTimeout(() => {
+          const moviesSection = document.getElementById('movies-section');
+          if (moviesSection) {
+            moviesSection.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 100);
       } else if (category.path === '/#contact') {
         // Navigate to home and scroll to contact section
         navigate('/');
@@ -104,6 +127,11 @@ const Header = () => {
     
     // Navigate to home page with filter parameters
     const params = new URLSearchParams();
+    
+    // Preserve the type parameter if it exists
+    if (currentType) {
+      params.append('type', currentType);
+    }
     
     if (category === 'GENRES') {
       params.append('genre', option);
@@ -126,7 +154,9 @@ const Header = () => {
             <button
               className={`header-category ${activeDropdown === category.text ? 'active' : ''} ${
                 (category.text === 'GENRES' && currentGenre) || 
-                (category.text === 'YEARS' && currentYear) ? 'has-filter' : ''
+                (category.text === 'YEARS' && currentYear) ||
+                (category.text === 'ALL MOVIES' && !currentType) ||
+                (category.text === 'TV SHOWS' && currentType === 'tvshows') ? 'has-filter' : ''
               }`}
               onClick={() => handleCategoryClick(category)}
             >
@@ -136,6 +166,12 @@ const Header = () => {
                 <span className="filter-indicator">●</span>
               )}
               {category.text === 'YEARS' && currentYear && (
+                <span className="filter-indicator">●</span>
+              )}
+              {(category.text === 'ALL MOVIES' && !currentType) && (
+                <span className="filter-indicator">●</span>
+              )}
+              {(category.text === 'TV SHOWS' && currentType === 'tvshows') && (
                 <span className="filter-indicator">●</span>
               )}
             </button>

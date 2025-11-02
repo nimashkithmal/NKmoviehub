@@ -41,6 +41,7 @@ if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const movieRoutes = require('./routes/movies');
+const tvShowRoutes = require('./routes/tvshows');
 const contactRoutes = require('./routes/contacts');
 
 const app = express();
@@ -69,6 +70,7 @@ mongoose.connect(process.env.MONGODB_URI, {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/movies', movieRoutes);
+app.use('/api/tvshows', tvShowRoutes);
 app.use('/api/contacts', contactRoutes);
 
 // Health check endpoint

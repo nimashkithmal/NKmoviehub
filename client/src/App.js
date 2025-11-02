@@ -7,7 +7,9 @@ import Login from './components/Login';
 import Register from './components/Register';
 import AdminDashboard from './components/AdminDashboard';
 import AddMovie from './components/AddMovie';
+import AddTVShow from './components/AddTVShow';
 import MovieDetail from './components/MovieDetail';
+import TVShowDetail from './components/TVShowDetail';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import './App.css';
@@ -43,6 +45,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/movie/:id" element={<MovieDetail />} />
+                <Route path="/tvshow/:id" element={<TVShowDetail />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route 
@@ -58,6 +61,14 @@ function App() {
                   element={
                     <ProtectedRoute adminOnly={true}>
                       <AddMovie />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/add-tvshow" 
+                  element={
+                    <ProtectedRoute adminOnly={true}>
+                      <AddTVShow />
                     </ProtectedRoute>
                   } 
                 />
