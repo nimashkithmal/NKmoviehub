@@ -174,11 +174,29 @@ const Navbar = () => {
             <span></span>
             <span></span>
           </button>
+        </div>
+      </div>
 
-          {/* Popup Menu */}
-          {isMobileMenuOpen && (
-            <div className="popup-menu">
-              <div className="popup-menu-content">
+      {/* Popup Menu Modal */}
+      {isMobileMenuOpen && (
+        <>
+          <div 
+            className="mobile-menu-overlay"
+            onClick={closeMobileMenu}
+          ></div>
+          <div className="menu-toggle-wrapper">
+            <div className="mobile-popup-menu">
+              <div className="mobile-popup-header">
+                <h3>Menu</h3>
+                <button 
+                  className="mobile-popup-close"
+                  onClick={closeMobileMenu}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="mobile-popup-content">
           {/* Mobile Search */}
           <div className="mobile-search">
             <div className={`search-wrapper ${isSearching ? 'searching' : ''}`}>
@@ -325,13 +343,8 @@ const Navbar = () => {
           </ul>
               </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Menu Overlay */}
-      {isMobileMenuOpen && (
-        <div className="menu-overlay" onClick={closeMobileMenu}></div>
+          </div>
+        </>
       )}
     </nav>
   );
