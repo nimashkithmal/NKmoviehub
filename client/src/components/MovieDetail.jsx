@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import MoviePlayer from './MoviePlayer';
+import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 import './MovieDetail.css';
 
 const MovieDetail = () => {
@@ -240,17 +241,7 @@ const MovieDetail = () => {
                 <img 
                   src={movie.images[selectedImageIndex] || movie.images[0]} 
                   alt={movie.title}
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    const placeholder = e.target.parentElement.querySelector('.movie-placeholder-large') || document.createElement('div');
-                    placeholder.className = 'movie-placeholder-large';
-                    placeholder.innerHTML = '<span>🎬</span>';
-                    if (!e.target.parentElement.querySelector('.movie-placeholder-large')) {
-                      e.target.parentElement.appendChild(placeholder);
-                    } else {
-                      e.target.parentElement.querySelector('.movie-placeholder-large').style.display = 'flex';
-                    }
-                  }}
+                  onError={(e) => handleImageError(e, movie.title)}
                 />
               </div>
               {movie.images.length > 1 && (
@@ -264,10 +255,7 @@ const MovieDetail = () => {
                       <img 
                         src={imageUrl} 
                         alt={`${movie.title} ${index + 1}`}
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="150"%3E%3Crect width="100" height="150" fill="%231a1a1a"/%3E%3Ctext x="50" y="75" font-size="20" fill="white" text-anchor="middle" dominant-baseline="middle"%3E🎬%3C/text%3E%3C/svg%3E';
-                        }}
+                        onError={(e) => handleImageError(e, `${movie.title} ${index + 1}`)}
                       />
                     </div>
                   ))}
@@ -276,24 +264,16 @@ const MovieDetail = () => {
             </div>
           ) : movie.imageUrl ? (
             <img 
-              src={movie.imageUrl} 
+              src={movie.imageUrl.startsWith('http') ? movie.imageUrl : getMoviePlaceholder(movie.title, 400, 600)} 
               alt={movie.title}
-              onError={(e) => {
-                e.target.style.display = 'none';
-                const placeholder = e.target.parentElement.querySelector('.movie-placeholder-large') || document.createElement('div');
-                placeholder.className = 'movie-placeholder-large';
-                placeholder.innerHTML = '<span>🎬</span>';
-                if (!e.target.parentElement.querySelector('.movie-placeholder-large')) {
-                  e.target.parentElement.appendChild(placeholder);
-                } else {
-                  e.target.parentElement.querySelector('.movie-placeholder-large').style.display = 'flex';
-                }
-              }}
+              onError={(e) => handleImageError(e, movie.title)}
             />
           ) : (
-            <div className="movie-placeholder-large">
-              <span>🎬</span>
-            </div>
+            <img 
+              src={getMoviePlaceholder(movie.title, 400, 600)} 
+              alt={movie.title}
+              className="movie-placeholder-img"
+            />
           )}
         </div>
 

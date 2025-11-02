@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import './Navbar.css';
 
 const Navbar = () => {
   const { user, isAuthenticated, logout } = useAuth();
@@ -11,12 +12,23 @@ const Navbar = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   // Track if search is from user input or URL update
   const [isUserTyping, setIsUserTyping] = useState(false);
 
   // Check if we're on home page - define this before useEffects that use it
   const isHomePage = location.pathname === '/';
+
+  // Handle scroll effect
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Initialize search term from URL parameters
   useEffect(() => {
@@ -115,154 +127,212 @@ const Navbar = () => {
   const handleLogout = () => {
     logout();
     navigate('/');
+    setIsMobileMenuOpen(false);
+  };
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
   };
 
   return (
-    <nav className="navbar">
-      <div className="container">
-        <Link to="/" className="navbar-brand">
-          <div className="brand-container">
-            <div className="brand-text">
-              <span className="brand-nk">NK</span>
-              <span className="brand-movie">Movie</span>
-              <span className="brand-hub">HUB</span>
-            </div>
-            <div className="brand-tagline">YOUR ULTIMATE MOVIE DESTINATION</div>
-            <div className="brand-logo-badge">
-              <span className="brand-logo-text">NK</span>
-              <div className="brand-logo-dots">
-                <span className="dot"></span>
-                <span className="dot"></span>
-                <span className="dot"></span>
+    <nav className={`navbar ${isScrolled ? 'scrolled' : ''}`}>
+      <div className="navbar-container">
+        {/* Brand/Logo */}
+        <Link to="/" className="navbar-brand" onClick={closeMobileMenu}>
+          <div className="navbar-logo">
+            <div className="logo-main-section">
+              <span className="logo-primary">NK</span>
+              <span className="logo-secondary">Movie</span>
+              <div className="logo-hub-container">
+                <div className="logo-play-button">
+                  <span className="play-icon">▶</span>
+                </div>
+                <span className="logo-accent">HUB</span>
               </div>
+            </div>
+            <div className="logo-subtitle-section">
+              <span className="subtitle-underline"></span>
+              <span className="logo-subtitle">Entertainment Platform</span>
             </div>
           </div>
         </Link>
 
-        {/* Search and Filters Section */}
-        <div className="navbar-search-section">
-          <div className="navbar-search-form">
-            {/* Search Bar */}
-            <div className={`navbar-search-wrapper ${isSearching ? 'searching' : ''}`}>
+
+        {/* Menu Toggle Button */}
+        <div className="menu-toggle-wrapper">
+          <button 
+            className={`mobile-menu-toggle ${isMobileMenuOpen ? 'active' : ''}`}
+            onClick={toggleMobileMenu}
+            aria-label="Toggle menu"
+            aria-expanded={isMobileMenuOpen}
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+
+          {/* Popup Menu */}
+          {isMobileMenuOpen && (
+            <div className="popup-menu">
+              <div className="popup-menu-content">
+          {/* Mobile Search */}
+          <div className="mobile-search">
+            <div className={`search-wrapper ${isSearching ? 'searching' : ''}`}>
               <input
                 type="text"
                 placeholder="Search movies and TV shows..."
                 value={searchTerm}
                 onChange={(e) => {
-                  setIsUserTyping(true); // Mark as user typing
+                  setIsUserTyping(true);
                   setSearchTerm(e.target.value);
-                  // Navigate to home if not already there when typing
                   if (!isHomePage) {
                     const params = new URLSearchParams();
                     if (e.target.value.trim()) {
                       params.append('search', e.target.value.trim());
                     }
-                    const currentParams = new URLSearchParams(location.search);
-                    const currentType = currentParams.get('type');
-                    if (currentType) {
-                      params.append('type', currentType);
-                    }
                     navigate(`/?${params.toString()}`);
                   }
                 }}
-                className="navbar-search-input"
+                className="search-input"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     setIsUserTyping(true);
                     handleSearchWithLoading();
+                    closeMobileMenu();
                   }
                 }}
               />
               <button 
                 type="button" 
-                className="navbar-search-btn"
+                className="search-button"
                 onClick={() => {
                   if (isHomePage) {
                     handleSearchWithLoading();
                   } else {
-                    // Navigate to home with search
                     const params = new URLSearchParams();
                     if (searchTerm.trim()) {
                       params.append('search', searchTerm.trim());
                     }
                     navigate(`/?${params.toString()}`);
                   }
+                  closeMobileMenu();
                 }}
               >
-                {isSearching ? '⏳' : '🔍'}
+                {isSearching ? (
+                  <span className="search-spinner">⏳</span>
+                ) : (
+                  <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                  </svg>
+                )}
               </button>
             </div>
-            
-            {/* Search Status Indicator */}
-            {isSearching && isHomePage && (
-              <div className="search-status">
-                <span className="search-indicator">🔍 Searching...</span>
-              </div>
-            )}
-
-            {/* Clear Search Button */}
-            {searchTerm && isHomePage && (
-              <div className="navbar-filter-controls">
-                <button
-                  type="button"
-                  className="navbar-clear-btn"
-                  onClick={clearSearch}
-                >
-                  ✕ Clear
-                </button>
-              </div>
-            )}
           </div>
-        </div>
 
-        <ul className="navbar-nav">
-          <li>
-            <Link to="/">Home</Link>
-          </li>
-          {!isAuthenticated ? (
-            <>
-              <li>
-                <Link to="/login">Login</Link>
-              </li>
-              <li>
-                <Link to="/register">Register</Link>
-              </li>
-            </>
-          ) : (
-            <>
-              <li>
-                <span className="user-welcome">Welcome, {user?.name}!</span>
-              </li>
-              {user?.role === 'admin' && (
-                <>
-                  <li>
-                    <Link to="/admin" className="admin-link">Admin Dashboard</Link>
-                  </li>
-                  <li>
-                    <Link to="/add-movie" className="admin-link">Add Movie</Link>
-                  </li>
-                  <li>
-                    <Link to="/add-tvshow" className="admin-link">Add TV Show</Link>
-                  </li>
-                </>
-              )}
-              <li>
-                <button 
-                  onClick={handleLogout}
-                  className="btn btn-secondary logout-btn"
-                >
-                  Logout
-                </button>
-              </li>
-            </>
+          {/* Mobile Nav Links */}
+          <ul className="mobile-nav-links">
+            <li>
+              <Link 
+                to="/" 
+                className={location.pathname === '/' ? 'active' : ''}
+                onClick={closeMobileMenu}
+              >
+                <span className="nav-icon">🏠</span>
+                <span>Home</span>
+              </Link>
+            </li>
+            {!isAuthenticated ? (
+              <>
+                <li>
+                  <Link 
+                    to="/login" 
+                    className={location.pathname === '/login' ? 'active' : ''}
+                    onClick={closeMobileMenu}
+                  >
+                    <span className="nav-icon">🔐</span>
+                    <span>Login</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    to="/register" 
+                    className={`nav-btn-primary ${location.pathname === '/register' ? 'active' : ''}`}
+                    onClick={closeMobileMenu}
+                  >
+                    <span className="nav-icon">✨</span>
+                    <span>Sign Up</span>
+                  </Link>
+                </li>
+              </>
+            ) : (
+              <>
+                <li className="mobile-user-info">
+                  <div className="user-profile">
+                    <span className="user-avatar">👤</span>
+                    <div>
+                      <div className="user-name-mobile">{user?.name}</div>
+                      <div className="user-role-mobile">{user?.role === 'admin' ? 'Administrator' : 'User'}</div>
+                    </div>
+                  </div>
+                </li>
+                {user?.role === 'admin' && (
+                  <>
+                    <li>
+                      <Link 
+                        to="/admin" 
+                        className={`admin-nav-link ${location.pathname === '/admin' ? 'active' : ''}`}
+                        onClick={closeMobileMenu}
+                      >
+                        <span className="nav-icon">⚙️</span>
+                        <span>Admin Dashboard</span>
+                      </Link>
+                    </li>
+                    <li>
+                      <Link 
+                        to="/add-movie" 
+                        className={`admin-nav-link ${location.pathname === '/add-movie' ? 'active' : ''}`}
+                        onClick={closeMobileMenu}
+                      >
+                        <span className="nav-icon">➕</span>
+                        <span>Add Movie</span>
+                      </Link>
+                    </li>
+                    <li>
+                      <Link 
+                        to="/add-tvshow" 
+                        className={`admin-nav-link ${location.pathname === '/add-tvshow' ? 'active' : ''}`}
+                        onClick={closeMobileMenu}
+                      >
+                        <span className="nav-icon">📺</span>
+                        <span>Add TV Show</span>
+                      </Link>
+                    </li>
+                  </>
+                )}
+                <li>
+                  <button onClick={handleLogout} className="nav-btn-secondary mobile-logout">
+                    <span className="nav-icon">🚪</span>
+                    <span>Logout</span>
+                  </button>
+                </li>
+              </>
+            )}
+          </ul>
+              </div>
+            </div>
           )}
-          <li>
-            <button className="navbar-icon-btn" aria-label="Movie Hub">
-              <span className="navbar-icon">🎬</span>
-            </button>
-          </li>
-        </ul>
+        </div>
       </div>
+
+      {/* Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="menu-overlay" onClick={closeMobileMenu}></div>
+      )}
     </nav>
   );
 };

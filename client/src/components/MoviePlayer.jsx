@@ -131,7 +131,7 @@ const MoviePlayer = ({ movie, onClose }) => {
         setIsLoading(true);
       } else {
         setHasError(true);
-        setErrorMessage('Invalid Google Drive URL. Make sure the file is shared publicly (Anyone with the link can view).');
+        setErrorMessage('Invalid Google Drive URL. Note: Google Drive videos have embedding restrictions. The file must be: 1) Shared with "Anyone with the link can view", 2) A supported video format, 3) You may need to open it directly in a new tab.');
         setIsLoading(false);
       }
     } else if (type === 'youtube') {
@@ -336,6 +336,35 @@ const MoviePlayer = ({ movie, onClose }) => {
               <div className="error-icon">⚠️</div>
               <h3>Unable to play video</h3>
               <p>{errorMessage || 'An error occurred while loading the video.'}</p>
+              {videoType === 'googledrive' && (
+                <div className="google-drive-info">
+                  <p><strong>Google Drive Video Limitations:</strong></p>
+                  <ul>
+                    <li>Google Drive videos cannot be embedded in iframes due to security restrictions</li>
+                    <li>The file must be shared publicly with "Anyone with the link can view"</li>
+                    <li>Use YouTube, Vimeo, or direct video URLs for better compatibility</li>
+                    <li>You can click "Open Link" below to watch in Google Drive directly</li>
+                  </ul>
+                  <a 
+                    href={movie.movieUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="open-link-button"
+                    style={{
+                      display: 'inline-block',
+                      marginTop: '15px',
+                      padding: '10px 20px',
+                      background: '#4285f4',
+                      color: 'white',
+                      textDecoration: 'none',
+                      borderRadius: '8px',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Open Link in New Tab
+                  </a>
+                </div>
+              )}
               <div className="error-url-info">
                 <small>URL: {movie.movieUrl}</small>
               </div>
@@ -381,7 +410,7 @@ const MoviePlayer = ({ movie, onClose }) => {
                 }}
                 onError={() => {
                   setHasError(true);
-                  setErrorMessage('Failed to load video. Make sure the Google Drive file is shared publicly (Anyone with the link can view).');
+                  setErrorMessage('Google Drive videos cannot be embedded due to security restrictions. Please ensure the file is: 1) Shared publicly with "Anyone with the link can view" permission, 2) A video file format (MP4, WebM, etc.), and 3) Try opening the link directly in a new tab instead.');
                   setIsLoading(false);
                 }}
               />

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MoviePlayer from './MoviePlayer';
+import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 
 const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenticated, showNotification }) => {
   const navigate = useNavigate();
@@ -456,38 +457,20 @@ const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenti
                 <img 
                   src={movie.images[0]} 
                   alt={movie.title}
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    const placeholder = e.target.parentElement.querySelector('.movie-placeholder') || document.createElement('div');
-                    placeholder.className = 'movie-placeholder';
-                    placeholder.innerHTML = '<span>🎬</span>';
-                    if (!e.target.parentElement.querySelector('.movie-placeholder')) {
-                      e.target.parentElement.appendChild(placeholder);
-                    } else {
-                      e.target.parentElement.querySelector('.movie-placeholder').style.display = 'flex';
-                    }
-                  }}
+                  onError={(e) => handleImageError(e, movie.title)}
                 />
               ) : movie.imageUrl ? (
                 <img 
                   src={movie.imageUrl} 
                   alt={movie.title}
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    const placeholder = e.target.parentElement.querySelector('.movie-placeholder') || document.createElement('div');
-                    placeholder.className = 'movie-placeholder';
-                    placeholder.innerHTML = '<span>🎬</span>';
-                    if (!e.target.parentElement.querySelector('.movie-placeholder')) {
-                      e.target.parentElement.appendChild(placeholder);
-                    } else {
-                      e.target.parentElement.querySelector('.movie-placeholder').style.display = 'flex';
-                    }
-                  }}
+                  onError={(e) => handleImageError(e, movie.title)}
                 />
               ) : (
-                <div className="movie-placeholder">
-                  <span>🎬</span>
-                </div>
+                <img 
+                  src={getMoviePlaceholder(movie.title)} 
+                  alt={movie.title}
+                  className="movie-placeholder-img"
+                />
               )}
               
             </div>
