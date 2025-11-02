@@ -10,15 +10,18 @@ A full-stack movie rating and review application built with React.js frontend an
 
 - **User Authentication**: Secure login and registration system with JWT tokens
 - **Movie Management**: Add, view, and manage movies with admin controls
-- **Rating System**: Rate movies and leave reviews with user feedback
+- **TV Show Management**: Complete TV show library with episodes, seasons, and admin controls
+- **Rating System**: Rate movies and TV shows with 5-star ratings and user feedback
 - **Advanced Search & Filters**: Search by title, filter by genre and year with real-time results
 - **Dynamic Slideshow**: Auto-rotating movie wallpapers with manual navigation controls
 - **Contact System**: User contact form with email notifications and admin management
 - **Email Integration**: Automated email confirmations and admin replies via Gmail SMTP
-- **Admin Dashboard**: Comprehensive administrative interface for managing users, movies, and contacts
+- **Cloudinary Integration**: Professional image hosting and optimization for posters and thumbnails
+- **Admin Dashboard**: Comprehensive administrative interface for managing users, movies, TV shows, and contacts
 - **Contact Management**: Admin panel for viewing, replying to, and managing user inquiries
 - **Responsive Design**: Modern UI that works seamlessly on all devices
 - **Real-time Updates**: Live search results and dynamic content updates
+- **Episode Management**: Add and manage episodes for TV shows with individual URLs
 
 ## 🛠️ Tech Stack
 
@@ -33,8 +36,11 @@ A full-stack movie rating and review application built with React.js frontend an
 - MongoDB with Mongoose
 - JWT Authentication
 - Nodemailer (Email Service)
+- Cloudinary (Image Hosting & Optimization)
 - Express Validator (Input Validation)
 - bcrypt (Password Hashing)
+- bcryptjs
+- CORS Support
 
 ## 📁 Project Structure
 
@@ -48,7 +54,13 @@ NKMovieHUB/
 │   │   │   ├── ContactSection.jsx   # Contact page section
 │   │   │   ├── Home.jsx             # Home page with slideshow
 │   │   │   ├── MovieGrid.jsx        # Movie display grid
+│   │   │   ├── TVShowGrid.jsx       # TV Show display grid
+│   │   │   ├── MovieDetail.jsx      # Movie detail page
+│   │   │   ├── TVShowDetail.jsx     # TV Show detail page
+│   │   │   ├── MoviePlayer.jsx      # Video player component
 │   │   │   ├── AdminDashboard.jsx   # Admin panel
+│   │   │   ├── AddMovie.jsx         # Add movie form
+│   │   │   ├── AddTVShow.jsx        # Add TV show form
 │   │   │   └── ...
 │   │   ├── context/       # Authentication context
 │   │   └── ...
@@ -56,16 +68,20 @@ NKMovieHUB/
 │   ├── models/            # MongoDB models
 │   │   ├── Contact.js     # Contact message model
 │   │   ├── Movie.js       # Movie model
+│   │   ├── TVShow.js      # TV Show model
 │   │   ├── User.js        # User model
 │   │   └── Rating.js      # Rating model
 │   ├── routes/            # API routes
 │   │   ├── contacts.js    # Contact management routes
 │   │   ├── movies.js      # Movie management routes
+│   │   ├── tvshows.js     # TV Show management routes
 │   │   ├── auth.js        # Authentication routes
 │   │   └── users.js       # User management routes
 │   ├── services/          # External services
 │   │   └── emailService.js # Email notification service
 │   ├── middleware/        # Authentication middleware
+│   ├── seedDatabase.js    # Database seeding script
+│   ├── seedMovies.js      # Movie seeding script
 │   └── ...
 └── ...
 ```
@@ -103,14 +119,20 @@ NKMovieHUB/
    ```
 
 4. **Environment Setup**
-   - Copy `server/config.env.example` to `server/config.env`
+   - Copy `server/config.env.example` to `server/config.env` or edit existing `server/config.env`
    - Update the MongoDB connection string and JWT secret
    - Configure email settings (optional):
      ```env
      EMAIL_USER=your-gmail@gmail.com
      EMAIL_PASS=your-16-character-app-password
      ```
-   - Note: Email service is optional. Contact system works without email configuration.
+   - Configure Cloudinary settings (optional, fallback values provided):
+     ```env
+     CLOUDINARY_CLOUD_NAME=your-cloud-name
+     CLOUDINARY_API_KEY=your-api-key
+     CLOUDINARY_API_SECRET=your-api-secret
+     ```
+   - Note: Email and Cloudinary services are optional. The app includes fallback configurations.
 
 5. **Start the application**
 
@@ -152,14 +174,18 @@ NKMovieHUB/
 ### For Users
 - **Register/Login**: Create an account or sign in to access full features
 - **Browse Movies**: View all available movies with advanced search and filters
-- **Search & Filter**: Search by movie title, filter by genre and year
-- **Rate Movies**: Give ratings and leave reviews for movies you've watched
+- **Browse TV Shows**: Explore TV shows with episode management
+- **Search & Filter**: Search by title, filter by genre and year for movies/TV shows
+- **Rate Content**: Give 1-5 star ratings and leave reviews for movies and TV shows
+- **Watch Content**: Access movie players and TV show episodes
 - **Contact Support**: Send inquiries and messages through the contact form
 
 ### For Admins
 - **Admin Dashboard**: Access comprehensive admin panel at `/admin`
 - **User Management**: View and manage all registered users
 - **Movie Management**: Add, edit, and remove movies from the database
+- **TV Show Management**: Add, edit, and remove TV shows with episode management
+- **Content Upload**: Upload images for movies and TV shows via Cloudinary
 - **Contact Management**: View, reply to, and manage user inquiries
 - **Email Integration**: Send automated replies to user contacts
 - **Statistics**: View contact statistics and system metrics
@@ -182,8 +208,6 @@ EMAIL_USER=your-gmail@gmail.com
 EMAIL_PASS=your-16-character-app-password
 ```
 
-**Note**: Email service is optional. The contact system will work without email configuration, but users won't receive confirmation emails or admin replies via email.
-
 ## 🎬 Movie Features
 
 ### Dynamic Slideshow
@@ -200,9 +224,36 @@ EMAIL_PASS=your-16-character-app-password
 - **Average Ratings**: Display average ratings from all users
 - **Real-time Updates**: Ratings update immediately after submission
 
+## 📺 TV Show Features
+
+### TV Show Management
+- **Episode Management**: Add and manage individual episodes with titles and URLs
+- **Seasons Support**: Organize shows by number of seasons
+- **Episode Count**: Track total number of episodes
+- **Complete Library**: Browse TV shows with full metadata
+
+### TV Show Rating System
+- **Unified Rating System**: Same 1-5 star rating as movies
+- **Show-specific Ratings**: Track ratings per TV show
+- **Average Ratings**: Display average ratings from all users
+- **User Reviews**: Leave written reviews for TV shows
+
 ## 📄 License
 
-This project is currently in development. Once published, contributions will be welcome:
+This project is currently in development. Once published, contributions will be welcome.
+
+## 🎯 Key Highlights
+
+- **Full-Stack Application**: Complete React frontend with Node.js/Express backend
+- **MongoDB Integration**: Robust database with Mongoose ODM
+- **Cloud Storage**: Professional image hosting with Cloudinary
+- **Email Services**: Automated email notifications via Nodemailer
+- **Role-Based Access**: Admin and user roles with proper authorization
+- **Real-Time Features**: Live search, filtering, and content updates
+- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile
+- **Secure Authentication**: JWT-based authentication with password hashing
+- **RESTful API**: Well-structured API endpoints with proper HTTP methods
+- **Production Ready**: Environment-based configuration and error handling
 
 ## 👨‍💻 Author
 
