@@ -1,23 +1,41 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const TVShowGrid = ({ tvShows, searchTerm = '' }) => {
+const TVShowGrid = ({ tvShows, searchTerm = '', selectedGenre = '', selectedYear = '' }) => {
   const navigate = useNavigate();
 
-  // Check if there's a search term and no results
+  // Check if there are active filters and no results
   const hasSearchTerm = searchTerm && searchTerm.trim().length > 0;
+  const hasGenreFilter = selectedGenre && selectedGenre.trim().length > 0;
+  const hasYearFilter = selectedYear && selectedYear.trim().length > 0;
+  const hasActiveFilters = hasSearchTerm || hasGenreFilter || hasYearFilter;
   const hasTVShows = tvShows && tvShows.length > 0;
   const displayTVShows = hasTVShows ? tvShows : [];
-  const showNoTVShowsMessage = hasSearchTerm && !hasTVShows;
+  const showNoTVShowsMessage = hasActiveFilters && !hasTVShows;
 
   return (
     <div className="movie-grid-container">
       {showNoTVShowsMessage ? (
         <div className="no-movies-message">
           <div className="no-movies-icon">📺</div>
-          <h3>No TV Show Available</h3>
-          <p>Sorry, we couldn't find any TV show matching "{searchTerm}".</p>
-          <p className="no-movies-suggestion">Please try a different search term or browse our collection.</p>
+          <h3>No TV Shows Available</h3>
+          <p>
+            {hasSearchTerm && hasGenreFilter && hasYearFilter && 
+              `Sorry, we couldn't find any TV shows matching "${searchTerm}" in ${selectedGenre} genre from ${selectedYear}.`}
+            {hasSearchTerm && hasGenreFilter && !hasYearFilter && 
+              `Sorry, we couldn't find any TV shows matching "${searchTerm}" in ${selectedGenre} genre.`}
+            {hasSearchTerm && !hasGenreFilter && hasYearFilter && 
+              `Sorry, we couldn't find any TV shows matching "${searchTerm}" from ${selectedYear}.`}
+            {hasSearchTerm && !hasGenreFilter && !hasYearFilter && 
+              `Sorry, we couldn't find any TV show matching "${searchTerm}".`}
+            {!hasSearchTerm && hasGenreFilter && hasYearFilter && 
+              `Sorry, we couldn't find any ${selectedGenre} TV shows from ${selectedYear}.`}
+            {!hasSearchTerm && hasGenreFilter && !hasYearFilter && 
+              `Sorry, we couldn't find any ${selectedGenre} TV shows.`}
+            {!hasSearchTerm && !hasGenreFilter && hasYearFilter && 
+              `Sorry, we couldn't find any TV shows from ${selectedYear}.`}
+          </p>
+          <p className="no-movies-suggestion">Please try different filters or browse our collection.</p>
         </div>
       ) : (
         <div className="movie-grid">

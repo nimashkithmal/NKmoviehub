@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import MoviePlayer from './MoviePlayer';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 
-const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenticated, showNotification, searchTerm = '' }) => {
+const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenticated, showNotification, searchTerm = '', selectedGenre = '', selectedYear = '' }) => {
   const navigate = useNavigate();
   const [selectedMovie, setSelectedMovie] = useState(null);
   // 30 New Movies Collection
@@ -430,12 +430,15 @@ const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenti
     }
   ];
 
-  // Use sample movies only if no search term is active and no movies provided
-  // If there's a search term and no results, show "no movies available" message
+  // Use sample movies only if no filters are active and no movies provided
+  // If there's a search term, genre, or year filter and no results, show "no movies available" message
   const hasSearchTerm = searchTerm && searchTerm.trim().length > 0;
+  const hasGenreFilter = selectedGenre && selectedGenre.trim().length > 0;
+  const hasYearFilter = selectedYear && selectedYear.trim().length > 0;
+  const hasActiveFilters = hasSearchTerm || hasGenreFilter || hasYearFilter;
   const hasMovies = movies && movies.length > 0;
-  const displayMovies = hasMovies ? movies : (hasSearchTerm ? [] : sampleMovies);
-  const showNoMoviesMessage = hasSearchTerm && !hasMovies;
+  const displayMovies = hasMovies ? movies : (hasActiveFilters ? [] : sampleMovies);
+  const showNoMoviesMessage = hasActiveFilters && !hasMovies;
 
   return (
     <>
@@ -450,9 +453,24 @@ const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenti
         {showNoMoviesMessage ? (
           <div className="no-movies-message">
             <div className="no-movies-icon">🎬</div>
-            <h3>No Movie Available</h3>
-            <p>Sorry, we couldn't find any movie matching "{searchTerm}".</p>
-            <p className="no-movies-suggestion">Please try a different search term or browse our collection.</p>
+            <h3>No Movies Available</h3>
+            <p>
+              {hasSearchTerm && hasGenreFilter && hasYearFilter && 
+                `Sorry, we couldn't find any movies matching "${searchTerm}" in ${selectedGenre} genre from ${selectedYear}.`}
+              {hasSearchTerm && hasGenreFilter && !hasYearFilter && 
+                `Sorry, we couldn't find any movies matching "${searchTerm}" in ${selectedGenre} genre.`}
+              {hasSearchTerm && !hasGenreFilter && hasYearFilter && 
+                `Sorry, we couldn't find any movies matching "${searchTerm}" from ${selectedYear}.`}
+              {hasSearchTerm && !hasGenreFilter && !hasYearFilter && 
+                `Sorry, we couldn't find any movie matching "${searchTerm}".`}
+              {!hasSearchTerm && hasGenreFilter && hasYearFilter && 
+                `Sorry, we couldn't find any ${selectedGenre} movies from ${selectedYear}.`}
+              {!hasSearchTerm && hasGenreFilter && !hasYearFilter && 
+                `Sorry, we couldn't find any ${selectedGenre} movies.`}
+              {!hasSearchTerm && !hasGenreFilter && hasYearFilter && 
+                `Sorry, we couldn't find any movies from ${selectedYear}.`}
+            </p>
+            <p className="no-movies-suggestion">Please try different filters or browse our collection.</p>
           </div>
         ) : (
           <div className="movie-grid">

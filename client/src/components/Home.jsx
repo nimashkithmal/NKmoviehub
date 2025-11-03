@@ -273,9 +273,23 @@ const Home = () => {
   }, [contentType, selectedGenre, selectedYear, searchTerm, fetchMovies, fetchTVShows]);
 
   const clearFilters = useCallback(() => {
-    // Use navigate instead of pushState to properly trigger React Router updates
-    navigate('/', { replace: true });
-  }, [navigate]);
+    const params = new URLSearchParams(location.search);
+    
+    // Clear all filter parameters
+    params.delete('search');
+    params.delete('genre');
+    params.delete('year');
+    
+    // Preserve type parameter
+    if (contentType === 'tvshows') {
+      params.set('type', 'tvshows');
+    } else {
+      params.delete('type');
+    }
+    
+    const queryString = params.toString();
+    navigate(queryString ? `/?${queryString}` : '/', { replace: true });
+  }, [navigate, location.search, contentType]);
 
 
   // Fetch user ratings for movies
@@ -648,7 +662,12 @@ const Home = () => {
               </button>
             </div>
           ) : contentType === 'tvshows' ? (
-            <TVShowGrid tvShows={tvShows} searchTerm={searchTerm} />
+            <TVShowGrid 
+              tvShows={tvShows} 
+              searchTerm={searchTerm}
+              selectedGenre={selectedGenre}
+              selectedYear={selectedYear}
+            />
           ) : (
             <MovieGrid 
               movies={movies}
@@ -658,6 +677,8 @@ const Home = () => {
               isAuthenticated={isAuthenticated}
               showNotification={showNotification}
               searchTerm={searchTerm}
+              selectedGenre={selectedGenre}
+              selectedYear={selectedYear}
             />
           )}
         </div>
