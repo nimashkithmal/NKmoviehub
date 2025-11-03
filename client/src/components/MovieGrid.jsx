@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import MoviePlayer from './MoviePlayer';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 
-const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenticated, showNotification }) => {
+const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenticated, showNotification, searchTerm = '' }) => {
   const navigate = useNavigate();
   const [selectedMovie, setSelectedMovie] = useState(null);
   // 30 New Movies Collection
@@ -430,8 +430,12 @@ const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenti
     }
   ];
 
-  // Use sample movies if no movies provided
-  const displayMovies = movies && movies.length > 0 ? movies : sampleMovies;
+  // Use sample movies only if no search term is active and no movies provided
+  // If there's a search term and no results, show "no movies available" message
+  const hasSearchTerm = searchTerm && searchTerm.trim().length > 0;
+  const hasMovies = movies && movies.length > 0;
+  const displayMovies = hasMovies ? movies : (hasSearchTerm ? [] : sampleMovies);
+  const showNoMoviesMessage = hasSearchTerm && !hasMovies;
 
   return (
     <>
@@ -443,8 +447,16 @@ const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenti
       )}
       
       <div className="movie-grid-container">
-        <div className="movie-grid">
-        {displayMovies.map((movie, index) => (
+        {showNoMoviesMessage ? (
+          <div className="no-movies-message">
+            <div className="no-movies-icon">🎬</div>
+            <h3>No Movie Available</h3>
+            <p>Sorry, we couldn't find any movie matching "{searchTerm}".</p>
+            <p className="no-movies-suggestion">Please try a different search term or browse our collection.</p>
+          </div>
+        ) : (
+          <div className="movie-grid">
+          {displayMovies.map((movie, index) => (
           <div 
             key={movie._id} 
             className="movie-poster-card"
@@ -490,7 +502,8 @@ const MovieGrid = ({ movies, onRateMovie, userRatings, ratingLoading, isAuthenti
             </div>
           </div>
         ))}
-        </div>
+          </div>
+        )}
       </div>
     </>
   );

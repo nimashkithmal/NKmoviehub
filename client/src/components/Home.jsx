@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Header from './Header';
 import MovieGrid from './MovieGrid';
 import TVShowGrid from './TVShowGrid';
@@ -10,6 +10,7 @@ import './MovieGrid.css';
 const Home = () => {
   const { isAuthenticated, token } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [movies, setMovies] = useState([]);
   const [tvShows, setTVShows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -23,6 +24,9 @@ const Home = () => {
   const [showYearPanel, setShowYearPanel] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [contentType, setContentType] = useState('movies'); // 'movies' or 'tvshows'
+  const [availableGenres, setAvailableGenres] = useState([]);
+  const [availableYears, setAvailableYears] = useState([]);
+  const [filtersLoading, setFiltersLoading] = useState(false);
 
   // Slideshow images - movie-related wallpapers
   const slideshowImages = [
@@ -50,6 +54,16 @@ const Home = () => {
     setSelectedGenre(genreParam || '');
     setSelectedYear(yearParam || '');
     setContentType(typeParam === 'tvshows' ? 'tvshows' : 'movies');
+    
+    // Scroll to movies section if genre/year filter is applied (helps when navigating from other pages)
+    if (genreParam || yearParam) {
+      setTimeout(() => {
+        const moviesSection = document.getElementById('movies-section');
+        if (moviesSection) {
+          moviesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 500);
+    }
   }, [location.search]);
 
   // Auto-advance slideshow
@@ -74,6 +88,34 @@ const Home = () => {
     setCurrentSlide((prev) => (prev - 1 + slideshowImages.length) % slideshowImages.length);
   };
 
+  // Fetch available genres and years based on content type
+  useEffect(() => {
+    const fetchFilters = async () => {
+      try {
+        setFiltersLoading(true);
+        const apiEndpoint = contentType === 'tvshows' 
+          ? 'http://localhost:5001/api/tvshows/filters'
+          : 'http://localhost:5001/api/movies/filters';
+        
+        const response = await fetch(apiEndpoint);
+        const result = await response.json();
+        
+        if (result.success) {
+          setAvailableGenres(result.data.genres || []);
+          setAvailableYears(result.data.years || []);
+        }
+      } catch (error) {
+        console.error('Error fetching filters:', error);
+        setAvailableGenres([]);
+        setAvailableYears([]);
+      } finally {
+        setFiltersLoading(false);
+      }
+    };
+
+    fetchFilters();
+  }, [contentType]);
+
   // Close panels when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -90,6 +132,56 @@ const Home = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showGenrePanel, showYearPanel]);
+
+  // Handle genre selection
+  const handleGenreSelect = (genre) => {
+    const params = new URLSearchParams(location.search);
+    
+    if (selectedGenre === genre) {
+      // Toggle off - remove genre
+      params.delete('genre');
+    } else {
+      // Set new genre
+      params.set('genre', genre);
+      params.delete('search'); // Clear search when selecting genre
+    }
+    
+    // Preserve type parameter
+    if (contentType === 'tvshows') {
+      params.set('type', 'tvshows');
+    } else {
+      params.delete('type');
+    }
+    
+    const queryString = params.toString();
+    navigate(queryString ? `/?${queryString}` : '/', { replace: true });
+    setShowGenrePanel(false);
+  };
+
+  // Handle year selection
+  const handleYearSelect = (year) => {
+    const params = new URLSearchParams(location.search);
+    
+    if (selectedYear === year.toString()) {
+      // Toggle off - remove year
+      params.delete('year');
+    } else {
+      // Set new year
+      params.set('year', year);
+      params.delete('search'); // Clear search when selecting year
+    }
+    
+    // Preserve type parameter
+    if (contentType === 'tvshows') {
+      params.set('type', 'tvshows');
+    } else {
+      params.delete('type');
+    }
+    
+    const queryString = params.toString();
+    navigate(queryString ? `/?${queryString}` : '/', { replace: true });
+    setShowYearPanel(false);
+  };
 
   // Fetch movies from backend
   const fetchMovies = useCallback(async () => {
@@ -157,28 +249,9 @@ const Home = () => {
     }
   }, [searchTerm, selectedGenre, selectedYear]);
 
-  // Fetch content based on type
+  // Unified fetch effect - handles all filter changes including initial load
   useEffect(() => {
-    if (contentType === 'tvshows') {
-      fetchTVShows();
-    } else {
-      fetchMovies();
-    }
-  }, [contentType, fetchMovies, fetchTVShows]);
-
-  // Immediate search for short terms (1-2 characters)
-  useEffect(() => {
-    if (searchTerm.trim().length <= 2 && searchTerm.trim()) {
-      if (contentType === 'tvshows') {
-        fetchTVShows();
-      } else {
-        fetchMovies();
-      }
-    }
-  }, [searchTerm, contentType, fetchMovies, fetchTVShows]);
-
-  // Auto-search when search term or filters change (for longer terms)
-  useEffect(() => {
+    // Debounce for search terms longer than 2 characters
     if (searchTerm.trim().length > 2) {
       const timeoutId = setTimeout(() => {
         if (contentType === 'tvshows') {
@@ -186,30 +259,23 @@ const Home = () => {
         } else {
           fetchMovies();
         }
-      }, 200);
+      }, 300);
 
       return () => clearTimeout(timeoutId);
-    }
-  }, [searchTerm, selectedGenre, selectedYear, contentType, fetchMovies, fetchTVShows]);
-
-  // Immediate search for genre and year changes
-  useEffect(() => {
-    if (selectedGenre || selectedYear) {
+    } else {
+      // Immediate fetch for genre/year changes, short search terms, or initial load
       if (contentType === 'tvshows') {
         fetchTVShows();
       } else {
         fetchMovies();
       }
     }
-  }, [selectedGenre, selectedYear, contentType, fetchMovies, fetchTVShows]);
+  }, [contentType, selectedGenre, selectedYear, searchTerm, fetchMovies, fetchTVShows]);
 
   const clearFilters = useCallback(() => {
-    setSearchTerm('');
-    setSelectedGenre('');
-    setSelectedYear('');
-    // Clear URL parameters
-    window.history.pushState({}, '', '/');
-  }, []);
+    // Use navigate instead of pushState to properly trigger React Router updates
+    navigate('/', { replace: true });
+  }, [navigate]);
 
 
   // Fetch user ratings for movies
@@ -394,7 +460,110 @@ const Home = () => {
             ))}
           </div>
         </div>
-        <h2>{contentType === 'tvshows' ? 'Browse TV Shows' : 'Browse Movies'}</h2>
+        
+        {/* Browse Header with Filters */}
+        <div className="browse-header-with-filters">
+          <h2>{contentType === 'tvshows' ? 'Browse TV Shows' : 'Browse Movies'}</h2>
+          
+          {/* Genre and Year Filter Buttons */}
+          <div className="inline-filters-container">
+            {/* Genre Filter */}
+            <div className="filter-select-group">
+              <button
+                className={`filter-button ${selectedGenre ? 'active' : ''}`}
+                onClick={() => {
+                  setShowGenrePanel(!showGenrePanel);
+                  setShowYearPanel(false);
+                }}
+              >
+                <span className="filter-icon">🎭</span>
+                <span className="filter-text">
+                  {selectedGenre || 'All Genres'}
+                </span>
+                {selectedGenre && <span className="filter-indicator">●</span>}
+              </button>
+              
+              {showGenrePanel && (
+                <div className="filter-dropdown">
+                  <div className="filter-dropdown-header">
+                    <span>Select Genre</span>
+                    <button 
+                      className="filter-close-btn"
+                      onClick={() => setShowGenrePanel(false)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="filter-options">
+                    {filtersLoading ? (
+                      <div className="filter-loading">Loading...</div>
+                    ) : availableGenres.length > 0 ? (
+                      availableGenres.map((genre, index) => (
+                        <button
+                          key={index}
+                          className={`filter-option ${selectedGenre === genre ? 'selected' : ''}`}
+                          onClick={() => handleGenreSelect(genre)}
+                        >
+                          {genre}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="filter-empty">No genres available</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Year Filter */}
+            <div className="filter-select-group">
+              <button
+                className={`filter-button ${selectedYear ? 'active' : ''}`}
+                onClick={() => {
+                  setShowYearPanel(!showYearPanel);
+                  setShowGenrePanel(false);
+                }}
+              >
+                <span className="filter-icon">📅</span>
+                <span className="filter-text">
+                  {selectedYear || 'All Years'}
+                </span>
+                {selectedYear && <span className="filter-indicator">●</span>}
+              </button>
+              
+              {showYearPanel && (
+                <div className="filter-dropdown">
+                  <div className="filter-dropdown-header">
+                    <span>Select Year</span>
+                    <button 
+                      className="filter-close-btn"
+                      onClick={() => setShowYearPanel(false)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="filter-options year-options">
+                    {filtersLoading ? (
+                      <div className="filter-loading">Loading...</div>
+                    ) : availableYears.length > 0 ? (
+                      availableYears.map((year, index) => (
+                        <button
+                          key={index}
+                          className={`filter-option ${selectedYear === year.toString() ? 'selected' : ''}`}
+                          onClick={() => handleYearSelect(year)}
+                        >
+                          {year}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="filter-empty">No years available</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
         
         {/* Filter Summary */}
         {(searchTerm || selectedGenre || selectedYear) && (
@@ -406,10 +575,10 @@ const Home = () => {
                   <button 
                     className="remove-filter-btn"
                     onClick={() => {
-                      setSearchTerm('');
                       const params = new URLSearchParams(location.search);
                       params.delete('search');
-                      window.history.pushState({}, '', params.toString() ? `/?${params.toString()}` : '/');
+                      const queryString = params.toString();
+                      navigate(queryString ? `/?${queryString}` : '/', { replace: true });
                     }}
                   >
                     ×
@@ -422,10 +591,10 @@ const Home = () => {
                   <button 
                     className="remove-filter-btn"
                     onClick={() => {
-                      setSelectedGenre('');
                       const params = new URLSearchParams(location.search);
                       params.delete('genre');
-                      window.history.pushState({}, '', params.toString() ? `/?${params.toString()}` : '/');
+                      const queryString = params.toString();
+                      navigate(queryString ? `/?${queryString}` : '/', { replace: true });
                     }}
                   >
                     ×
@@ -438,10 +607,10 @@ const Home = () => {
                   <button 
                     className="remove-filter-btn"
                     onClick={() => {
-                      setSelectedYear('');
                       const params = new URLSearchParams(location.search);
                       params.delete('year');
-                      window.history.pushState({}, '', params.toString() ? `/?${params.toString()}` : '/');
+                      const queryString = params.toString();
+                      navigate(queryString ? `/?${queryString}` : '/', { replace: true });
                     }}
                   >
                     ×
@@ -479,7 +648,7 @@ const Home = () => {
               </button>
             </div>
           ) : contentType === 'tvshows' ? (
-            <TVShowGrid tvShows={tvShows} />
+            <TVShowGrid tvShows={tvShows} searchTerm={searchTerm} />
           ) : (
             <MovieGrid 
               movies={movies}
@@ -488,6 +657,7 @@ const Home = () => {
               ratingLoading={ratingLoading}
               isAuthenticated={isAuthenticated}
               showNotification={showNotification}
+              searchTerm={searchTerm}
             />
           )}
         </div>

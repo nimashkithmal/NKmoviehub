@@ -1,16 +1,27 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const TVShowGrid = ({ tvShows }) => {
+const TVShowGrid = ({ tvShows, searchTerm = '' }) => {
   const navigate = useNavigate();
 
-  // Use provided TV shows or empty array
-  const displayTVShows = tvShows && tvShows.length > 0 ? tvShows : [];
+  // Check if there's a search term and no results
+  const hasSearchTerm = searchTerm && searchTerm.trim().length > 0;
+  const hasTVShows = tvShows && tvShows.length > 0;
+  const displayTVShows = hasTVShows ? tvShows : [];
+  const showNoTVShowsMessage = hasSearchTerm && !hasTVShows;
 
   return (
     <div className="movie-grid-container">
-      <div className="movie-grid">
-        {displayTVShows.map((tvShow, index) => (
+      {showNoTVShowsMessage ? (
+        <div className="no-movies-message">
+          <div className="no-movies-icon">📺</div>
+          <h3>No TV Show Available</h3>
+          <p>Sorry, we couldn't find any TV show matching "{searchTerm}".</p>
+          <p className="no-movies-suggestion">Please try a different search term or browse our collection.</p>
+        </div>
+      ) : (
+        <div className="movie-grid">
+          {displayTVShows.map((tvShow, index) => (
           <div 
             key={tvShow._id} 
             className="movie-poster-card"
@@ -73,7 +84,8 @@ const TVShowGrid = ({ tvShows }) => {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
