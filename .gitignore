@@ -88,11 +88,6 @@ temp/
 ehthumbs.db
 Thumbs.db
 
-# Screenshots
-Screenshot*.png
-Screenshot*.jpg
-Screenshot*.jpeg
-
 # IDE files
 .vscode/
 .idea/
