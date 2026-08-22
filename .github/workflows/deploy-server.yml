@@ -71,6 +71,44 @@ jobs:
 
           echo "All three secrets are present."
 
+      - name: Diagnose connectivity to the server
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          echo "EC2_HOST length: ${#EC2_HOST} characters"
+
+          case "$EC2_HOST" in
+            *://*)
+              echo "PROBLEM: EC2_HOST contains a scheme such as http://"
+              echo "Store only the address, e.g. 51.20.40.2"
+              exit 1 ;;
+            */*)
+              echo "PROBLEM: EC2_HOST contains a slash"
+              exit 1 ;;
+            *" "*)
+              echo "PROBLEM: EC2_HOST contains a space"
+              exit 1 ;;
+            *)
+              echo "Address shape looks fine." ;;
+          esac
+
+          if command -v timeout > /dev/null; then
+            probe() { timeout 15 bash -c ": < /dev/tcp/$1/22"; }
+          else
+            probe() { bash -c ": < /dev/tcp/$1/22"; }
+          fi
+
+          if probe "$EC2_HOST" 2>/dev/null; then
+            echo "Port 22 IS reachable from this runner."
+          else
+            echo "Port 22 is NOT reachable from this runner."
+            echo ""
+            echo "If ssh works from your own machine, the EC2 security group is"
+            echo "almost certainly limited to your IP address. GitHub runners come"
+            echo "from a large, changing IP range, so inbound SSH has to allow them."
+            exit 1
+          fi
+
       - name: Pull and restart on EC2
         env:
           SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
