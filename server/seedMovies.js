@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Movie = require('./models/Movie');
 const User = require('./models/User');
 require('dotenv').config({ path: './config.env' });
+const { generatePlaceholderImage } = require('./utils/placeholderImage');
 
 const sampleMovies = [
   {
@@ -249,7 +250,7 @@ const sampleMovies = [
     year: 1998,
     description: "Following the Normandy Landings, a group of U.S. soldiers go behind enemy lines to retrieve a paratrooper whose brothers have been killed in action.",
     genre: "War",
-    imageUrl: "https://image.tmdb.org/t/p/w500/uqx37cS8cpHg8U35f9U5I7rPEsI.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/uqx37cS8cpHg8U35f9U5IBlrCV3.jpg",
     movieUrl: "https://www.imdb.com/title/tt0120815/",
     imdbRating: 8.6,
     averageRating: 8.7,
@@ -273,7 +274,7 @@ const sampleMovies = [
     year: 2006,
     description: "An undercover cop and a mob informant both attempt to identify each other while infiltrating an Irish gang in South Boston.",
     genre: "Crime",
-    imageUrl: "https://image.tmdb.org/t/p/w500/nT97ifVT2J1yMQme7jHbB0nP5nz.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/nT97ifVT2J1yMQmeq20Qblg61T.jpg",
     movieUrl: "https://www.imdb.com/title/tt0407887/",
     imdbRating: 8.5,
     averageRating: 8.6,
@@ -333,7 +334,7 @@ const sampleMovies = [
     year: 2006,
     description: "After a tragic accident, two stage magicians in 1890s London engage in a battle to create the ultimate illusion while sacrificing everything they have to outwit each other.",
     genre: "Thriller",
-    imageUrl: "https://image.tmdb.org/t/p/w500/5MXyQfz8xUP3dIFPTubhTsbFY6N.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/Ag2B2KHKQPukjH7WutmgnnSNurZ.jpg",
     movieUrl: "https://www.imdb.com/title/tt0482571/",
     imdbRating: 8.5,
     averageRating: 8.6,
@@ -345,7 +346,7 @@ const sampleMovies = [
     year: 1995,
     description: "A sole survivor tells of the twisty events leading up to a horrific gun battle on a boat, which began when five criminals met at a seemingly random police lineup.",
     genre: "Crime",
-    imageUrl: "https://image.tmdb.org/t/p/w500/qwy6SYVv5a4nfyaY9oTz1ZdEn3K.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/99X2SgyFunJFXGAYnDv3sb9pnUD.jpg",
     movieUrl: "https://www.imdb.com/title/tt0114814/",
     imdbRating: 8.5,
     averageRating: 8.6,
@@ -369,7 +370,7 @@ const sampleMovies = [
     year: 1999,
     description: "A boy who communicates with spirits seeks the help of a disheartened child psychologist.",
     genre: "Thriller",
-    imageUrl: "https://image.tmdb.org/t/p/w500/isQy6o3m67Hs51vO2b23sq7KyNg.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/vOyfUXNFSnaTk7Vk5AjpsKTUWsu.jpg",
     movieUrl: "https://www.imdb.com/title/tt0167404/",
     imdbRating: 8.1,
     averageRating: 8.2,
@@ -429,7 +430,7 @@ const sampleMovies = [
     year: 2018,
     description: "Teen Miles Morales becomes Spider-Man of his reality, crossing his path with five counterparts from other dimensions to stop a threat for all realities.",
     genre: "Animation",
-    imageUrl: "https://image.tmdb.org/t/p/w500/iiZZdoQBEYBv6id8r7T1dGz2PmB.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/iiZZdoQBEYBv6id8su7ImL0oCbD.jpg",
     movieUrl: "https://www.imdb.com/title/tt4633694/",
     imdbRating: 8.4,
     averageRating: 8.6,
@@ -441,7 +442,7 @@ const sampleMovies = [
     year: 2025,
     description: "A terrifying horror movie from the future that will scare you to death.",
     genre: "Horror",
-    imageUrl: "https://via.placeholder.com/500x750/8b0000/ffffff?text=Horror+2025",
+    imageUrl: generatePlaceholderImage(500, 750, "Test Horror Movie 2025", "8b0000", "ffffff"),
     movieUrl: "https://example.com/horror-2025",
     imdbRating: 8.5,
     averageRating: 8.7,

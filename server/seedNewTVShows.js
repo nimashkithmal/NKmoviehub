@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const TVShow = require('./models/TVShow');
 const User = require('./models/User');
 require('dotenv').config({ path: './config.env' });
+const { generatePlaceholderImage } = require('./utils/placeholderImage');
 
 // TV Shows to add
 const tvShowsToAdd = [
@@ -10,7 +11,7 @@ const tvShowsToAdd = [
     year: 2019,
     description: "A teenage boy with a sex therapist mother teams up with a high school classmate to set up an underground sex therapy clinic at school.",
     genre: "Comedy",
-    imageUrl: "https://image.tmdb.org/t/p/w500/7JFLv7kAsn7Q3vMRlqTIY3EqMSk.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/bc3bmTdnoKcRuO9xdQKgAbB7Y9Z.jpg",
     showUrl: "https://example.com/sex-education/s01e01",
     episodeCount: 32,
     numberOfSeasons: 4,
@@ -24,7 +25,7 @@ const tvShowsToAdd = [
     year: 2012,
     description: "Spoiled billionaire playboy Oliver Queen is missing and presumed dead when his yacht is lost at sea. He returns five years later a changed man, determined to clean up the city as a hooded vigilante armed with a bow.",
     genre: "Action",
-    imageUrl: "https://image.tmdb.org/t/p/w500/gKG5QGz5Ngf8fgWpBsWfhlLutJo.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/u8ZHFj1jC384JEkTt3vNg1DfWEb.jpg",
     showUrl: "https://example.com/arrow/s01e01",
     episodeCount: 170,
     numberOfSeasons: 8,
@@ -66,7 +67,7 @@ const tvShowsToAdd = [
     year: 2023,
     description: "A reality series following a group of strong, independent women in Hollywood as they navigate the entertainment industry and build their empires.",
     genre: "Reality TV",
-    imageUrl: "https://via.placeholder.com/500x750/FF1493/ffffff?text=Baddies+of+Hollywood",
+    imageUrl: generatePlaceholderImage(500, 750, "Baddies of Hollywood", "FF1493", "ffffff"),
     showUrl: "https://example.com/baddies-hollywood/s01e01",
     episodeCount: 12,
     numberOfSeasons: 1,
@@ -80,7 +81,7 @@ const tvShowsToAdd = [
     year: 2022,
     description: "A gripping thriller series following a detective investigating mysterious cases in a small town where nothing is as it seems.",
     genre: "Thriller",
-    imageUrl: "https://via.placeholder.com/500x750/4682B4/ffffff?text=Farazi",
+    imageUrl: generatePlaceholderImage(500, 750, "Farazi", "4682B4", "ffffff"),
     showUrl: "https://example.com/farazi/s01e01",
     episodeCount: 8,
     numberOfSeasons: 1,
@@ -94,7 +95,7 @@ const tvShowsToAdd = [
     year: 2008,
     description: "After the mysterious murder of his father, a son's search for answers begins a momentous fight against tyranny.",
     genre: "Fantasy",
-    imageUrl: "https://image.tmdb.org/t/p/w500/gj282P2piANJLvTADbTOOQ8OhxV.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/ibclBUwEjsvfi8hpdO2i9jdOMUI.jpg",
     showUrl: "https://example.com/legend-seeker/s01e01",
     episodeCount: 44,
     numberOfSeasons: 2,
@@ -108,7 +109,7 @@ const tvShowsToAdd = [
     year: 2016,
     description: "A team of superheroes travels through time to save the world from various threats and prevent the destruction of time itself.",
     genre: "Action",
-    imageUrl: "https://image.tmdb.org/t/p/w500/8oI9Y2X4L7xqu4H0lRjwfp5ls8z.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/qNgAcg4gNYbZ9mySLB9ZX4ehZb6.jpg",
     showUrl: "https://example.com/legends-tomorrow/s01e01",
     episodeCount: 110,
     numberOfSeasons: 7,

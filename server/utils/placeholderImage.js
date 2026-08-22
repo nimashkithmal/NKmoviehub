@@ -1,6 +1,7 @@
 /**
- * Generate a placeholder image as an inline SVG data URI.
- * Everything is generated locally, so there are no external requests to fail.
+ * Generate poster placeholders as inline SVG data URIs.
+ * Kept in sync with client/src/utils/placeholderImage.js so seeded records
+ * do not depend on any external placeholder service.
  */
 
 // SVG is XML, so titles containing &, <, > or quotes have to be escaped
@@ -38,7 +39,7 @@ const wrapText = (text, maxCharsPerLine = 14, maxLines = 4) => {
   return lines;
 };
 
-export const generatePlaceholderImage = (width = 300, height = 450, text = '', bgColor = '1a1a1a', textColor = 'ffffff') => {
+const generatePlaceholderImage = (width = 500, height = 750, text = '', bgColor = '1a1a1a', textColor = 'ffffff') => {
   const label = (text || 'No Image').trim();
   const lines = wrapText(label);
   const fontSize = Math.round(Math.min(width, height) / 10);
@@ -60,9 +61,10 @@ export const generatePlaceholderImage = (width = 300, height = 450, text = '', b
 };
 
 /**
- * Get a placeholder image for a movie/TV show, with a colour picked from the title
+ * Poster placeholder for a movie/TV show, with a colour derived from the title
+ * so the same title always gets the same poster.
  */
-export const getMoviePlaceholder = (title, width = 300, height = 450) => {
+const getPosterPlaceholder = (title, width = 500, height = 750) => {
   const colors = [
     { bg: '1a1a1a', text: 'ffffff' }, // Dark
     { bg: '0f0f23', text: 'ffffff' }, // Dark blue
@@ -78,7 +80,6 @@ export const getMoviePlaceholder = (title, width = 300, height = 450) => {
     { bg: '1a0f0a', text: 'ffffff' }, // Dark purple-brown
   ];
 
-  // Use title to pick a consistent color
   let hash = 0;
   if (title) {
     for (let i = 0; i < title.length; i++) {
@@ -92,15 +93,4 @@ export const getMoviePlaceholder = (title, width = 300, height = 450) => {
   return generatePlaceholderImage(width, height, title, selectedColor.bg, selectedColor.text);
 };
 
-/**
- * Handle image loading errors by providing a fallback placeholder
- */
-export const handleImageError = (event, title) => {
-  if (event.target.src && event.target.src.startsWith('data:')) {
-    // Already using placeholder, don't replace
-    return;
-  }
-
-  event.target.onerror = null; // Prevent infinite loop
-  event.target.src = getMoviePlaceholder(title || 'Image');
-};
+module.exports = { generatePlaceholderImage, getPosterPlaceholder };
