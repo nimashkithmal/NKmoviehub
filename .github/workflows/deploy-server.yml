@@ -54,15 +54,26 @@ jobs:
     name: Deploy over SSH
     needs: verify
     runs-on: ubuntu-latest
+    env:
+      SSH_KEY: ${{ secrets.EC2_SSH_KEY || secrets.SSH_PRIVATE_KEY }}
+      EC2_HOST: ${{ secrets.EC2_HOST || vars.EC2_HOST }}
+      EC2_USER: ${{ secrets.EC2_USER || vars.EC2_USER }}
 
     steps:
       # Plain ssh rather than a third-party action, so the deploy key is never
       # handed to code outside this repository.
+      - name: Validate deploy configuration
+        run: |
+          missing=()
+          [ -z "$SSH_KEY" ] && missing+=("EC2_SSH_KEY (or SSH_PRIVATE_KEY)")
+          [ -z "$EC2_HOST" ] && missing+=("EC2_HOST secret/variable")
+          [ -z "$EC2_USER" ] && missing+=("EC2_USER secret/variable")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required deploy configuration: ${missing[*]}"
+            exit 1
+          fi
+
       - name: Pull and restart on EC2
-        env:
-          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
         run: |
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
@@ -91,8 +102,6 @@ jobs:
           REMOTE
 
       - name: Check the API is answering
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
           for i in $(seq 1 10); do
             code=$(curl -s -o /dev/null -w '%{http_code}' "http://$EC2_HOST/api/health" || true)
