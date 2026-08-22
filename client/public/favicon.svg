@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <!-- Red gradient for text -->
+    <linearGradient id="redGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#dc2626;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#b91c1c;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Purple gradient for movie icon -->
+    <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Shadow filter -->
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.5"/>
+      <feOffset dx="0" dy="1" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Glow effect -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background with subtle gradient -->
+  <rect width="64" height="64" rx="12" fill="#ffffff"/>
+  
+  <!-- Inner shadow circle for depth -->
+  <circle cx="32" cy="32" r="29" fill="none" stroke="rgba(0,0,0,0.05)" stroke-width="1"/>
+  
+  <!-- NK Text with gradient and shadow -->
+  <text x="32" y="38" font-family="'Inter', 'Arial', 'Helvetica Neue', sans-serif" font-size="32" font-weight="800" text-anchor="middle" fill="url(#redGradient)" letter-spacing="-1.5px" filter="url(#shadow)">NK</text>
+  
+  <!-- Decorative red accent bars -->
+  <rect x="14" y="41" width="8" height="2.5" rx="1.25" fill="url(#redGradient)" opacity="0.8"/>
+  <rect x="42" y="41" width="8" height="2.5" rx="1.25" fill="url(#redGradient)" opacity="0.8"/>
+  
+  <!-- Professional purple movie icon with gradient -->
+  <g transform="translate(19, 45)" filter="url(#shadow)">
+    <!-- Film strip base with gradient -->
+    <rect x="0" y="0" width="26" height="14" fill="url(#purpleGradient)" rx="2"/>
+    
+    <!-- Film strip shadow effect -->
+    <rect x="0.5" y="0.5" width="25" height="13" fill="none" stroke="rgba(124, 58, 237, 0.3)" stroke-width="0.5" rx="2"/>
+    
+    <!-- Film strip holes on left -->
+    <circle cx="3.5" cy="3.5" r="1.2" fill="#ffffff" opacity="0.9"/>
+    <circle cx="3.5" cy="10.5" r="1.2" fill="#ffffff" opacity="0.9"/>
+    
+    <!-- Film strip holes on right -->
+    <circle cx="22.5" cy="3.5" r="1.2" fill="#ffffff" opacity="0.9"/>
+    <circle cx="22.5" cy="10.5" r="1.2" fill="#ffffff" opacity="0.9"/>
+    
+    <!-- Film frame with inner shadow -->
+    <rect x="7.5" y="4" width="11" height="6" fill="#ffffff" rx="1"/>
+    <rect x="7.5" y="4" width="11" height="6" fill="none" stroke="rgba(139, 92, 246, 0.2)" stroke-width="0.3" rx="1"/>
+    
+    <!-- Play icon with gradient -->
+    <path d="M 10 6 L 10 8.5 L 14 7.25 Z" fill="url(#purpleGradient)"/>
+    
+    <!-- Subtle shine effect on film strip -->
+    <rect x="7.5" y="1" width="11" height="1.5" fill="#ffffff" opacity="0.3" rx="0.5"/>
+  </g>
+  
+  <!-- Outer border with gradient -->
+  <rect x="1" y="1" width="62" height="62" rx="12" fill="none" stroke="url(#redGradient)" stroke-width="1.5" opacity="0.6"/>
+</svg>
