@@ -98,6 +98,18 @@ jobs:
               "$EC2_USER@$EC2_HOST" \
               APP_DIR="$APP_DIR" PM2_APP="$PM2_APP" 'bash -s' <<'REMOTE'
             set -euo pipefail
+
+            # A non-interactive ssh session skips .bashrc, so anything installed
+            # through nvm (node, npm, pm2) is not on PATH unless we load it here.
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            export PATH="$PATH:$HOME/.npm-global/bin:/usr/local/bin"
+
+            echo "--- environment ---"
+            echo "node: $(command -v node || echo MISSING)"
+            echo "npm : $(command -v npm  || echo MISSING)"
+            echo "pm2 : $(command -v pm2  || echo MISSING)"
+
             cd "$APP_DIR"
 
             echo "--- pulling latest ---"
