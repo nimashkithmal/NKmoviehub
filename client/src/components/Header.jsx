@@ -34,7 +34,7 @@ const Header = () => {
   const categories = useMemo(() => [
     {
       icon: '🎬',
-      text: 'ALL MOVIES.......',
+      text: 'ALL MOVIES...',
       path: '/',
       dropdown: null
     },
