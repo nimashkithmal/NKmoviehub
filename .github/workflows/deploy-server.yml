@@ -91,10 +91,30 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          # A malformed or truncated key otherwise fails later as a bare
+          # "Permission denied", which says nothing about the real cause.
+          if ! ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null 2>&1; then
+            echo "EC2_SSH_KEY is not a usable private key."
+            echo "Store the whole .pem file, from the BEGIN line to the END line,"
+            echo "with no extra spaces and nothing trimmed."
+            exit 1
+          fi
+          echo "Private key loaded."
+
+          # Not silenced: if the host key cannot be fetched, StrictHostKeyChecking
+          # rejects the connection and the reason belongs in the log.
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+          if [ ! -s ~/.ssh/known_hosts ]; then
+            echo "Could not fetch the host key from the server."
+            exit 1
+          fi
+          echo "Host key recorded."
 
           ssh -i ~/.ssh/deploy_key \
               -o StrictHostKeyChecking=yes \
+              -o BatchMode=yes \
+              -o ConnectTimeout=20 \
               "$EC2_USER@$EC2_HOST" \
               APP_DIR="$APP_DIR" PM2_APP="$PM2_APP" 'bash -s' <<'REMOTE'
             set -euo pipefail
