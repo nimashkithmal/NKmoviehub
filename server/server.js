@@ -43,6 +43,7 @@ const userRoutes = require('./routes/users');
 const movieRoutes = require('./routes/movies');
 const tvShowRoutes = require('./routes/tvshows');
 const contactRoutes = require('./routes/contacts');
+const bannerRoutes = require('./routes/banners');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -72,6 +73,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/movies', movieRoutes);
 app.use('/api/tvshows', tvShowRoutes);
 app.use('/api/contacts', contactRoutes);
+app.use('/api/banners', bannerRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

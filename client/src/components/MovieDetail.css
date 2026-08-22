@@ -1,8 +1,10 @@
 /* Movie Detail Container */
 .movie-detail-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: var(--space-xl) var(--space-lg);
+  /* Matches the home page, which fills main.container rather than capping at
+     a narrower width, so a movie or show page is the same size as the grid */
+  max-width: 100%;
+  margin: 0;
+  padding: var(--space-xl) 0;
   animation: fadeIn 0.5s ease-in;
 }
 
@@ -54,6 +56,9 @@
 
 /* Movie Detail Poster */
 .movie-detail-poster {
+  /* Grid items default to min-width:auto and refuse to shrink below their
+     content, which pushed the page wider than the screen on phones */
+  min-width: 0;
   width: 100%;
   height: 600px;
   border-radius: var(--radius-xl);
@@ -171,6 +176,7 @@
 
 /* Movie Detail Info */
 .movie-detail-info {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-xl);
@@ -460,7 +466,7 @@
 
 @media (max-width: 768px) {
   .movie-detail-container {
-    padding: var(--space-lg) var(--space-md);
+    padding: var(--space-lg) 0;
   }
 
   .movie-detail-content {

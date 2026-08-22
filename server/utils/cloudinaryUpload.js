@@ -20,13 +20,26 @@ cloudinary.config({
 
 const POSTER_FOLDERS = {
   movie: 'nkmoviehub',
-  tvshow: 'nkmoviehub/tvshows'
+  tvshow: 'nkmoviehub/tvshows',
+  banner: 'nkmoviehub/home-page-banner'
 };
 
 const POSTER_TRANSFORMATION = [
   { width: 500, height: 750, crop: 'fill' },
   { quality: 'auto' }
 ];
+
+// Home page slides are wide rather than portrait, so they need their own size
+const BANNER_TRANSFORMATION = [
+  { width: 1920, height: 800, crop: 'fill' },
+  { quality: 'auto' }
+];
+
+const TRANSFORMATIONS = {
+  movie: POSTER_TRANSFORMATION,
+  tvshow: POSTER_TRANSFORMATION,
+  banner: BANNER_TRANSFORMATION
+};
 
 const isCloudinaryUrl = (value) =>
   typeof value === 'string' && value.includes('res.cloudinary.com');
@@ -53,15 +66,21 @@ const normalizeDataUri = (value) => {
 };
 
 /**
- * Upload one poster and return its Cloudinary URL.
- * Accepts a base64/data-URI upload from the admin form or a remote image URL.
- * Anything already on Cloudinary is returned untouched.
+ * Upload one image and return Cloudinary's full response.
+ * Callers that need the public_id back - to be able to delete the image later -
+ * use this; everything else uses uploadPoster and gets just the URL.
  */
-const uploadPoster = async (source, options = {}) => {
-  const { type = 'movie', folder = POSTER_FOLDERS[type] || POSTER_FOLDERS.movie, publicId } = options;
+const uploadImage = async (source, options = {}) => {
+  const {
+    type = 'movie',
+    folder = POSTER_FOLDERS[type] || POSTER_FOLDERS.movie,
+    publicId,
+    transformation = TRANSFORMATIONS[type] || POSTER_TRANSFORMATION
+  } = options;
 
   if (isCloudinaryUrl(source)) {
-    return source; // already hosted by us
+    // Already hosted by us; there is nothing to re-upload
+    return { secure_url: source, public_id: null };
   }
 
   if (!isDataUri(source) && !isRemoteUrl(source)) {
@@ -70,7 +89,7 @@ const uploadPoster = async (source, options = {}) => {
 
   const uploadOptions = {
     folder,
-    transformation: POSTER_TRANSFORMATION,
+    transformation,
     // SVG placeholders would otherwise stay vector; posters are served as images
     format: 'jpg'
   };
@@ -80,11 +99,19 @@ const uploadPoster = async (source, options = {}) => {
     uploadOptions.overwrite = true;
   }
 
-  const result = await cloudinary.uploader.upload(
+  return cloudinary.uploader.upload(
     isDataUri(source) ? normalizeDataUri(source) : source,
     uploadOptions
   );
+};
 
+/**
+ * Upload one poster and return its Cloudinary URL.
+ * Accepts a base64/data-URI upload from the admin form or a remote image URL.
+ * Anything already on Cloudinary is returned untouched.
+ */
+const uploadPoster = async (source, options = {}) => {
+  const result = await uploadImage(source, options);
   return result.secure_url;
 };
 
@@ -108,9 +135,11 @@ const uploadPosters = async (sources, options = {}) => {
 
 module.exports = {
   cloudinary,
+  uploadImage,
   uploadPoster,
   uploadPosters,
   isCloudinaryUrl,
   POSTER_FOLDERS,
-  POSTER_TRANSFORMATION
+  POSTER_TRANSFORMATION,
+  BANNER_TRANSFORMATION
 };

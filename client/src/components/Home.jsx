@@ -28,18 +28,25 @@ const Home = () => {
   const [availableYears, setAvailableYears] = useState([]);
   const [filtersLoading, setFiltersLoading] = useState(false);
 
-  // Slideshow images - movie-related wallpapers
-  const slideshowImages = [
-    'https://c4.wallpaperflare.com/wallpaper/884/965/115/movies-flash-superman-wonder-woman-wallpaper-preview.jpg',
-    'https://images5.alphacoders.com/840/840870.jpg',
-    'https://wallpapercave.com/wp/wp2592669.jpg',
-    'https://wallup.net/wp-content/uploads/2019/09/06/297529-legend-of-the-seeker-models-tabrett-bethell-cara-mason-748x421.jpg',
-    'https://www.syfy.com/sites/syfy/files/styles/hero_image__large__computer__alt_1_5x/public/2021/01/legends-of-tomorrow.jpg',
-    'https://www.chromethemer.com/wallpapers/chromebook-wallpapers/images/960/marvel-logo-chromebook-wallpaper.jpg',
-    'https://wallpapers.com/images/high/4k-avengers-infinity-war-whole-cast-gx5riyd6eqklm4hf.webp',
-    'https://4kwallpapers.com/images/walls/thumbs_3t/11941.jpg',
-    'https://www.pixelstalk.net/wp-content/uploads/2016/01/Harry-Potter-7-Wallpaper-HD-Free.jpg'
-  ];
+  // Slideshow images are configured by an admin and stored in Cloudinary
+  const [slideshowImages, setSlideshowImages] = useState([]);
+
+  useEffect(() => {
+    const fetchBanners = async () => {
+      try {
+        const response = await fetch('/api/banners');
+        const result = await response.json();
+
+        if (result.success) {
+          setSlideshowImages(result.data.banners.map((banner) => banner.imageUrl));
+        }
+      } catch (error) {
+        console.error('Error fetching banners:', error);
+      }
+    };
+
+    fetchBanners();
+  }, []);
 
   // Handle URL parameters from navbar search
   useEffect(() => {
@@ -68,6 +75,8 @@ const Home = () => {
 
   // Auto-advance slideshow
   useEffect(() => {
+    if (slideshowImages.length === 0) return undefined;
+
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slideshowImages.length);
     }, 5000); // Change slide every 5 seconds
@@ -425,7 +434,8 @@ const Home = () => {
       
       {/* Movie Browsing Section */}
       <div className="card">
-        {/* Slideshow Wallpaper */}
+        {/* Slideshow Wallpaper - hidden until an admin has added slides */}
+        {slideshowImages.length > 0 && (
         <div className="slideshow-container">
           <div className="slideshow-wrapper">
             {slideshowImages.map((image, index) => (
@@ -474,6 +484,7 @@ const Home = () => {
             ))}
           </div>
         </div>
+        )}
         
         {/* Browse Header with Filters */}
         <div className="browse-header-with-filters">

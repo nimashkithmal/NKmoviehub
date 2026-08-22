@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ContactManagement from './ContactManagement';
 import AdminManagement from './AdminManagement';
+import BannerManagement from './BannerManagement';
 
 const AdminDashboard = () => {
   const { user, token } = useAuth();
@@ -71,7 +72,7 @@ const AdminDashboard = () => {
     averageRating: 0,
     newTVShowsThisMonth: 0
   });
-  const [activeTab, setActiveTab] = useState('users'); // 'users', 'admins', 'movies', 'tvshows', or 'contacts'
+  const [activeTab, setActiveTab] = useState('users'); // 'users', 'admins', 'movies', 'tvshows', 'banners', or 'contacts'
 
   // Notification system
   const showNotification = (message, type = 'info') => {
@@ -1162,6 +1163,12 @@ const AdminDashboard = () => {
         >
           TV Show Management
         </button>
+        <button
+          className={`tab-button ${activeTab === 'banners' ? 'active' : ''}`}
+          onClick={() => setActiveTab('banners')}
+        >
+          Home Banner
+        </button>
         <button 
           className={`tab-button ${activeTab === 'contacts' ? 'active' : ''}`}
           onClick={() => setActiveTab('contacts')}
@@ -1170,7 +1177,8 @@ const AdminDashboard = () => {
         </button>
       </div>
 
-      {/* Statistics Cards */}
+      {/* Statistics Cards - the banner tab has no numbers worth showing */}
+      {activeTab !== 'banners' && (
       <div className="dashboard-stats">
         {activeTab === 'users' ? (
           <>
@@ -1231,6 +1239,7 @@ const AdminDashboard = () => {
           </>
         )}
       </div>
+      )}
 
       {/* User Management Section */}
       {activeTab === 'users' && (
@@ -2395,6 +2404,14 @@ const AdminDashboard = () => {
           token={token}
           admins={users.filter(u => u.role === 'admin')}
           onAdminCreated={fetchUsers}
+        />
+      )}
+
+      {/* Home Page Banner Section */}
+      {activeTab === 'banners' && (
+        <BannerManagement
+          token={token}
+          showNotification={showNotification}
         />
       )}
 

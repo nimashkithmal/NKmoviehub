@@ -331,7 +331,10 @@ const TVShowDetail = () => {
               </div>
             </div>
 
-            {/* Episodes Section - Organized by Seasons */}
+          </div>
+
+          {/* Episodes, outside the info column so they span the poster width too */}
+          <div style={{ gridColumn: '1 / -1', minWidth: 0 }}>
             {seasons.length > 0 ? (
               <div className="episodes-section" style={{ marginTop: '30px' }}>
                 <h3 style={{ marginBottom: '16px', color: '#f5f5f5' }}>
@@ -376,7 +379,12 @@ const TVShowDetail = () => {
                   })}
                 </div>
 
-                <div style={{ border: '1px solid #262626', borderRadius: '10px', overflow: 'hidden' }}>
+                <div style={{
+                  border: '1px solid #262626',
+                  borderRadius: '10px',
+                  overflow: 'hidden',
+                  overflowX: 'auto'
+                }}>
                   {currentSeason.episodes.map((episode, episodeIndex) => {
                     // Numbering restarts at 1 inside each season
                     const seasonEpisodeNumber = episodeIndex + 1;
