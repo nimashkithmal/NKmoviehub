@@ -93,6 +93,162 @@ class EmailService {
     }
   }
 
+  async sendPasswordResetOtp(user, otp, expiryMinutes) {
+    if (!this.transporter) {
+      console.log('⚠️  Email service disabled - Password reset code not sent');
+      return { success: false, error: 'Email service not configured' };
+    }
+
+    try {
+      const mailOptions = {
+        from: {
+          name: 'NK Movie Hub',
+          address: process.env.EMAIL_USER
+        },
+        to: user.email,
+        subject: 'Your NK Movie Hub password reset code',
+        html: this.generatePasswordResetOtpTemplate(user, otp, expiryMinutes)
+      };
+
+      const result = await this.transporter.sendMail(mailOptions);
+      console.log('📧 Password reset code sent successfully:', result.messageId);
+      return { success: true, messageId: result.messageId };
+    } catch (error) {
+      console.error('❌ Error sending password reset code:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async sendRegistrationOtp(pendingRegistration, otp, expiryMinutes) {
+    if (!this.transporter) {
+      console.log('⚠️  Email service disabled - Registration code not sent');
+      return { success: false, error: 'Email service not configured' };
+    }
+
+    try {
+      const mailOptions = {
+        from: {
+          name: 'NK Movie Hub',
+          address: process.env.EMAIL_USER
+        },
+        to: pendingRegistration.email,
+        subject: 'Verify your NK Movie Hub email address',
+        html: this.generateRegistrationOtpTemplate(pendingRegistration, otp, expiryMinutes)
+      };
+
+      const result = await this.transporter.sendMail(mailOptions);
+      console.log('📧 Registration code sent successfully:', result.messageId);
+      return { success: true, messageId: result.messageId };
+    } catch (error) {
+      console.error('❌ Error sending registration code:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  generateRegistrationOtpTemplate(pendingRegistration, otp, expiryMinutes) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Verify Your Email - NK Movie Hub</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #f4f4f4; }
+          .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+          .header { text-align: center; border-bottom: 3px solid #e74c3c; padding-bottom: 20px; margin-bottom: 30px; }
+          .logo { font-size: 28px; font-weight: bold; color: #e74c3c; margin-bottom: 10px; }
+          .tagline { color: #666; font-size: 14px; }
+          .content { margin-bottom: 30px; }
+          .otp-code { font-size: 34px; font-weight: bold; letter-spacing: 10px; color: #e74c3c; text-align: center; background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 25px 0; }
+          .warning { background: #fff4e5; padding: 20px; border-left: 4px solid #f39c12; margin: 20px 0; border-radius: 0 5px 5px 0; }
+          .footer { text-align: center; color: #666; font-size: 12px; border-top: 1px solid #eee; padding-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="logo">🎬 NK Movie Hub</div>
+            <div class="tagline">Your Ultimate Movie Experience</div>
+          </div>
+
+          <div class="content">
+            <h2>Welcome, ${pendingRegistration.name}!</h2>
+
+            <p>You're one step away from your NK Movie Hub account. Enter the verification code below to confirm this email address:</p>
+
+            <div class="otp-code">${otp}</div>
+
+            <p style="text-align: center; color: #666;">This code expires in ${expiryMinutes} minutes.</p>
+
+            <div class="warning">
+              <h4>Didn't sign up?</h4>
+              <p>If you did not create an NK Movie Hub account, you can safely ignore this email - no account is created until this code is entered. Never share this code with anyone.</p>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>This is an automated verification email from NK Movie Hub</p>
+            <p>© 2024 NK Movie Hub. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  generatePasswordResetOtpTemplate(user, otp, expiryMinutes) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Password Reset Code - NK Movie Hub</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #f4f4f4; }
+          .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+          .header { text-align: center; border-bottom: 3px solid #e74c3c; padding-bottom: 20px; margin-bottom: 30px; }
+          .logo { font-size: 28px; font-weight: bold; color: #e74c3c; margin-bottom: 10px; }
+          .tagline { color: #666; font-size: 14px; }
+          .content { margin-bottom: 30px; }
+          .otp-code { font-size: 34px; font-weight: bold; letter-spacing: 10px; color: #e74c3c; text-align: center; background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 25px 0; }
+          .warning { background: #fff4e5; padding: 20px; border-left: 4px solid #f39c12; margin: 20px 0; border-radius: 0 5px 5px 0; }
+          .footer { text-align: center; color: #666; font-size: 12px; border-top: 1px solid #eee; padding-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="logo">🎬 NK Movie Hub</div>
+            <div class="tagline">Your Ultimate Movie Experience</div>
+          </div>
+
+          <div class="content">
+            <h2>Hello ${user.name}!</h2>
+
+            <p>We received a request to reset the password for your NK Movie Hub account. Use the verification code below to continue:</p>
+
+            <div class="otp-code">${otp}</div>
+
+            <p style="text-align: center; color: #666;">This code expires in ${expiryMinutes} minutes.</p>
+
+            <div class="warning">
+              <h4>Didn't request this?</h4>
+              <p>If you did not ask to reset your password, you can safely ignore this email - your password stays unchanged. Never share this code with anyone.</p>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>This is an automated security email from NK Movie Hub</p>
+            <p>© 2024 NK Movie Hub. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
   generateReplyEmailTemplate(contactData, replyMessage, adminName) {
     return `
       <!DOCTYPE html>

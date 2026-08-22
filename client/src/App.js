@@ -5,6 +5,7 @@ import Footer from './components/Footer';
 import Home from './components/Home';
 import Login from './components/Login';
 import Register from './components/Register';
+import ForgotPassword from './components/ForgotPassword';
 import AdminDashboard from './components/AdminDashboard';
 import AddMovie from './components/AddMovie';
 import AddTVShow from './components/AddTVShow';
@@ -48,6 +49,7 @@ function App() {
                 <Route path="/tvshow/:id" element={<TVShowDetail />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route 
                   path="/admin" 
                   element={

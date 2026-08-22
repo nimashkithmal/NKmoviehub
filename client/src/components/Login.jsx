@@ -118,13 +118,8 @@ const Login = () => {
         </form>
         
         <div style={{ textAlign: 'center', marginTop: '20px' }}>
+          <p><Link to="/forgot-password">Forgot Password?</Link></p>
           <p>Don't have an account? <Link to="/register">Register here</Link></p>
-        </div>
-        
-        <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
-          <h4>Demo Accounts:</h4>
-          <p><strong>Admin:</strong> admin@gmail.com / 123456</p>
-          <p><strong>User:</strong> user@gmail.com / 123456</p>
         </div>
       </div>
     </div>

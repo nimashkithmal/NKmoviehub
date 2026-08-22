@@ -59,6 +59,10 @@ userSchema.virtual('profile').get(function() {
 userSchema.pre('save', async function(next) {
   // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
+
+  // Escape hatch for the email-verified registration flow, which already
+  // holds a bcrypt hash and must not hash it a second time
+  if (this.$locals.skipPasswordHash) return next();
   
   try {
     // Hash password with cost of 12

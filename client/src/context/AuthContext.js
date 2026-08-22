@@ -78,6 +78,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Step one of registration: the account is not created yet, a verification
+  // code is emailed and the details are held server-side until it comes back
   const register = async (name, email, password) => {
     try {
       const response = await fetch('http://localhost:5001/api/auth/register', {
@@ -91,27 +93,96 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (data.success) {
-        const { user, token } = data.data;
-        
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(user));
-        
-        setUser(user);
-        setToken(token);
-        setIsAuthenticated(true);
-        
-        return { success: true, user };
+        return {
+          success: true,
+          email: data.data.email,
+          resendAfterSeconds: data.data.resendAfterSeconds,
+          message: data.message
+        };
       } else {
-        return { 
-          success: false, 
-          error: data.message 
+        return {
+          success: false,
+          error: data.message
         };
       }
     } catch (error) {
       console.error('Registration error:', error);
-      return { 
-        success: false, 
-        error: 'Network error. Please check your connection.' 
+      return {
+        success: false,
+        error: 'Network error. Please check your connection.'
+      };
+    }
+  };
+
+  // Step two: a correct code creates the account and logs straight in
+  const verifyRegistration = async (email, otp) => {
+    try {
+      const response = await fetch('http://localhost:5001/api/auth/verify-registration', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, otp }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const { user, token } = data.data;
+
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+
+        setUser(user);
+        setToken(token);
+        setIsAuthenticated(true);
+
+        return { success: true, user };
+      } else {
+        return {
+          success: false,
+          error: data.message
+        };
+      }
+    } catch (error) {
+      console.error('Verify registration error:', error);
+      return {
+        success: false,
+        error: 'Network error. Please check your connection.'
+      };
+    }
+  };
+
+  const resendRegistrationOtp = async (email) => {
+    try {
+      const response = await fetch('http://localhost:5001/api/auth/resend-registration-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        return {
+          success: true,
+          resendAfterSeconds: data.data.resendAfterSeconds,
+          message: data.message
+        };
+      } else {
+        return {
+          success: false,
+          error: data.message,
+          resendAfterSeconds: data.data && data.data.resendAfterSeconds
+        };
+      }
+    } catch (error) {
+      console.error('Resend registration code error:', error);
+      return {
+        success: false,
+        error: 'Network error. Please check your connection.'
       };
     }
   };
@@ -135,6 +206,8 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     register,
+    verifyRegistration,
+    resendRegistrationOtp,
     logout,
     updateUser,
     token
