@@ -31,7 +31,7 @@ const MovieDetail = () => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`http://localhost:5001/api/movies/${id}`);
+      const response = await fetch(`/api/movies/${id}`);
       
       if (!response.ok) {
         throw new Error('Movie not found');
@@ -56,7 +56,7 @@ const MovieDetail = () => {
     if (!isAuthenticated) return;
     
     try {
-      const response = await fetch(`http://localhost:5001/api/movies/${id}/rating`, {
+      const response = await fetch(`/api/movies/${id}/rating`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -80,7 +80,7 @@ const MovieDetail = () => {
     try {
       setRatingLoading(true);
       
-      const response = await fetch(`http://localhost:5001/api/movies/${id}/rate`, {
+      const response = await fetch(`/api/movies/${id}/rate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -130,7 +130,7 @@ const MovieDetail = () => {
         return;
       }
 
-      const downloadUrl = `http://localhost:5001/api/movies/${id}/download`;
+      const downloadUrl = `/api/movies/${id}/download`;
       
       // Create a temporary anchor element and trigger download
       const link = document.createElement('a');

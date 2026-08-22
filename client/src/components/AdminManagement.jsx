@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const API_URL = 'http://localhost:5001/api/users/admins';
+const API_URL = '/api/users/admins';
 
 /**
  * Administration section of the admin dashboard.

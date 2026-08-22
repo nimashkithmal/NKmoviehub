@@ -25,7 +25,7 @@ const TVShowDetail = () => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`http://localhost:5001/api/tvshows/${id}`);
+      const response = await fetch(`/api/tvshows/${id}`);
       
       if (!response.ok) {
         throw new Error('TV Show not found');

@@ -110,7 +110,7 @@ const AdminDashboard = () => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch('http://localhost:5001/api/users', {
+      const response = await fetch('/api/users', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -159,7 +159,7 @@ const AdminDashboard = () => {
       setMoviesLoading(true);
       setMoviesError(null);
       
-      const response = await fetch('http://localhost:5001/api/movies/admin?limit=1000', {
+      const response = await fetch('/api/movies/admin?limit=1000', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -208,7 +208,7 @@ const AdminDashboard = () => {
       setTVShowsLoading(true);
       setTVShowsError(null);
       
-      const response = await fetch('http://localhost:5001/api/tvshows/admin?limit=1000', {
+      const response = await fetch('/api/tvshows/admin?limit=1000', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -267,7 +267,7 @@ const AdminDashboard = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:5001/api/users', {
+      const response = await fetch('/api/users', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -324,7 +324,7 @@ const AdminDashboard = () => {
         role: formData.role
       };
 
-      const response = await fetch(`http://localhost:5001/api/users/${editingUser._id}`, {
+      const response = await fetch(`/api/users/${editingUser._id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -356,7 +356,7 @@ const AdminDashboard = () => {
   const handleDeleteUser = async (userId) => {
     if (window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       try {
-        const response = await fetch(`http://localhost:5001/api/users/${userId}`, {
+        const response = await fetch(`/api/users/${userId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -385,7 +385,7 @@ const AdminDashboard = () => {
 
   const handleToggleUserStatus = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/users/${userId}/status`, {
+      const response = await fetch(`/api/users/${userId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -510,7 +510,7 @@ const AdminDashboard = () => {
       console.log('Updating movie with data:', updateData);
       console.log('IMDB Rating in updateData:', updateData.imdbRating, 'Type:', typeof updateData.imdbRating);
       
-      const response = await fetch(`http://localhost:5001/api/movies/${editingMovie._id}`, {
+      const response = await fetch(`/api/movies/${editingMovie._id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -600,7 +600,7 @@ const AdminDashboard = () => {
   const handleDeleteMovie = async (movieId) => {
     if (window.confirm('Are you sure you want to delete this movie?')) {
       try {
-        const response = await fetch(`http://localhost:5001/api/movies/${movieId}`, {
+        const response = await fetch(`/api/movies/${movieId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -628,7 +628,7 @@ const AdminDashboard = () => {
 
   const handleToggleMovieStatus = async (movieId) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/movies/${movieId}/status`, {
+      const response = await fetch(`/api/movies/${movieId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -671,7 +671,7 @@ const AdminDashboard = () => {
         imageFilesCount: imageFiles ? imageFiles.length : 0
       });
 
-      const response = await fetch(`http://localhost:5001/api/movies/${movieId}/update-admin-fields`, {
+      const response = await fetch(`/api/movies/${movieId}/update-admin-fields`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -998,7 +998,7 @@ const AdminDashboard = () => {
       
       console.log('Updating TV show:', editingTVShow._id, updateData);
       
-      const response = await fetch(`http://localhost:5001/api/tvshows/${editingTVShow._id}`, {
+      const response = await fetch(`/api/tvshows/${editingTVShow._id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1048,7 +1048,7 @@ const AdminDashboard = () => {
   const handleDeleteTVShow = async (tvShowId) => {
     if (window.confirm('Are you sure you want to delete this TV show?')) {
       try {
-        const response = await fetch(`http://localhost:5001/api/tvshows/${tvShowId}`, {
+        const response = await fetch(`/api/tvshows/${tvShowId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -1076,7 +1076,7 @@ const AdminDashboard = () => {
 
   const handleToggleTVShowStatus = async (tvShowId) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/tvshows/${tvShowId}/status`, {
+      const response = await fetch(`/api/tvshows/${tvShowId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -34,7 +34,7 @@ const ContactManagement = () => {
       setLoading(true);
       setError(null);
       
-      let url = 'http://localhost:5001/api/contacts?limit=1000';
+      let url = '/api/contacts?limit=1000';
       if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
       if (statusFilter) url += `&status=${statusFilter}`;
       
@@ -79,7 +79,7 @@ const ContactManagement = () => {
 
     try {
       console.log('Fetching contact stats...');
-      const response = await fetch('http://localhost:5001/api/contacts/stats', {
+      const response = await fetch('/api/contacts/stats', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -110,7 +110,7 @@ const ContactManagement = () => {
   // Update contact status
   const updateContactStatus = async (contactId, newStatus) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/contacts/${contactId}`, {
+      const response = await fetch(`/api/contacts/${contactId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -151,7 +151,7 @@ const ContactManagement = () => {
 
     setReplyLoading(true);
     try {
-      const response = await fetch(`http://localhost:5001/api/contacts/${selectedContact._id}/reply`, {
+      const response = await fetch(`/api/contacts/${selectedContact._id}/reply`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -190,7 +190,7 @@ const ContactManagement = () => {
     if (!window.confirm('Are you sure you want to delete this contact message?')) return;
 
     try {
-      const response = await fetch(`http://localhost:5001/api/contacts/${contactId}`, {
+      const response = await fetch(`/api/contacts/${contactId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

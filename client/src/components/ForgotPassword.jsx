@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
-const API_URL = 'http://localhost:5001/api/auth';
+const API_URL = '/api/auth';
 
 const ForgotPassword = () => {
   // email -> otp -> password -> done

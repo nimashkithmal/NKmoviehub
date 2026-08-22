@@ -181,7 +181,7 @@ const AddMovie = () => {
         token: token ? 'Present' : 'Missing'
       });
       
-      const response = await fetch('http://localhost:5001/api/movies', {
+      const response = await fetch('/api/movies', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

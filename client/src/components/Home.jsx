@@ -94,8 +94,8 @@ const Home = () => {
       try {
         setFiltersLoading(true);
         const apiEndpoint = contentType === 'tvshows' 
-          ? 'http://localhost:5001/api/tvshows/filters'
-          : 'http://localhost:5001/api/movies/filters';
+          ? '/api/tvshows/filters'
+          : '/api/movies/filters';
         
         const response = await fetch(apiEndpoint);
         const result = await response.json();
@@ -189,7 +189,7 @@ const Home = () => {
       setLoading(true);
       setError(null);
       
-      let url = 'http://localhost:5001/api/movies?limit=1000';
+      let url = '/api/movies?limit=1000';
       if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
       if (selectedGenre) url += `&genre=${encodeURIComponent(selectedGenre)}`;
       if (selectedYear) url += `&year=${selectedYear}`;
@@ -222,7 +222,7 @@ const Home = () => {
       setLoading(true);
       setError(null);
       
-      let url = 'http://localhost:5001/api/tvshows?limit=1000';
+      let url = '/api/tvshows?limit=1000';
       if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
       if (selectedGenre) url += `&genre=${encodeURIComponent(selectedGenre)}`;
       if (selectedYear) url += `&year=${selectedYear}`;
@@ -299,7 +299,7 @@ const Home = () => {
     try {
       const ratingPromises = movies.map(async (movie) => {
         try {
-          const response = await fetch(`http://localhost:5001/api/movies/${movie._id}/rating`, {
+          const response = await fetch(`/api/movies/${movie._id}/rating`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
@@ -333,7 +333,7 @@ const Home = () => {
     try {
       setRatingLoading(prev => ({ ...prev, [movieId]: true }));
       
-      const response = await fetch(`http://localhost:5001/api/movies/${movieId}/rate`, {
+      const response = await fetch(`/api/movies/${movieId}/rate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

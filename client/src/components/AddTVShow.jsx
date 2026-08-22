@@ -289,7 +289,7 @@ const AddTVShow = () => {
         imageFile: '[BASE64_IMAGE]'
       }, null, 2));
       
-      const response = await fetch('http://localhost:5001/api/tvshows', {
+      const response = await fetch('/api/tvshows', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
