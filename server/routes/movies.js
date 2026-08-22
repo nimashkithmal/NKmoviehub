@@ -214,8 +214,8 @@ const getGoogleDriveDownloadUrl = (url) => {
 
 // @route   GET /api/movies/:id/download
 // @desc    Download a movie file
-// @access  Private
-router.get('/:id/download', protect, async (req, res) => {
+// @access  Public
+router.get('/:id/download', async (req, res) => {
   try {
     console.log('Download request received for movie ID:', req.params.id);
     const movie = await Movie.findById(req.params.id);

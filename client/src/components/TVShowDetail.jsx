@@ -46,12 +46,7 @@ const TVShowDetail = () => {
     }
   };
 
-  const handleWatchEpisode = (episode) => {
-    if (!isAuthenticated) {
-      showNotification('Please login to watch episodes', 'warning');
-      return;
-    }
-    
+  const handleWatchEpisode = (episode) => {    
     // Create a movie-like object for the player
     const episodeMovie = {
       _id: `${tvShow._id}-ep${episode.episodeNumber}`,
@@ -64,12 +59,7 @@ const TVShowDetail = () => {
     setShowPlayer(true);
   };
 
-  const handleWatchShow = () => {
-    if (!isAuthenticated) {
-      showNotification('Please login to watch TV shows', 'warning');
-      return;
-    }
-    
+  const handleWatchShow = () => {    
     if (tvShow.showUrl) {
       const episode = {
         _id: tvShow._id,
@@ -387,7 +377,7 @@ const TVShowDetail = () => {
                               padding: '15px',
                               border: '1px solid #ddd',
                               borderRadius: '8px',
-                              cursor: isAuthenticated ? 'pointer' : 'not-allowed',
+                              cursor: 'pointer',
                               backgroundColor: '#fff',
                               transition: 'all 0.3s ease',
                               boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
@@ -418,7 +408,7 @@ const TVShowDetail = () => {
                               </div>
                             )}
                             <div style={{ fontSize: '12px', color: '#999' }}>
-                              {isAuthenticated ? 'Click to watch →' : 'Login to watch'}
+                              Click to watch →
                             </div>
                           </div>
                         );
@@ -439,7 +429,7 @@ const TVShowDetail = () => {
                         padding: '15px',
                         border: '1px solid #ddd',
                         borderRadius: '8px',
-                        cursor: isAuthenticated ? 'pointer' : 'not-allowed',
+                        cursor: 'pointer',
                         backgroundColor: '#f9f9f9',
                         transition: 'all 0.3s ease'
                       }}
@@ -464,7 +454,7 @@ const TVShowDetail = () => {
                         </div>
                       )}
                       <div style={{ fontSize: '12px', color: '#999' }}>
-                        {isAuthenticated ? 'Click to watch →' : 'Login to watch'}
+                        Click to watch →
                       </div>
                     </div>
                   ))}
@@ -482,7 +472,7 @@ const TVShowDetail = () => {
                 ) : (
                   <button 
                     className="btn btn-primary btn-large"
-                    onClick={() => showNotification('Please login to watch TV shows', 'warning')}
+                    onClick={handleWatchShow}
                   >
                     📺 Watch TV Show
                   </button>

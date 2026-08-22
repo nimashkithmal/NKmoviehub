@@ -11,7 +11,7 @@ const Login = () => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
   const navigate = useNavigate();
 
   // Don't redirect immediately - let the form submission handle it
@@ -38,18 +38,20 @@ const Login = () => {
     try {
       const result = await login(formData.email, formData.password);
       console.log('Login result:', result);
-      
+
       if (result.success) {
+        // This page is the admin entrance only - drop any non-admin session
+        if (result.user?.role !== 'admin') {
+          logout();
+          setError('This login is for administrators only.');
+          return;
+        }
+
         console.log('Login successful, setting success message');
         setSuccess('Login successful! Redirecting...');
         // Add a longer delay to show success state before redirecting
         setTimeout(() => {
-          console.log('Timeout completed, navigating to:', result.redirectTo === 'admin' ? '/admin' : '/');
-          if (result.redirectTo === 'admin') {
-            navigate('/admin');
-          } else {
-            navigate('/');
-          }
+          navigate('/admin');
         }, 2000);
       } else {
         setError(result.error || 'Login failed. Please check your credentials.');
@@ -65,7 +67,7 @@ const Login = () => {
   return (
     <div className="auth-container">
       <div className="card">
-        <h2>Login to NKMovieHUB</h2>
+        <h2>Admin Login</h2>
         
         {error && (
           <div className="alert alert-error">
@@ -119,7 +121,7 @@ const Login = () => {
         
         <div style={{ textAlign: 'center', marginTop: '20px' }}>
           <p><Link to="/forgot-password">Forgot Password?</Link></p>
-          <p>Don't have an account? <Link to="/register">Register here</Link></p>
+          <p><Link to="/">Back to NKMovieHUB</Link></p>
         </div>
       </div>
     </div>

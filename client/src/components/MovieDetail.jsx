@@ -73,7 +73,7 @@ const MovieDetail = () => {
 
   const handleRateMovie = async (rating, review = '') => {
     if (!isAuthenticated) {
-      showNotification('Please login to rate movies', 'warning');
+      showNotification('Rating is not available right now', 'warning');
       return;
     }
     
@@ -120,11 +120,6 @@ const MovieDetail = () => {
       return;
     }
 
-    if (!isAuthenticated) {
-      showNotification('Please login to download movies', 'warning');
-      return;
-    }
-
     try {
       setDownloading(true);
       
@@ -135,8 +130,7 @@ const MovieDetail = () => {
         return;
       }
 
-      // Create download URL with token in query parameter (server will verify it)
-      const downloadUrl = `http://localhost:5001/api/movies/${id}/download?token=${encodeURIComponent(token)}`;
+      const downloadUrl = `http://localhost:5001/api/movies/${id}/download`;
       
       // Create a temporary anchor element and trigger download
       const link = document.createElement('a');
@@ -361,42 +355,23 @@ const MovieDetail = () => {
           )}
 
           <div className="movie-detail-actions">
-            {isAuthenticated ? (
+            {movie.movieUrl && (
               <>
-                {movie.movieUrl && (
-                  <>
-                    <button 
-                      className="btn btn-primary btn-large"
-                      onClick={() => setShowPlayer(true)}
-                    >
-                      🎬 Watch Movie
-                    </button>
-                    {!movie.movieUrl.includes('youtube.com') && !movie.movieUrl.includes('youtu.be') && !movie.movieUrl.includes('vimeo.com') && (
-                      <button 
-                        className="btn btn-secondary btn-large"
-                        onClick={handleDownload}
-                        disabled={downloading}
-                      >
-                        {downloading ? '⬇️ Downloading...' : '⬇️ Download Movie'}
-                      </button>
-                    )}
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                <button 
+                <button
                   className="btn btn-primary btn-large"
-                  onClick={() => showNotification('Please login to watch movies', 'warning')}
+                  onClick={() => setShowPlayer(true)}
                 >
                   🎬 Watch Movie
                 </button>
-                <button 
-                  className="btn btn-secondary btn-large"
-                  onClick={() => showNotification('Please login to download movies', 'warning')}
-                >
-                  ⬇️ Download Movie
-                </button>
+                {!movie.movieUrl.includes('youtube.com') && !movie.movieUrl.includes('youtu.be') && !movie.movieUrl.includes('vimeo.com') && (
+                  <button
+                    className="btn btn-secondary btn-large"
+                    onClick={handleDownload}
+                    disabled={downloading}
+                  >
+                    {downloading ? '⬇️ Downloading...' : '⬇️ Download Movie'}
+                  </button>
+                )}
               </>
             )}
           </div>

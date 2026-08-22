@@ -4,7 +4,6 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './components/Home';
 import Login from './components/Login';
-import Register from './components/Register';
 import ForgotPassword from './components/ForgotPassword';
 import AdminDashboard from './components/AdminDashboard';
 import AddMovie from './components/AddMovie';
@@ -48,7 +47,6 @@ function App() {
                 <Route path="/movie/:id" element={<MovieDetail />} />
                 <Route path="/tvshow/:id" element={<TVShowDetail />} />
                 <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route 
                   path="/admin" 
@@ -74,6 +72,8 @@ function App() {
                     </ProtectedRoute>
                   } 
                 />
+                {/* Anything else, /register included, belongs on the public site */}
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>
             <Footer />

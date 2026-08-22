@@ -164,37 +164,14 @@ const Header = () => {
                       <span>Home</span>
                     </Link>
                   </li>
-                  {!isAuthenticated ? (
-                    <>
-                      <li>
-                        <Link 
-                          to="/login" 
-                          className={location.pathname === '/login' ? 'active' : ''}
-                          onClick={closeMobileMenu}
-                        >
-                          <span className="nav-icon">🔐</span>
-                          <span>Login</span>
-                        </Link>
-                      </li>
-                      <li>
-                        <Link 
-                          to="/register" 
-                          className={`nav-btn-primary ${location.pathname === '/register' ? 'active' : ''}`}
-                          onClick={closeMobileMenu}
-                        >
-                          <span className="nav-icon">✨</span>
-                          <span>Sign Up</span>
-                        </Link>
-                      </li>
-                    </>
-                  ) : (
+                  {isAuthenticated && (
                     <>
                       <li className="mobile-user-info">
                         <div className="user-profile">
                           <span className="user-avatar">👤</span>
                           <div>
                             <div className="user-name-mobile">{user?.name}</div>
-                            <div className="user-role-mobile">{user?.role === 'admin' ? 'Administrator' : 'User'}</div>
+                            <div className="user-role-mobile">Administrator</div>
                           </div>
                         </div>
                       </li>

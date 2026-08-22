@@ -3,13 +3,14 @@ const bcrypt = require('bcryptjs');
 const otp = require('../utils/otp');
 
 /**
- * A registration that has been submitted but not yet confirmed by email.
+ * An admin account that an existing admin has started creating but whose email
+ * address has not been confirmed yet.
  *
  * Nothing here is a real account: the User document is only created once the
- * emailed code has been verified, so an unverified address never ends up in
+ * emailed code has been verified, so an unconfirmed address never ends up in
  * the users collection.
  */
-const pendingRegistrationSchema = new mongoose.Schema({
+const pendingAdminSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
@@ -46,31 +47,37 @@ const pendingRegistrationSchema = new mongoose.Schema({
   otpSentAt: {
     type: Date,
     required: true
+  },
+  // Which admin started this, for the audit trail
+  invitedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   }
 }, {
   timestamps: true
 });
 
-// Let MongoDB drop abandoned registrations on its own
-pendingRegistrationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// Let MongoDB drop abandoned invitations on its own
+pendingAdminSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-pendingRegistrationSchema.virtual('isExpired').get(function() {
+pendingAdminSchema.virtual('isExpired').get(function() {
   return this.expiresAt.getTime() <= Date.now();
 });
 
-pendingRegistrationSchema.methods.cooldownRemaining = function() {
+pendingAdminSchema.methods.cooldownRemaining = function() {
   return otp.cooldownRemaining(this.otpSentAt);
 };
 
-pendingRegistrationSchema.methods.compareOtp = function(candidateOtp) {
+pendingAdminSchema.methods.compareOtp = function(candidateOtp) {
   return otp.compareOtp(candidateOtp, this.otpHash);
 };
 
 /**
- * Attach a freshly generated code to this pending registration and return the
- * plain code so it can be emailed.
+ * Attach a freshly generated code to this pending admin and return the plain
+ * code so it can be emailed.
  */
-pendingRegistrationSchema.methods.issueOtp = async function() {
+pendingAdminSchema.methods.issueOtp = async function() {
   const code = otp.generateOtp();
 
   this.otpHash = await otp.hashOtp(code);
@@ -83,11 +90,11 @@ pendingRegistrationSchema.methods.issueOtp = async function() {
 };
 
 /**
- * Start (or restart) a pending registration for an email address. Re-submitting
- * the form replaces the stored details, so the newest submission is the one
- * that gets created after verification.
+ * Start (or restart) creating an admin for an email address. Re-submitting the
+ * form replaces the stored details, so the newest submission is the one that
+ * gets created after verification.
  */
-pendingRegistrationSchema.statics.startFor = async function({ name, email, password }) {
+pendingAdminSchema.statics.startFor = async function({ name, email, password, invitedBy }) {
   const passwordHash = await bcrypt.hash(password, 12);
   const normalizedEmail = email.toLowerCase();
 
@@ -96,6 +103,7 @@ pendingRegistrationSchema.statics.startFor = async function({ name, email, passw
   if (pending) {
     pending.name = name;
     pending.passwordHash = passwordHash;
+    pending.invitedBy = invitedBy;
     return pending;
   }
 
@@ -104,6 +112,7 @@ pendingRegistrationSchema.statics.startFor = async function({ name, email, passw
     name,
     email: normalizedEmail,
     passwordHash,
+    invitedBy,
     otpHash: 'pending',
     otpSentAt: new Date(),
     expiresAt: otp.otpExpiryDate()
@@ -112,10 +121,10 @@ pendingRegistrationSchema.statics.startFor = async function({ name, email, passw
   return pending;
 };
 
-pendingRegistrationSchema.statics.findForEmail = function(email) {
+pendingAdminSchema.statics.findForEmail = function(email) {
   return this.findOne({ email: email.toLowerCase() }).select('+otpHash +passwordHash');
 };
 
-const PendingRegistration = mongoose.model('PendingRegistration', pendingRegistrationSchema);
+const PendingAdmin = mongoose.model('PendingAdmin', pendingAdminSchema);
 
-module.exports = PendingRegistration;
+module.exports = PendingAdmin;

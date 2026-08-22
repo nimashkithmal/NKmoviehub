@@ -119,9 +119,9 @@ class EmailService {
     }
   }
 
-  async sendRegistrationOtp(pendingRegistration, otp, expiryMinutes) {
+  async sendAdminInviteOtp(pendingAdmin, otp, expiryMinutes, invitedByName = 'An administrator') {
     if (!this.transporter) {
-      console.log('⚠️  Email service disabled - Registration code not sent');
+      console.log('⚠️  Email service disabled - Admin verification code not sent');
       return { success: false, error: 'Email service not configured' };
     }
 
@@ -131,28 +131,28 @@ class EmailService {
           name: 'NK Movie Hub',
           address: process.env.EMAIL_USER
         },
-        to: pendingRegistration.email,
-        subject: 'Verify your NK Movie Hub email address',
-        html: this.generateRegistrationOtpTemplate(pendingRegistration, otp, expiryMinutes)
+        to: pendingAdmin.email,
+        subject: 'Verify your NK Movie Hub admin account',
+        html: this.generateAdminInviteOtpTemplate(pendingAdmin, otp, expiryMinutes, invitedByName)
       };
 
       const result = await this.transporter.sendMail(mailOptions);
-      console.log('📧 Registration code sent successfully:', result.messageId);
+      console.log('📧 Admin verification code sent successfully:', result.messageId);
       return { success: true, messageId: result.messageId };
     } catch (error) {
-      console.error('❌ Error sending registration code:', error);
+      console.error('❌ Error sending admin verification code:', error);
       return { success: false, error: error.message };
     }
   }
 
-  generateRegistrationOtpTemplate(pendingRegistration, otp, expiryMinutes) {
+  generateAdminInviteOtpTemplate(pendingAdmin, otp, expiryMinutes, invitedByName) {
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Verify Your Email - NK Movie Hub</title>
+        <title>Verify Your Admin Account - NK Movie Hub</title>
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #f4f4f4; }
           .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
@@ -173,17 +173,17 @@ class EmailService {
           </div>
 
           <div class="content">
-            <h2>Welcome, ${pendingRegistration.name}!</h2>
+            <h2>Welcome, ${pendingAdmin.name}!</h2>
 
-            <p>You're one step away from your NK Movie Hub account. Enter the verification code below to confirm this email address:</p>
+            <p>${invitedByName} is setting up an NK Movie Hub administrator account for this email address. Share the verification code below with them to confirm it:</p>
 
             <div class="otp-code">${otp}</div>
 
             <p style="text-align: center; color: #666;">This code expires in ${expiryMinutes} minutes.</p>
 
             <div class="warning">
-              <h4>Didn't sign up?</h4>
-              <p>If you did not create an NK Movie Hub account, you can safely ignore this email - no account is created until this code is entered. Never share this code with anyone.</p>
+              <h4>Not expecting this?</h4>
+              <p>If you were not expecting an NK Movie Hub admin account, ignore this email and do not share the code - no account is created until the code is entered.</p>
             </div>
           </div>
 

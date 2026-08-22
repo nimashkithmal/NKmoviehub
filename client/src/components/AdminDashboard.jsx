@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ContactManagement from './ContactManagement';
+import AdminManagement from './AdminManagement';
 
 const AdminDashboard = () => {
   const { user, token } = useAuth();
@@ -70,7 +71,7 @@ const AdminDashboard = () => {
     averageRating: 0,
     newTVShowsThisMonth: 0
   });
-  const [activeTab, setActiveTab] = useState('users'); // 'users', 'movies', 'tvshows', or 'contacts'
+  const [activeTab, setActiveTab] = useState('users'); // 'users', 'admins', 'movies', 'tvshows', or 'contacts'
 
   // Notification system
   const showNotification = (message, type = 'info') => {
@@ -1143,7 +1144,13 @@ const AdminDashboard = () => {
         >
           User Management
         </button>
-        <button 
+        <button
+          className={`tab-button ${activeTab === 'admins' ? 'active' : ''}`}
+          onClick={() => setActiveTab('admins')}
+        >
+          Administration
+        </button>
+        <button
           className={`tab-button ${activeTab === 'movies' ? 'active' : ''}`}
           onClick={() => setActiveTab('movies')}
         >
@@ -2380,6 +2387,15 @@ const AdminDashboard = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Admin Management Section */}
+      {activeTab === 'admins' && (
+        <AdminManagement
+          token={token}
+          admins={users.filter(u => u.role === 'admin')}
+          onAdminCreated={fetchUsers}
+        />
       )}
 
       {/* Contact Management Section */}
