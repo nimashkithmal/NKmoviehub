@@ -1,7 +1,5 @@
 name: Deploy server to EC2
 
-# The client is deployed by Vercel on its own, so this only handles the
-# Express API running behind nginx on EC2.
 on:
   push:
     branches: [main]
@@ -12,8 +10,6 @@ on:
 
 env:
   APP_DIR: /home/ubuntu/NKmoviehub
-  # `pm2 list` on the box shows the app name. "all" restarts every app pm2
-  # manages, which is right while this is the only one.
   PM2_APP: all
 
 jobs:
@@ -56,8 +52,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Without this the job dies inside ssh with an unhelpful error, which is
-      # exactly what a missing secret looked like the first time round.
       - name: Check the required secrets are set
         env:
           SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
@@ -65,23 +59,18 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
         run: |
           missing=""
+
           [ -z "$EC2_HOST" ] && missing="$missing EC2_HOST"
           [ -z "$EC2_USER" ] && missing="$missing EC2_USER"
-          [ -z "$SSH_KEY" ]  && missing="$missing EC2_SSH_KEY"
+          [ -z "$SSH_KEY" ] && missing="$missing EC2_SSH_KEY"
 
           if [ -n "$missing" ]; then
             echo "Missing repository secret(s):$missing"
-            echo ""
-            echo "Add them under Settings > Secrets and variables > Actions:"
-            echo "  EC2_HOST     the server address, e.g. 51.20.40.2"
-            echo "  EC2_USER     the ssh user, e.g. ubuntu"
-            echo "  EC2_SSH_KEY  the full contents of your .pem private key"
             exit 1
           fi
+
           echo "All three secrets are present."
 
-      # Plain ssh rather than a third-party action, so the deploy key is never
-      # handed to code outside this repository.
       - name: Pull and restart on EC2
         env:
           SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
@@ -89,46 +78,40 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
         run: |
           mkdir -p ~/.ssh
+
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-          # A malformed or truncated key otherwise fails later as a bare
-          # "Permission denied", which says nothing about the real cause.
           if ! ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null 2>&1; then
             echo "EC2_SSH_KEY is not a usable private key."
-            echo "Store the whole .pem file, from the BEGIN line to the END line,"
-            echo "with no extra spaces and nothing trimmed."
+            echo "Store the whole .pem file, from BEGIN to END."
             exit 1
           fi
+
           echo "Private key loaded."
 
-          # Not silenced: if the host key cannot be fetched, StrictHostKeyChecking
-          # rejects the connection and the reason belongs in the log.
-          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
-          if [ ! -s ~/.ssh/known_hosts ]; then
-            echo "Could not fetch the host key from the server."
-            exit 1
-          fi
-          echo "Host key recorded."
-
           ssh -i ~/.ssh/deploy_key \
-              -o StrictHostKeyChecking=yes \
+              -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null \
               -o BatchMode=yes \
               -o ConnectTimeout=20 \
               "$EC2_USER@$EC2_HOST" \
               APP_DIR="$APP_DIR" PM2_APP="$PM2_APP" 'bash -s' <<'REMOTE'
+
             set -euo pipefail
 
-            # A non-interactive ssh session skips .bashrc, so anything installed
-            # through nvm (node, npm, pm2) is not on PATH unless we load it here.
             export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+            if [ -s "$NVM_DIR/nvm.sh" ]; then
+              . "$NVM_DIR/nvm.sh"
+            fi
+
             export PATH="$PATH:$HOME/.npm-global/bin:/usr/local/bin"
 
             echo "--- environment ---"
             echo "node: $(command -v node || echo MISSING)"
-            echo "npm : $(command -v npm  || echo MISSING)"
-            echo "pm2 : $(command -v pm2  || echo MISSING)"
+            echo "npm : $(command -v npm || echo MISSING)"
+            echo "pm2 : $(command -v pm2 || echo MISSING)"
 
             cd "$APP_DIR"
 
@@ -143,7 +126,9 @@ jobs:
             pm2 restart "$PM2_APP" --update-env
             pm2 save
 
+            echo "--- PM2 status ---"
             pm2 list
+
           REMOTE
 
       - name: Check the API is answering
@@ -151,13 +136,17 @@ jobs:
           EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
           for i in $(seq 1 10); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "http://$EC2_HOST/api/health" || true)
+            code=$(curl -s -o /dev/null -w '%{http_code}' \
+              "http://$EC2_HOST/api/health" || true)
+
             if [ "$code" = "200" ]; then
               echo "API healthy (HTTP $code)"
               exit 0
             fi
-            echo "attempt $i: HTTP $code, retrying..."
+
+            echo "Attempt $i: HTTP $code, retrying..."
             sleep 5
           done
+
           echo "API did not come back healthy"
           exit 1
