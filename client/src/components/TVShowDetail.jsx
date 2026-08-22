@@ -14,10 +14,12 @@ const TVShowDetail = () => {
   const [selectedEpisode, setSelectedEpisode] = useState(null);
   const [showPlayer, setShowPlayer] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [activeSeason, setActiveSeason] = useState(1);
 
   useEffect(() => {
     fetchTVShowDetails();
     setSelectedImageIndex(0); // Reset image index when TV show changes
+    setActiveSeason(1);
   }, [id]);
 
   const fetchTVShowDetails = async () => {
@@ -195,6 +197,10 @@ const TVShowDetail = () => {
     ? groupEpisodesBySeasons(sortedEpisodes, numberOfSeasons)
     : [];
 
+  // Falling back to the first season keeps the list valid when a show has
+  // fewer seasons than the one last selected
+  const currentSeason = seasons.find((s) => s.seasonNumber === activeSeason) || seasons[0];
+
   return (
     <>
       {showPlayer && selectedEpisode && (
@@ -328,94 +334,116 @@ const TVShowDetail = () => {
             {/* Episodes Section - Organized by Seasons */}
             {seasons.length > 0 ? (
               <div className="episodes-section" style={{ marginTop: '30px' }}>
-                <h3 style={{ marginBottom: '20px' }}>
-                  Episodes ({sortedEpisodes.length}) - {numberOfSeasons} Season{numberOfSeasons !== 1 ? 's' : ''}
+                <h3 style={{ marginBottom: '16px', color: '#f5f5f5' }}>
+                  Episodes
+                  <span style={{ color: '#8a8a8a', fontWeight: 'normal', fontSize: '16px', marginLeft: '10px' }}>
+                    ({sortedEpisodes.length} across {seasons.length} season{seasons.length !== 1 ? 's' : ''})
+                  </span>
                 </h3>
-                {seasons.map((season, seasonIndex) => (
-                  <div 
-                    key={seasonIndex} 
-                    style={{ 
-                      marginBottom: '40px',
-                      padding: '20px',
-                      border: '2px solid #007bff',
-                      borderRadius: '12px',
-                      backgroundColor: '#f8f9fa'
-                    }}
-                  >
-                    <h4 style={{ 
-                      margin: '0 0 20px 0', 
-                      color: '#007bff', 
-                      fontSize: '24px',
-                      fontWeight: 'bold',
-                      borderBottom: '2px solid #007bff',
-                      paddingBottom: '10px'
-                    }}>
-                      Season {season.seasonNumber}
-                      <span style={{ 
-                        fontSize: '16px', 
-                        color: '#666', 
-                        fontWeight: 'normal',
-                        marginLeft: '10px'
-                      }}>
-                        ({season.episodes.length} episode{season.episodes.length !== 1 ? 's' : ''})
-                      </span>
-                    </h4>
-                    <div className="episodes-list" style={{ 
-                      display: 'grid', 
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
-                      gap: '15px' 
-                    }}>
-                      {season.episodes.map((episode, episodeIndex) => {
-                        // Calculate season-relative episode number (Episode 1, 2, 3... within the season)
-                        const seasonEpisodeNumber = episodeIndex + 1;
-                        
-                        return (
-                          <div 
-                            key={episodeIndex} 
-                            className="episode-card"
-                            style={{
-                              padding: '15px',
-                              border: '1px solid #ddd',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              backgroundColor: '#fff',
-                              transition: 'all 0.3s ease',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                            }}
-                            onClick={() => handleWatchEpisode(episode)}
-                            onMouseEnter={(e) => {
-                              if (isAuthenticated) {
-                                e.currentTarget.style.backgroundColor = '#e9e9e9';
-                                e.currentTarget.style.transform = 'translateY(-2px)';
-                                e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = '#fff';
-                              e.currentTarget.style.transform = 'translateY(0)';
-                              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-                            }}
-                          >
-                            <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#333' }}>
-                              Episode {seasonEpisodeNumber}
-                            </div>
-                            <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>
-                              Season {season.seasonNumber} Episode {seasonEpisodeNumber}
-                            </div>
-                            {episode.episodeTitle && (
-                              <div style={{ fontSize: '13px', color: '#888', marginBottom: '8px', fontStyle: 'italic' }}>
-                                {episode.episodeTitle}
-                              </div>
-                            )}
-                            <div style={{ fontSize: '12px', color: '#999' }}>
-                              Click to watch →
-                            </div>
+
+                {/* One tab per season - only the chosen season's episodes are listed */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '22px' }}>
+                  {seasons.map((season) => {
+                    const isActive = season.seasonNumber === currentSeason.seasonNumber;
+
+                    return (
+                      <button
+                        key={season.seasonNumber}
+                        type="button"
+                        onClick={() => setActiveSeason(season.seasonNumber)}
+                        title={`${season.episodes.length} episodes`}
+                        style={{
+                          padding: '9px 18px',
+                          borderRadius: '999px',
+                          border: `1px solid ${isActive ? '#c9314a' : '#2f2f2f'}`,
+                          background: isActive ? '#c9314a' : '#1c1c1c',
+                          color: isActive ? '#fff' : '#c9c9c9',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isActive) e.currentTarget.style.background = '#2a2a2a';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isActive) e.currentTarget.style.background = '#1c1c1c';
+                        }}
+                      >
+                        Season {String(season.seasonNumber).padStart(2, '0')}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ border: '1px solid #262626', borderRadius: '10px', overflow: 'hidden' }}>
+                  {currentSeason.episodes.map((episode, episodeIndex) => {
+                    // Numbering restarts at 1 inside each season
+                    const seasonEpisodeNumber = episodeIndex + 1;
+
+                    return (
+                      <div
+                        key={episode._id || episodeIndex}
+                        onClick={() => handleWatchEpisode(episode)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '16px',
+                          padding: '12px 16px',
+                          background: '#141414',
+                          borderBottom: episodeIndex === currentSeason.episodes.length - 1
+                            ? 'none'
+                            : '1px solid #232323',
+                          cursor: 'pointer',
+                          transition: 'background 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = '#c9314a'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = '#141414'; }}
+                      >
+                        <span style={{
+                          minWidth: '28px',
+                          textAlign: 'center',
+                          color: '#8a8a8a',
+                          fontSize: '15px',
+                          fontWeight: 600
+                        }}>
+                          {seasonEpisodeNumber}
+                        </span>
+
+                        <img
+                          src={tvShow.imageUrl}
+                          alt=""
+                          style={{
+                            width: '68px',
+                            height: '42px',
+                            objectFit: 'cover',
+                            borderRadius: '4px',
+                            background: '#222',
+                            flexShrink: 0
+                          }}
+                        />
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            color: '#f5f5f5',
+                            fontWeight: 700,
+                            fontSize: '14px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {episode.episodeTitle || `Episode ${seasonEpisodeNumber}`}
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+                          <div style={{ color: '#8a8a8a', fontSize: '12px', marginTop: '3px' }}>
+                            Season {String(currentSeason.seasonNumber).padStart(2, '0')} · Episode {String(seasonEpisodeNumber).padStart(2, '0')}
+                          </div>
+                        </div>
+
+                        <span style={{ color: '#8a8a8a', fontSize: '13px', flexShrink: 0 }}>▶</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : sortedEpisodes.length > 0 ? (
               <div className="episodes-section" style={{ marginTop: '30px' }}>
