@@ -699,6 +699,18 @@
   box-shadow: 0 0 10px rgba(139, 92, 246, 0.3);
 }
 
+/* Build number under the last menu entry - readable but never competing
+   with the links above it */
+.mobile-nav-links li.mobile-menu-version {
+  padding: 10px 14px 2px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-align: center;
+  cursor: default;
+}
+
 .nav-icon {
   font-size: 20px;
   width: 24px;

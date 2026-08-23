@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { APP_VERSION } from '../version';
 import '../components/Navbar.css';
 
 const Header = () => {
@@ -217,6 +218,10 @@ const Header = () => {
                       </li>
                     </>
                   )}
+
+                  {/* Last item in the list, so it sits under Logout for a
+                      signed-in admin and under Home for everybody else */}
+                  <li className="mobile-menu-version">v{APP_VERSION}</li>
                 </ul>
               </div>
             </div>
