@@ -158,13 +158,36 @@ router.get('/filters', async (req, res) => {
   }
 });
 
+// @route   GET /api/tvshows/coming-soon
+// @desc    TV shows marked Coming Soon for the home catalog row
+// @access  Public
+router.get('/coming-soon', async (req, res) => {
+  try {
+    const tvShows = await TVShow.find({ status: 'coming_soon' })
+      .select('-__v')
+      .sort({ year: 1, createdAt: -1 })
+      .limit(40);
+
+    res.json({
+      success: true,
+      data: { tvShows }
+    });
+  } catch (error) {
+    console.error('Get coming soon TV shows error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching coming soon TV shows'
+    });
+  }
+});
+
 // @route   GET /api/tvshows/:id
 // @desc    Get TV show by ID (public)
 // @access  Public
 router.get('/:id', async (req, res) => {
   try {
     // Prevent special routes from being matched as IDs
-    const specialRoutes = ['admin', 'filters'];
+    const specialRoutes = ['admin', 'filters', 'coming-soon'];
     if (specialRoutes.includes(req.params.id)) {
       return res.status(404).json({
         success: false,
@@ -652,7 +675,11 @@ router.patch('/:id/status', protect, restrictToAdmin, async (req, res) => {
       });
     }
 
-    const newStatus = tvShow.status === 'active' ? 'inactive' : 'active';
+    const allowed = ['active', 'inactive', 'coming_soon'];
+    const requested = req.body?.status;
+    const newStatus = allowed.includes(requested)
+      ? requested
+      : (tvShow.status === 'active' ? 'inactive' : 'active');
     tvShow.status = newStatus;
     await tvShow.save();
 

@@ -926,22 +926,21 @@ h3 {
   100% { transform: rotate(360deg); }
 }
 
-/* Custom Scrollbar - Dark Theme */
-::-webkit-scrollbar {
-  width: 8px;
+/* Hide scrollbars, keep scrolling */
+html {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-::-webkit-scrollbar-track {
-  background: var(--gray-50);
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-::-webkit-scrollbar-thumb {
-  background: var(--gray-400);
-  border-radius: var(--radius-sm);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--gray-500);
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 /* Selection */

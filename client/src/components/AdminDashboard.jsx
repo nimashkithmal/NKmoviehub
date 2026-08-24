@@ -8,28 +8,16 @@ import BannerManagement from './BannerManagement';
 const AdminDashboard = () => {
   const { user, token } = useAuth();
   const navigate = useNavigate();
-  const [users, setUsers] = useState([]);
   const [movies, setMovies] = useState([]);
   const [tvShows, setTVShows] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [moviesLoading, setMoviesLoading] = useState(false);
   const [tvShowsLoading, setTVShowsLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [moviesError, setMoviesError] = useState(null);
   const [tvShowsError, setTVShowsError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [movieSearchTerm, setMovieSearchTerm] = useState('');
   const [tvShowSearchTerm, setTVShowSearchTerm] = useState('');
-  const [showAddUserModal, setShowAddUserModal] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
   const [editingMovie, setEditingMovie] = useState(null);
   const [editingTVShow, setEditingTVShow] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    role: 'user'
-  });
   const [movieFormData, setMovieFormData] = useState({
     title: '',
     year: new Date().getFullYear(),
@@ -54,12 +42,6 @@ const AdminDashboard = () => {
   const [tvShowImagePreviews, setTVShowImagePreviews] = useState([]);
   const [tvShowEpisodes, setTVShowEpisodes] = useState([]);
   const [tvShowSeasons, setTVShowSeasons] = useState([]);
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    activeUsers: 0,
-    adminUsers: 0,
-    newUsersThisMonth: 0
-  });
   const [movieStats, setMovieStats] = useState({
     totalMovies: 0,
     activeMovies: 0,
@@ -72,7 +54,7 @@ const AdminDashboard = () => {
     averageRating: 0,
     newTVShowsThisMonth: 0
   });
-  const [activeTab, setActiveTab] = useState('users'); // 'users', 'admins', 'movies', 'tvshows', 'banners', or 'contacts'
+  const [activeTab, setActiveTab] = useState('admins'); // 'admins', 'movies', 'tvshows', 'banners', or 'contacts'
 
   // Notification system
   const showNotification = (message, type = 'info') => {
@@ -104,55 +86,6 @@ const AdminDashboard = () => {
       }
     });
   };
-
-  // Fetch users from backend
-  const fetchUsers = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await fetch('/api/users', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        setUsers(result.data.users);
-        
-        // Calculate stats
-        const totalUsers = result.data.users.length;
-        const activeUsers = result.data.users.filter(u => u.status === 'active').length;
-        const adminUsers = result.data.users.filter(u => u.role === 'admin').length;
-        const newUsersThisMonth = result.data.users.filter(u => {
-          const userDate = new Date(u.createdAt);
-          const now = new Date();
-          return userDate.getMonth() === now.getMonth() && userDate.getFullYear() === now.getFullYear();
-        }).length;
-
-        setStats({
-          totalUsers,
-          activeUsers,
-          adminUsers,
-          newUsersThisMonth
-        });
-      } else {
-        throw new Error(result.message || 'Failed to fetch users');
-      }
-    } catch (err) {
-      console.error('Error fetching users:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
 
   // Fetch movies from backend
   const fetchMovies = useCallback(async () => {
@@ -255,162 +188,10 @@ const AdminDashboard = () => {
   // Fetch data on component mount
   useEffect(() => {
     if (token) {
-      fetchUsers();
       fetchMovies();
       fetchTVShows();
     }
-  }, [token, fetchUsers, fetchMovies, fetchTVShows]);
-
-  const handleAddUser = async () => {
-    if (!formData.name || !formData.email || !formData.password) {
-      showNotification('Please fill in all fields', 'error');
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-          role: formData.role
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create user');
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        // Refresh users list
-        await fetchUsers();
-        setFormData({ name: '', email: '', password: '', role: 'user' });
-        setShowAddUserModal(false);
-        showNotification('User created successfully!', 'success');
-      }
-    } catch (err) {
-      console.error('Error creating user:', err);
-      showNotification(`Error creating user: ${err.message}`, 'error');
-    }
-  };
-
-  const handleEditUser = (user) => {
-    setEditingUser(user);
-    setFormData({
-      name: user.name,
-      email: user.email,
-      password: '',
-      role: user.role
-    });
-  };
-
-  const handleUpdateUser = async () => {
-    if (!formData.name || !formData.email) {
-      showNotification('Please fill in all fields', 'error');
-      return;
-    }
-
-    try {
-      const updateData = {
-        name: formData.name,
-        email: formData.email,
-        role: formData.role
-      };
-
-      const response = await fetch(`/api/users/${editingUser._id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updateData)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update user');
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        // Refresh users list
-        await fetchUsers();
-        setEditingUser(null);
-        setFormData({ name: '', email: '', password: '', role: 'user' });
-        showNotification('User updated successfully!', 'success');
-      }
-    } catch (err) {
-      console.error('Error updating user:', err);
-      showNotification(`Error updating user: ${err.message}`, 'error');
-    }
-  };
-
-  const handleDeleteUser = async (userId) => {
-    if (window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      try {
-        const response = await fetch(`/api/users/${userId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to delete user');
-        }
-
-        const result = await response.json();
-        
-        if (result.success) {
-          // Refresh users list
-          await fetchUsers();
-          showNotification('User deleted successfully!', 'success');
-        }
-      } catch (err) {
-        console.error('Error deleting user:', err);
-        showNotification(`Error deleting user: ${err.message}`, 'error');
-      }
-    }
-  };
-
-  const handleToggleUserStatus = async (userId) => {
-    try {
-      const response = await fetch(`/api/users/${userId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update user status');
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        // Refresh users list
-        await fetchUsers();
-        showNotification(`User status updated successfully!`, 'success');
-      }
-    } catch (err) {
-      console.error('Error updating user status:', err);
-      showNotification(`Error updating user status: ${err.message}`, 'error');
-    }
-  };
+  }, [token, fetchMovies, fetchTVShows]);
 
   // Movie management functions
 
@@ -627,14 +408,15 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleToggleMovieStatus = async (movieId) => {
+  const handleToggleMovieStatus = async (movieId, status) => {
     try {
       const response = await fetch(`/api/movies/${movieId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ status })
       });
 
       if (!response.ok) {
@@ -793,11 +575,6 @@ const AdminDashboard = () => {
       reader.onerror = error => reject(error);
     });
   };
-
-  const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const filteredMovies = movies.filter(movie =>
     movie.title.toLowerCase().includes(movieSearchTerm.toLowerCase()) ||
@@ -1075,14 +852,15 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleToggleTVShowStatus = async (tvShowId) => {
+  const handleToggleTVShowStatus = async (tvShowId, status) => {
     try {
       const response = await fetch(`/api/tvshows/${tvShowId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ status })
       });
 
       if (!response.ok) {
@@ -1102,34 +880,6 @@ const AdminDashboard = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="card">
-        <div className="loading-state">
-          <h3>Loading users...</h3>
-          <p>Please wait while we fetch the latest user data.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="card">
-        <div className="error-state">
-          <h3>Error loading users</h3>
-          <p>{error}</p>
-          <button 
-            className="btn btn-primary"
-            onClick={fetchUsers}
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
       <div className="dashboard-header">
@@ -1139,12 +889,6 @@ const AdminDashboard = () => {
 
       {/* Tab Navigation */}
       <div className="dashboard-tabs">
-        <button 
-          className={`tab-button ${activeTab === 'users' ? 'active' : ''}`}
-          onClick={() => setActiveTab('users')}
-        >
-          User Management
-        </button>
         <button
           className={`tab-button ${activeTab === 'admins' ? 'active' : ''}`}
           onClick={() => setActiveTab('admins')}
@@ -1177,29 +921,10 @@ const AdminDashboard = () => {
         </button>
       </div>
 
-      {/* Statistics Cards - the banner tab has no numbers worth showing */}
-      {activeTab !== 'banners' && (
+      {/* Statistics Cards */}
+      {activeTab !== 'banners' && activeTab !== 'admins' && activeTab !== 'contacts' && (
       <div className="dashboard-stats">
-        {activeTab === 'users' ? (
-          <>
-            <div className="stat-card">
-              <h3>{stats.totalUsers}</h3>
-              <p>Total Users</p>
-            </div>
-            <div className="stat-card">
-              <h3>{stats.activeUsers}</h3>
-              <p>Active Users</p>
-            </div>
-            <div className="stat-card">
-              <h3>{stats.adminUsers}</h3>
-              <p>Admin Users</p>
-            </div>
-            <div className="stat-card">
-              <h3>{stats.newUsersThisMonth}</h3>
-              <p>New This Month</p>
-            </div>
-          </>
-        ) : activeTab === 'tvshows' ? (
+        {activeTab === 'tvshows' ? (
           <>
             <div className="stat-card">
               <h3>{tvShowStats.totalTVShows}</h3>
@@ -1239,123 +964,6 @@ const AdminDashboard = () => {
           </>
         )}
       </div>
-      )}
-
-      {/* User Management Section */}
-      {activeTab === 'users' && (
-        <div className="card">
-          <div className="dashboard-header">
-            <h2>User Management</h2>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button 
-                className="btn btn-primary"
-                onClick={() => setShowAddUserModal(true)}
-              >
-                Add New User
-              </button>
-            </div>
-          </div>
-
-          <div className="search-bar">
-            <input
-              type="text"
-              placeholder="Search users by name or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          <div className="user-actions">
-            <button 
-              className="btn btn-secondary"
-              onClick={() => setSearchTerm('')}
-            >
-              Clear Search
-            </button>
-            <button 
-              className="btn btn-secondary"
-              onClick={fetchUsers}
-            >
-              Refresh
-            </button>
-          </div>
-
-          {filteredUsers.length === 0 ? (
-            <div className="empty-state">
-              <h3>No users found</h3>
-              <p>{searchTerm ? 'Try adjusting your search terms.' : 'No users have been registered yet.'}</p>
-            </div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map(user => (
-                  <tr key={user._id}>
-                    <td>{user.name}</td>
-                    <td>{user.email}</td>
-                    <td>
-                      <span style={{ 
-                        padding: '4px 8px', 
-                        borderRadius: '4px', 
-                        backgroundColor: user.role === 'admin' ? '#dc3545' : '#28a745',
-                        color: 'white',
-                        fontSize: '12px'
-                      }}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ 
-                        padding: '4px 8px', 
-                        borderRadius: '4px', 
-                        backgroundColor: user.status === 'active' ? '#28a745' : '#6c757d',
-                        color: 'white',
-                        fontSize: '12px'
-                      }}>
-                        {user.status}
-                      </span>
-                    </td>
-                    <td>{new Date(user.createdAt).toLocaleDateString()}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '5px' }}>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
-                          onClick={() => handleEditUser(user)}
-                        >
-                          Edit
-                        </button>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
-                          onClick={() => handleToggleUserStatus(user._id)}
-                        >
-                          {user.status === 'active' ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
-                          onClick={() => handleDeleteUser(user._id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
       )}
 
       {/* Movie Management Section */}
@@ -1517,33 +1125,41 @@ const AdminDashboard = () => {
                       <span style={{ 
                         padding: '4px 8px', 
                         borderRadius: '4px', 
-                        backgroundColor: movie.status === 'active' ? '#28a745' : '#6c757d',
+                        backgroundColor:
+                          movie.status === 'active'
+                            ? '#28a745'
+                            : movie.status === 'coming_soon'
+                              ? '#e50914'
+                              : '#6c757d',
                         color: 'white',
                         fontSize: '12px'
                       }}>
-                        {movie.status}
+                        {movie.status === 'coming_soon' ? 'coming soon' : movie.status}
                       </span>
                     </td>
                     <td>{movie.addedBy?.name || 'Unknown'}</td>
                     <td>
-                      <div style={{ display: 'flex', gap: '5px' }}>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                      <div className="table-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-table"
                           onClick={() => handleEditMovie(movie)}
                         >
                           Edit
                         </button>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
-                          onClick={() => handleToggleMovieStatus(movie._id)}
+                        <select
+                          className={`status-select status-select--${movie.status || 'active'}`}
+                          value={movie.status || 'active'}
+                          onChange={(e) => handleToggleMovieStatus(movie._id, e.target.value)}
+                          aria-label={`Status for ${movie.title}`}
                         >
-                          {movie.status === 'active' ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                          <option value="active">Active</option>
+                          <option value="coming_soon">Coming Soon</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-table"
                           onClick={() => handleDeleteMovie(movie._id)}
                         >
                           Delete
@@ -1703,33 +1319,41 @@ const AdminDashboard = () => {
                       <span style={{ 
                         padding: '4px 8px', 
                         borderRadius: '4px', 
-                        backgroundColor: tvShow.status === 'active' ? '#28a745' : '#6c757d',
+                        backgroundColor:
+                          tvShow.status === 'active'
+                            ? '#28a745'
+                            : tvShow.status === 'coming_soon'
+                              ? '#e50914'
+                              : '#6c757d',
                         color: 'white',
                         fontSize: '12px'
                       }}>
-                        {tvShow.status}
+                        {tvShow.status === 'coming_soon' ? 'coming soon' : tvShow.status}
                       </span>
                     </td>
                     <td>{tvShow.addedBy?.name || 'Unknown'}</td>
                     <td>
-                      <div style={{ display: 'flex', gap: '5px' }}>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                      <div className="table-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-table"
                           onClick={() => handleEditTVShow(tvShow)}
                         >
                           Edit
                         </button>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
-                          onClick={() => handleToggleTVShowStatus(tvShow._id)}
+                        <select
+                          className={`status-select status-select--${tvShow.status || 'active'}`}
+                          value={tvShow.status || 'active'}
+                          onChange={(e) => handleToggleTVShowStatus(tvShow._id, e.target.value)}
+                          aria-label={`Status for ${tvShow.title}`}
                         >
-                          {tvShow.status === 'active' ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                          <option value="active">Active</option>
+                          <option value="coming_soon">Coming Soon</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-table"
                           onClick={() => handleDeleteTVShow(tvShow._id)}
                         >
                           Delete
@@ -1741,135 +1365,6 @@ const AdminDashboard = () => {
               </tbody>
             </table>
           )}
-        </div>
-      )}
-
-      {/* Add User Modal */}
-      {showAddUserModal && (
-        <div className="modal">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3>Add New User</h3>
-              <button 
-                className="close-btn"
-                onClick={() => setShowAddUserModal(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="form-group">
-              <label>Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                placeholder="Enter user name"
-              />
-            </div>
-            <div className="form-group">
-              <label>Email</label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
-                placeholder="Enter user email"
-              />
-            </div>
-            <div className="form-group">
-              <label>Password</label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({...formData, password: e.target.value})}
-                placeholder="Enter user password"
-              />
-            </div>
-            <div className="form-group">
-              <label>Role</label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({...formData, role: e.target.value})}
-                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-              >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <div className="form-actions">
-              <button 
-                className="btn btn-primary"
-                onClick={handleAddUser}
-              >
-                Add User
-              </button>
-              <button 
-                className="btn btn-secondary"
-                onClick={() => setShowAddUserModal(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit User Modal */}
-      {editingUser && (
-        <div className="modal">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3>Edit User</h3>
-              <button 
-                className="close-btn"
-                onClick={() => setEditingUser(null)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="form-group">
-              <label>Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                placeholder="Enter user name"
-              />
-            </div>
-            <div className="form-group">
-              <label>Email</label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
-                placeholder="Enter user email"
-              />
-            </div>
-            <div className="form-group">
-              <label>Role</label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({...formData, role: e.target.value})}
-                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-              >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <div className="form-actions">
-              <button 
-                className="btn btn-primary"
-                onClick={handleUpdateUser}
-              >
-                Update User
-              </button>
-              <button 
-                className="btn btn-secondary"
-                onClick={() => setEditingUser(null)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -2400,11 +1895,7 @@ const AdminDashboard = () => {
 
       {/* Admin Management Section */}
       {activeTab === 'admins' && (
-        <AdminManagement
-          token={token}
-          admins={users.filter(u => u.role === 'admin')}
-          onAdminCreated={fetchUsers}
-        />
+        <AdminManagement token={token} />
       )}
 
       {/* Home Page Banner Section */}

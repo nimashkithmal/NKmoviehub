@@ -15,6 +15,8 @@ const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
+  const isAdmin = Boolean(isAuthenticated && user?.role === 'admin');
+
   const params = new URLSearchParams(location.search);
   const typeParam = params.get('type');
   const browseParam = params.get('browse');
@@ -52,6 +54,11 @@ const Navbar = () => {
   }, [searchOpen]);
 
   useEffect(() => {
+    if (!isAdmin) {
+      setAccountOpen(false);
+      return undefined;
+    }
+
     const onPointerDown = (event) => {
       if (!event.target.closest('.nav-account')) {
         setAccountOpen(false);
@@ -59,7 +66,7 @@ const Navbar = () => {
     };
     document.addEventListener('mousedown', onPointerDown);
     return () => document.removeEventListener('mousedown', onPointerDown);
-  }, []);
+  }, [isAdmin]);
 
   const submitSearch = useCallback(() => {
     const value = searchTerm.trim();
@@ -185,51 +192,41 @@ const Navbar = () => {
             )}
           </div>
 
-          <div className="nav-account">
-            <button
-              type="button"
-              className="nav-account-toggle"
-              aria-label="Account menu"
-              aria-expanded={accountOpen}
-              onClick={() => setAccountOpen((open) => !open)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M4 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5" />
-              </svg>
-            </button>
+          {isAdmin && (
+            <div className="nav-account">
+              <button
+                type="button"
+                className="nav-account-toggle"
+                aria-label="Admin account menu"
+                aria-expanded={accountOpen}
+                onClick={() => setAccountOpen((open) => !open)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5" />
+                </svg>
+              </button>
 
-            {accountOpen && (
-              <div className="nav-account-menu">
-                {isAuthenticated ? (
-                  <>
-                    <div className="nav-account-label">{user?.name || 'Account'}</div>
-                    {user?.role === 'admin' && (
-                      <>
-                        <Link to="/admin" onClick={() => setAccountOpen(false)}>
-                          Admin Dashboard
-                        </Link>
-                        <Link to="/add-movie" onClick={() => setAccountOpen(false)}>
-                          Add Movie
-                        </Link>
-                        <Link to="/add-tvshow" onClick={() => setAccountOpen(false)}>
-                          Add TV Show
-                        </Link>
-                      </>
-                    )}
-                    <button type="button" onClick={handleLogout}>
-                      Logout
-                    </button>
-                  </>
-                ) : (
-                  <Link to="/login" onClick={() => setAccountOpen(false)}>
-                    Login
+              {accountOpen && (
+                <div className="nav-account-menu">
+                  <div className="nav-account-label">{user?.name || 'Admin'}</div>
+                  <Link to="/admin" onClick={() => setAccountOpen(false)}>
+                    Admin Dashboard
                   </Link>
-                )}
-                <div className="nav-account-version">v{APP_VERSION}</div>
-              </div>
-            )}
-          </div>
+                  <Link to="/add-movie" onClick={() => setAccountOpen(false)}>
+                    Add Movie
+                  </Link>
+                  <Link to="/add-tvshow" onClick={() => setAccountOpen(false)}>
+                    Add TV Show
+                  </Link>
+                  <button type="button" onClick={handleLogout}>
+                    Logout
+                  </button>
+                  <div className="nav-account-version">v{APP_VERSION}</div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </nav>

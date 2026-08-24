@@ -90,26 +90,7 @@ userSchema.statics.findByEmail = function(email) {
   return this.findOne({ email: email.toLowerCase() });
 };
 
-// Static method to get user statistics
-userSchema.statics.getStats = async function() {
-  const stats = await this.aggregate([
-    {
-      $group: {
-        _id: null,
-        totalUsers: { $sum: 1 },
-        activeUsers: { 
-          $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } 
-        },
-        adminUsers: { 
-          $sum: { $cond: [{ $eq: ['$role', 'admin'] }, 1, 0] } 
-        }
-      }
-    }
-  ]);
-  
-  return stats[0] || { totalUsers: 0, activeUsers: 0, adminUsers: 0 };
-};
-
 const User = mongoose.model('User', userSchema);
 
-module.exports = User; 
+module.exports = User;
+ 

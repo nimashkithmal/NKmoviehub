@@ -16,7 +16,7 @@ const getRating = (item) => {
 /**
  * Compact Netflix/MovieAI-style poster used inside horizontal rows.
  */
-const PosterCard = ({ item, onClick }) => {
+const PosterCard = ({ item, onClick, badge }) => {
   const rating = getRating(item);
 
   return (
@@ -33,6 +33,7 @@ const PosterCard = ({ item, onClick }) => {
           loading="lazy"
           onError={(e) => handleImageError(e, item.title)}
         />
+        {badge && <span className="poster-card-badge">{badge}</span>}
         <div className="poster-card-overlay">
           {rating && (
             <span className="poster-card-rating">
@@ -44,10 +45,16 @@ const PosterCard = ({ item, onClick }) => {
           )}
           <div className="poster-card-actions">
             <span className="poster-card-play">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-              Play
+              {badge ? (
+                badge
+              ) : (
+                <>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                  Play
+                </>
+              )}
             </span>
           </div>
         </div>

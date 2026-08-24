@@ -34,7 +34,8 @@ const Home = () => {
   const [availableGenres, setAvailableGenres] = useState([]);
   const [availableYears, setAvailableYears] = useState([]);
   const [filtersLoading, setFiltersLoading] = useState(false);
-  const [slideshowImages, setSlideshowImages] = useState([]);
+  const [homeBanners, setHomeBanners] = useState([]);
+  const [comingSoonItems, setComingSoonItems] = useState([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [heroReady, setHeroReady] = useState(false);
   const [forceBrowse, setForceBrowse] = useState(false);
@@ -52,14 +53,36 @@ const Home = () => {
         const response = await fetch('/api/banners');
         const result = await response.json();
         if (result.success) {
-          setSlideshowImages(result.data.banners.map((banner) => banner.imageUrl).filter(Boolean));
+          const banners = (result.data.banners || []).filter((b) => b.imageUrl);
+          setHomeBanners(banners);
         }
       } catch (err) {
         console.error('Error fetching banners:', err);
       }
     };
 
+    const fetchComingSoon = async () => {
+      try {
+        const [moviesRes, tvRes] = await Promise.all([
+          fetch('/api/movies/coming-soon'),
+          fetch('/api/tvshows/coming-soon')
+        ]);
+        const moviesJson = await moviesRes.json();
+        const tvJson = await tvRes.json();
+        const movies = moviesJson.success
+          ? (moviesJson.data.movies || []).map((m) => ({ ...m, _kind: 'movie' }))
+          : [];
+        const shows = tvJson.success
+          ? (tvJson.data.tvShows || []).map((t) => ({ ...t, _kind: 'tvshow' }))
+          : [];
+        setComingSoonItems([...movies, ...shows].sort((a, b) => (a.year || 0) - (b.year || 0)));
+      } catch (err) {
+        console.error('Error fetching coming soon:', err);
+      }
+    };
+
     fetchBanners();
+    fetchComingSoon();
   }, []);
 
   useEffect(() => {
@@ -84,12 +107,12 @@ const Home = () => {
   }, [location.search]);
 
   useEffect(() => {
-    if (slideshowImages.length === 0) return undefined;
+    if (homeBanners.length === 0) return undefined;
     const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slideshowImages.length);
+      setCurrentSlide((prev) => (prev + 1) % homeBanners.length);
     }, 6000);
     return () => clearInterval(interval);
-  }, [slideshowImages.length]);
+  }, [homeBanners.length]);
 
   useEffect(() => {
     const fetchFilters = async () => {
@@ -411,18 +434,33 @@ const Home = () => {
     return withImages[Math.min(2, withImages.length - 1)];
   }, [topRatedMovies, movies]);
 
-  const heroImage =
-    slideshowImages.length > 0
-      ? slideshowImages[currentSlide]
-      : getItemImage(featuredMovie) || getMoviePlaceholder(featuredMovie?.title || 'NK Movie Hub', 1280, 720);
+  // Active hero slide: banner artwork + linked movie/TV details (never poster)
+  const activeBanner = homeBanners[currentSlide] || null;
+  const heroContent = activeBanner?.movie || activeBanner?.tvShow || featuredMovie;
+  const heroIsTV = Boolean(activeBanner?.tvShow && !activeBanner?.movie);
 
-  const heroTitle = featuredMovie?.title || 'NK Movie Hub';
+  const heroImage =
+    activeBanner?.imageUrl ||
+    getItemImage(featuredMovie) ||
+    getMoviePlaceholder(featuredMovie?.title || 'NK Movie Hub', 1280, 720);
+
+  const heroTitle = heroContent?.title || activeBanner?.title || 'NK Movie Hub';
   const heroDesc =
-    featuredMovie?.description ||
+    heroContent?.description ||
     'Discover movies and TV shows from every genre — stream your next favourite tonight.';
-  const heroRating = featuredMovie
-    ? Number(featuredMovie.imdbRating ?? featuredMovie.averageRating)
+  const heroRating = heroContent
+    ? Number(heroContent.imdbRating ?? heroContent.averageRating)
     : null;
+  const heroYear = heroContent?.year;
+  const heroGenre = heroContent?.genre;
+  const heroContentId = heroContent?._id;
+  const openHeroContent = () => {
+    if (!heroContentId) {
+      openBrowseMovies();
+      return;
+    }
+    navigate(heroIsTV ? `/tvshow/${heroContentId}` : `/movie/${heroContentId}`);
+  };
 
   const openBrowseMovies = () => navigate('/?browse=1');
 
@@ -437,12 +475,12 @@ const Home = () => {
         <>
           <section className="home-hero">
             <div className="home-hero-media">
-              {slideshowImages.length > 0 ? (
-                slideshowImages.map((image, index) => (
+              {homeBanners.length > 0 ? (
+                homeBanners.map((banner, index) => (
                   <div
-                    key={image + index}
+                    key={banner._id || banner.imageUrl + index}
                     className={`home-hero-slide${index === currentSlide ? ' is-visible' : ''}`}
-                    style={{ backgroundImage: `url(${image})` }}
+                    style={{ backgroundImage: `url(${banner.imageUrl})` }}
                   />
                 ))
               ) : (
@@ -472,16 +510,16 @@ const Home = () => {
                       {heroRating.toFixed(1)}
                     </span>
                   )}
-                  {featuredMovie?.year && (
+                  {heroYear && (
                     <>
                       <span className="home-hero-dot">·</span>
-                      <span className="home-hero-year">{featuredMovie.year}</span>
+                      <span className="home-hero-year">{heroYear}</span>
                     </>
                   )}
-                  {featuredMovie?.genre && (
+                  {heroGenre && (
                     <>
                       <span className="home-hero-dot">·</span>
-                      <span className="home-hero-genre">{featuredMovie.genre}</span>
+                      <span className="home-hero-genre">{heroGenre}</span>
                     </>
                   )}
                 </div>
@@ -493,9 +531,7 @@ const Home = () => {
                   <button
                     type="button"
                     className="home-hero-btn home-hero-btn-primary"
-                    onClick={() =>
-                      featuredMovie ? navigate(`/movie/${featuredMovie._id}`) : openBrowseMovies()
-                    }
+                    onClick={openHeroContent}
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M8 5v14l11-7z" />
@@ -505,9 +541,7 @@ const Home = () => {
                   <button
                     type="button"
                     className="home-hero-btn home-hero-btn-secondary"
-                    onClick={() =>
-                      featuredMovie ? navigate(`/movie/${featuredMovie._id}`) : openBrowseMovies()
-                    }
+                    onClick={openHeroContent}
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <circle cx="12" cy="12" r="10" />
@@ -519,11 +553,11 @@ const Home = () => {
               </div>
             </div>
 
-            {slideshowImages.length > 1 && (
+            {homeBanners.length > 1 && (
               <div className="home-hero-indicators">
-                {slideshowImages.map((_, index) => (
+                {homeBanners.map((banner, index) => (
                   <button
-                    key={index}
+                    key={banner._id || index}
                     type="button"
                     className={index === currentSlide ? 'is-active' : ''}
                     aria-label={`Go to slide ${index + 1}`}
@@ -535,6 +569,26 @@ const Home = () => {
           </section>
 
           <div className="home-rows" id="browse-anchor">
+            {comingSoonItems.length > 0 && (
+              <ContentRow
+                title="Coming Soon"
+                subtitle="Titles arriving on NK Movie Hub"
+              >
+                {comingSoonItems.map((item) => (
+                  <PosterCard
+                    key={`${item._kind}-${item._id}`}
+                    item={item}
+                    badge="Coming Soon"
+                    onClick={() =>
+                      navigate(
+                        item._kind === 'tvshow' ? `/tvshow/${item._id}` : `/movie/${item._id}`
+                      )
+                    }
+                  />
+                ))}
+              </ContentRow>
+            )}
+
             {latestMovies.length > 0 && (
               <ContentRow
                 title="Trending Now"

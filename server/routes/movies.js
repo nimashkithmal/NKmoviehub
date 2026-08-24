@@ -155,6 +155,29 @@ router.get('/filters', async (req, res) => {
   }
 });
 
+// @route   GET /api/movies/coming-soon
+// @desc    Titles marked Coming Soon for the home catalog row
+// @access  Public
+router.get('/coming-soon', async (req, res) => {
+  try {
+    const movies = await Movie.find({ status: 'coming_soon' })
+      .select('-__v')
+      .sort({ year: 1, createdAt: -1 })
+      .limit(40);
+
+    res.json({
+      success: true,
+      data: { movies }
+    });
+  } catch (error) {
+    console.error('Get coming soon movies error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching coming soon movies'
+    });
+  }
+});
+
 // @route   GET /api/movies/stats
 // @desc    Get movie statistics (admin only)
 // @access  Private/Admin
@@ -944,7 +967,11 @@ router.patch('/:id/status', protect, restrictToAdmin, async (req, res) => {
       });
     }
 
-    const newStatus = movie.status === 'active' ? 'inactive' : 'active';
+    const allowed = ['active', 'inactive', 'coming_soon'];
+    const requested = req.body?.status;
+    const newStatus = allowed.includes(requested)
+      ? requested
+      : (movie.status === 'active' ? 'inactive' : 'active');
     movie.status = newStatus;
     await movie.save();
 
