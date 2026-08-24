@@ -1,0 +1,119 @@
+/* Public Collections — name-list franchise layout */
+.collections-page {
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  margin-top: calc(-1 * (72px + var(--space-xl, 1.5rem)));
+  margin-bottom: calc(-1 * var(--space-xl, 1.5rem));
+  min-height: 100vh;
+  padding: calc(72px + 2rem) clamp(1.25rem, 5vw, 3.5rem) 3.5rem;
+  background: #000;
+  color: #fff;
+}
+
+.collections-header {
+  margin-bottom: 2.5rem;
+  max-width: 720px;
+}
+
+.collections-header h1 {
+  margin: 0 0 0.4rem !important;
+  font-size: clamp(2rem, 4vw, 2.75rem) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.03em;
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: #fff !important;
+  color: #fff !important;
+}
+
+.collections-header p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 1rem;
+}
+
+.collections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2.75rem;
+  max-width: 720px;
+}
+
+.collection-block {
+  text-align: left;
+}
+
+.collection-name {
+  margin: 0 0 0.85rem !important;
+  font-size: clamp(1.55rem, 3vw, 2rem) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: #fff !important;
+  color: #fff !important;
+}
+
+.collection-desc {
+  margin: -0.35rem 0 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.95rem;
+}
+
+.collection-empty-note {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.95rem;
+}
+
+.collection-movie-names {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: flex-start;
+}
+
+.collection-movie-link {
+  display: inline-block;
+  margin: 0;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: left;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.collection-movie-link:hover,
+.collection-movie-link:focus-visible {
+  color: #fff;
+  border-color: rgba(147, 197, 253, 0.7);
+  background: rgba(255, 255, 255, 0.04);
+  outline: none;
+}
+
+.collections-loading,
+.collections-empty {
+  padding: 2rem 0;
+  color: rgba(255, 255, 255, 0.7);
+  max-width: 720px;
+}
+
+.collections-empty h1 {
+  background: none !important;
+  -webkit-text-fill-color: #fff !important;
+  color: #fff !important;
+}

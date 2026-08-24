@@ -32,6 +32,7 @@ const Navbar = () => {
   const isTVShowsActive =
     location.pathname.startsWith('/tvshow') ||
     (location.pathname === '/' && typeParam === 'tvshows');
+  const isCollectionsActive = location.pathname.startsWith('/collections');
 
   const isHomePage = location.pathname === '/';
 
@@ -93,6 +94,10 @@ const Navbar = () => {
     navigate('/?type=tvshows');
   };
 
+  const goCollections = () => {
+    navigate('/collections');
+  };
+
   const handleLogout = () => {
     logout();
     setAccountOpen(false);
@@ -148,6 +153,13 @@ const Navbar = () => {
             onClick={goTVShows}
           >
             TV Shows
+          </button>
+          <button
+            type="button"
+            className={`nav-link ${isCollectionsActive ? 'is-active' : ''}`}
+            onClick={goCollections}
+          >
+            Collections
           </button>
         </div>
 

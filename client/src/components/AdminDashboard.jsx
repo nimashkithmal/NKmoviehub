@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import ContactManagement from './ContactManagement';
 import AdminManagement from './AdminManagement';
 import BannerManagement from './BannerManagement';
+import CollectionManagement from './CollectionManagement';
+import './AdminDashboard.css';
 
 const AdminDashboard = () => {
   const { user, token } = useAuth();
@@ -60,7 +62,7 @@ const AdminDashboard = () => {
     averageRating: 0,
     newTVShowsThisMonth: 0
   });
-  const [activeTab, setActiveTab] = useState('admins'); // 'admins', 'movies', 'tvshows', 'banners', or 'contacts'
+  const [activeTab, setActiveTab] = useState('admins'); // 'admins', 'movies', 'tvshows', 'banners', 'collections', or 'contacts'
 
   // Notification system
   const showNotification = (message, type = 'info') => {
@@ -953,7 +955,7 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div>
+    <div className="admin-dashboard">
       <div className="dashboard-header">
         <h1>Admin Dashboard</h1>
         <p>Welcome back, {user?.name}!</p>
@@ -985,6 +987,12 @@ const AdminDashboard = () => {
         >
           Home Banner
         </button>
+        <button
+          className={`tab-button ${activeTab === 'collections' ? 'active' : ''}`}
+          onClick={() => setActiveTab('collections')}
+        >
+          Collections
+        </button>
         <button 
           className={`tab-button ${activeTab === 'contacts' ? 'active' : ''}`}
           onClick={() => setActiveTab('contacts')}
@@ -994,7 +1002,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Statistics Cards */}
-      {activeTab !== 'banners' && activeTab !== 'admins' && activeTab !== 'contacts' && (
+      {activeTab !== 'banners' && activeTab !== 'admins' && activeTab !== 'contacts' && activeTab !== 'collections' && (
       <div className="dashboard-stats">
         {activeTab === 'tvshows' ? (
           <>
@@ -2033,6 +2041,14 @@ const AdminDashboard = () => {
       {/* Home Page Banner Section */}
       {activeTab === 'banners' && (
         <BannerManagement
+          token={token}
+          showNotification={showNotification}
+        />
+      )}
+
+      {/* Collections Section */}
+      {activeTab === 'collections' && (
+        <CollectionManagement
           token={token}
           showNotification={showNotification}
         />

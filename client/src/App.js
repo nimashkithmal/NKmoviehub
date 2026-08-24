@@ -10,6 +10,7 @@ import AddMovie from './components/AddMovie';
 import AddTVShow from './components/AddTVShow';
 import MovieDetail from './components/MovieDetail';
 import TVShowDetail from './components/TVShowDetail';
+import Collections from './components/Collections';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import './App.css';
@@ -44,6 +45,7 @@ function App() {
             <main className="container">
               <Routes>
                 <Route path="/" element={<Home />} />
+                <Route path="/collections" element={<Collections />} />
                 <Route path="/movie/:id" element={<MovieDetail />} />
                 <Route path="/tvshow/:id" element={<TVShowDetail />} />
                 <Route path="/login" element={<Login />} />

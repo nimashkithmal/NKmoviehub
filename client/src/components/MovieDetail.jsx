@@ -109,30 +109,9 @@ const MovieDetail = () => {
       )}
 
       <div className="md-page">
-        <section className="md-hero">
-          <img className="md-hero-img" src={backdropSrc} alt="" aria-hidden="true" />
-          <div className="md-hero-fade" aria-hidden="true" />
-
-          {movie.movieUrl && (
-            <div className="md-watch-stage">
-              <button
-                type="button"
-                className="md-watch-cta"
-                onClick={() => setShowPlayer(true)}
-              >
-                <span className="md-watch-cta-ring" aria-hidden="true" />
-                <span className="md-watch-cta-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                </span>
-                <span className="md-watch-cta-label">
-                  <span className="md-watch-cta-kicker">Stream now</span>
-                  <span className="md-watch-cta-title">Watch Now</span>
-                </span>
-              </button>
-            </div>
-          )}
+        <section className="md-hero" aria-hidden="true">
+          <img className="md-hero-img" src={backdropSrc} alt="" />
+          <div className="md-hero-fade" />
         </section>
 
         <button
@@ -217,6 +196,23 @@ const MovieDetail = () => {
                 </div>
               )}
             </div>
+
+            {movie.movieUrl && (
+              <aside className="md-side">
+                <button
+                  type="button"
+                  className="md-watch-hero"
+                  onClick={() => setShowPlayer(true)}
+                >
+                  <span className="md-watch-hero-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </span>
+                  <span className="md-watch-hero-label">Watch Now</span>
+                </button>
+              </aside>
+            )}
           </div>
         </section>
       </div>
