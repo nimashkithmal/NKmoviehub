@@ -1,15 +1,17 @@
 #!/bin/bash
 #
-# One deploy = one version bump.
+# Optional local deploy helper.
 #
-# Bumps the build number shown in the menu, commits everything, pushes (which
-# runs the EC2 workflow when server/** changed), then ships the frontend to
-# Vercel.
+# On every push to main, GitHub Actions already bumps the menu version
+# (1.0.0.1 -> 1.0.0.2 -> ...). This script also bumps once before push so the
+# version lands in the same commit as your changes; CI then skips a second bump.
 #
 # Usage:
 #   ./deploy.sh                          # commit message defaults to the version
 #   ./deploy.sh "feat: season tabs"      # your own commit message
 #   ./deploy.sh "fix: api" --no-vercel   # backend only, skip the Vercel step
+#
+# Or just: git push origin main  — CI will bump and commit chore: release vX.Y.Z.N
 #
 set -euo pipefail
 

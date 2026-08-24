@@ -1,0 +1,63 @@
+name: Bump app version
+
+# Every push to main bumps the menu build number: 1.0.0.1 -> 1.0.0.2 -> ...
+# Skips when this commit already changed version.js (e.g. ./deploy.sh bumped it).
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    name: Bump version
+    runs-on: ubuntu-latest
+
+    # Commits made with GITHUB_TOKEN do not re-trigger workflows, so no loop.
+    # Still skip if the push itself already bumped (deploy.sh / manual).
+    if: |
+      !contains(github.event.head_commit.message, 'chore: release v') &&
+      !contains(github.event.head_commit.message, '[skip version]')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Skip if version.js was already changed in this push
+        id: check
+        run: |
+          if git diff --name-only HEAD~1 HEAD | grep -qx 'client/src/version.js'; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "version.js already updated in this commit — skipping."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.already == 'false'
+        with:
+          node-version: '20'
+
+      - name: Bump build number
+        if: steps.check.outputs.already == 'false'
+        id: bump
+        run: |
+          OLD=$(node client/scripts/bump-version.js --print)
+          node client/scripts/bump-version.js
+          NEW=$(node client/scripts/bump-version.js --print)
+          echo "old=$OLD" >> "$GITHUB_OUTPUT"
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
+          echo "Bumped v$OLD -> v$NEW"
+
+      - name: Commit and push
+        if: steps.check.outputs.already == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src/version.js
+          git commit -m "chore: release v${{ steps.bump.outputs.new }}"
+          git push
