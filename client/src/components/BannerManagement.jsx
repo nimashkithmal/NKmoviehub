@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import ImageCropper from './ImageCropper';
 
 const API_URL = '/api/banners';
+
+// Matches BANNER_TRANSFORMATION on the server, so a cropped image arrives at
+// Cloudinary already the right shape and is not cropped a second time
+const BANNER_WIDTH = 1920;
+const BANNER_HEIGHT = 800;
 
 /**
  * Home page banner section of the admin dashboard.
@@ -18,6 +24,8 @@ const BannerManagement = ({ token, showNotification }) => {
   const [imageFile, setImageFile] = useState('');
   const [imagePreview, setImagePreview] = useState('');
   const [imageUrlInput, setImageUrlInput] = useState('');
+  // The image currently open in the cropper; null when it is closed
+  const [cropSource, setCropSource] = useState(null);
 
   const authHeaders = useCallback(() => ({
     'Content-Type': 'application/json',
@@ -55,6 +63,7 @@ const BannerManagement = ({ token, showNotification }) => {
     setImageFile('');
     setImagePreview('');
     setImageUrlInput('');
+    setCropSource(null);
   };
 
   const handleFileChange = (e) => {
@@ -74,11 +83,18 @@ const BannerManagement = ({ token, showNotification }) => {
 
     const reader = new FileReader();
     reader.onloadend = () => {
+      // Selected straight away, so cancelling the crop still leaves a usable
+      // image; the crop step only refines what is already chosen
       setImageFile(reader.result);
       setImagePreview(reader.result);
       setImageUrlInput('');
+      setCropSource(reader.result);
     };
     reader.readAsDataURL(file);
+
+    // Picking the same file twice fires no change event unless the input is
+    // cleared, which would otherwise leave the cropper closed
+    e.target.value = '';
   };
 
   const handleUrlChange = (e) => {
@@ -86,6 +102,15 @@ const BannerManagement = ({ token, showNotification }) => {
     setImageUrlInput(value);
     setImageFile('');
     setImagePreview(value);
+  };
+
+  const handleCropDone = (croppedDataUri) => {
+    // A cropped image is an upload from here on, even if it started as a URL
+    setImageFile(croppedDataUri);
+    setImagePreview(croppedDataUri);
+    setImageUrlInput('');
+    setCropSource(null);
+    showNotification('Image adjusted. Save the slide to upload it.', 'success');
   };
 
   const handleSubmit = async (e) => {
@@ -212,6 +237,17 @@ const BannerManagement = ({ token, showNotification }) => {
 
   return (
     <div className="card">
+      {cropSource && (
+        <ImageCropper
+          src={cropSource}
+          outputWidth={BANNER_WIDTH}
+          outputHeight={BANNER_HEIGHT}
+          title="Crop the banner image"
+          onDone={handleCropDone}
+          onCancel={() => setCropSource(null)}
+        />
+      )}
+
       <div className="dashboard-header">
         <h2>Home Page Banner</h2>
         <p>
@@ -233,7 +269,10 @@ const BannerManagement = ({ token, showNotification }) => {
             accept="image/*"
             onChange={handleFileChange}
           />
-          <small>Wide images work best; they are resized to 1920×800</small>
+          <small>
+            Wide images work best. Choosing a file opens a crop step so you can
+            pick exactly what shows in the {BANNER_WIDTH}×{BANNER_HEIGHT} banner.
+          </small>
         </div>
 
         <div className="form-group">
@@ -274,6 +313,14 @@ const BannerManagement = ({ token, showNotification }) => {
                 display: 'block'
               }}
             />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setCropSource(imagePreview)}
+              style={{ marginTop: '10px' }}
+            >
+              ✂️ Crop &amp; adjust
+            </button>
           </div>
         )}
 
