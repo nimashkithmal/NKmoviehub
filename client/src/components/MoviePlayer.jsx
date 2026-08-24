@@ -4,6 +4,16 @@ import './MoviePlayer.css';
 // Helper function to detect video URL type
 const getVideoType = (url) => {
   if (!url) return 'unknown';
+
+  // 2Embed / similar iframe embeds
+  if (
+    url.includes('2embed.') ||
+    url.includes('2embed.cc') ||
+    url.includes('/embed/') ||
+    url.includes('/embedtv/')
+  ) {
+    return 'embed';
+  }
   
   // Google Drive URLs
   if (url.includes('drive.google.com')) {
@@ -39,6 +49,19 @@ const getVideoType = (url) => {
   }
   
   return 'unknown';
+};
+
+/** Convert 2embed library links to the playable iframe src */
+const getEmbedPlayableUrl = (url) => {
+  if (!url) return null;
+  // https://www.2embed.skin/movie/969681  →  https://www.2embed.cc/embed/969681
+  const movieMatch = url.match(/2embed\.[^/]+\/movie\/(\d+)/i);
+  if (movieMatch) return `https://www.2embed.cc/embed/${movieMatch[1]}`;
+  const tvMatch = url.match(/2embed\.[^/]+\/tv\/(\d+)/i);
+  if (tvMatch) return `https://www.2embed.cc/embedtv/${tvMatch[1]}`;
+  // Already an embed URL
+  if (url.includes('/embed/') || url.includes('/embedtv/')) return url;
+  return url;
 };
 
 // Helper function to extract Google Drive file ID and convert to playable URL
@@ -132,6 +155,17 @@ const MoviePlayer = ({ movie, onClose }) => {
       } else {
         setHasError(true);
         setErrorMessage('Invalid Google Drive URL. Note: Google Drive videos have embedding restrictions. The file must be: 1) Shared with "Anyone with the link can view", 2) A supported video format, 3) You may need to open it directly in a new tab.');
+        setIsLoading(false);
+      }
+    } else if (type === 'embed') {
+      const playable = getEmbedPlayableUrl(movie.movieUrl);
+      if (playable) {
+        setEmbedUrl(playable);
+        setIsLoading(false);
+        setIsPlaying(true);
+      } else {
+        setHasError(true);
+        setErrorMessage('Invalid embed URL');
         setIsLoading(false);
       }
     } else if (type === 'youtube') {
@@ -394,7 +428,7 @@ const MoviePlayer = ({ movie, onClose }) => {
                 Retry
               </button>
             </div>
-          ) : videoType === 'youtube' || videoType === 'vimeo' || videoType === 'googledrive' ? (
+          ) : videoType === 'youtube' || videoType === 'vimeo' || videoType === 'googledrive' || videoType === 'embed' ? (
             <>
               <iframe
                 ref={iframeRef}

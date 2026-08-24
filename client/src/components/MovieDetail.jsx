@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import MoviePlayer from './MoviePlayer';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 import './MovieDetail.css';
@@ -8,37 +7,30 @@ import './MovieDetail.css';
 const MovieDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, token } = useAuth();
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [userRating, setUserRating] = useState(null);
-  const [ratingLoading, setRatingLoading] = useState(false);
   const [showPlayer, setShowPlayer] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   useEffect(() => {
     fetchMovieDetails();
-    if (isAuthenticated) {
-      fetchUserRating();
-    }
-    setSelectedImageIndex(0); // Reset image index when movie changes
-  }, [id, isAuthenticated, token]);
+    setSelectedImageIndex(0);
+  }, [id]);
 
   const fetchMovieDetails = async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await fetch(`/api/movies/${id}`);
-      
+
       if (!response.ok) {
         throw new Error('Movie not found');
       }
 
       const result = await response.json();
-      
+
       if (result.success) {
         setMovie(result.data.movie);
       } else {
@@ -52,134 +44,34 @@ const MovieDetail = () => {
     }
   };
 
-  const fetchUserRating = async () => {
-    if (!isAuthenticated) return;
-    
-    try {
-      const response = await fetch(`/api/movies/${id}/rating`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        setUserRating(result.data);
-      }
-    } catch (err) {
-      console.error('Error fetching user rating:', err);
+  // Poster gallery only — never include the detail banner
+  const galleryImages = useMemo(() => {
+    if (!movie) return [];
+    const banner = movie.bannerUrl || '';
+    if (movie.images?.length) {
+      return movie.images.filter((url) => url && url !== banner);
     }
-  };
+    if (movie.imageUrl && movie.imageUrl !== banner) return [movie.imageUrl];
+    return [];
+  }, [movie]);
 
-  const handleRateMovie = async (rating, review = '') => {
-    if (!isAuthenticated) {
-      showNotification('Rating is not available right now', 'warning');
-      return;
-    }
-    
-    try {
-      setRatingLoading(true);
-      
-      const response = await fetch(`/api/movies/${id}/rate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ rating, review })
-      });
+  const posterSrc = useMemo(() => {
+    if (!movie) return '';
+    if (galleryImages.length) return galleryImages[selectedImageIndex] || galleryImages[0];
+    if (movie.imageUrl?.startsWith('http')) return movie.imageUrl;
+    return getMoviePlaceholder(movie.title, 400, 600);
+  }, [movie, galleryImages, selectedImageIndex]);
 
-      if (response.ok) {
-        const result = await response.json();
-        setUserRating({
-          rating,
-          review,
-          hasRated: true
-        });
-        setMovie(prev => ({
-          ...prev,
-          averageRating: result.data.movie.averageRating,
-          totalRatings: result.data.movie.totalRatings
-        }));
-        showNotification(result.message || 'Rating submitted successfully!', 'success');
-      } else {
-        const errorData = await response.json();
-        showNotification(errorData.message || 'Failed to rate movie', 'error');
-      }
-    } catch (err) {
-      console.error('Error rating movie:', err);
-      showNotification('Failed to rate movie. Please try again.', 'error');
-    } finally {
-      setRatingLoading(false);
-    }
-  };
+  const backdropSrc = useMemo(() => {
+    if (!movie) return '';
+    if (movie.bannerUrl) return movie.bannerUrl;
+    return posterSrc;
+  }, [movie, posterSrc]);
 
-  const handleDownload = async () => {
-    if (!movie || !movie.movieUrl) {
-      showNotification('Movie URL not available', 'error');
-      return;
-    }
-
-    try {
-      setDownloading(true);
-      
-      // Check if it's YouTube or Vimeo (can't download directly)
-      if (movie.movieUrl.includes('youtube.com') || movie.movieUrl.includes('youtu.be') || movie.movieUrl.includes('vimeo.com')) {
-        showNotification('Direct download is not available for YouTube or Vimeo videos', 'warning');
-        setDownloading(false);
-        return;
-      }
-
-      const downloadUrl = `/api/movies/${id}/download`;
-      
-      // Create a temporary anchor element and trigger download
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `${movie.title.replace(/[^a-z0-9]/gi, '_')}.mp4`;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      showNotification('Download started!', 'success');
-      
-      // Reset downloading state after a delay
-      setTimeout(() => {
-        setDownloading(false);
-      }, 2000);
-
-    } catch (err) {
-      console.error('Error downloading movie:', err);
-      showNotification(err.message || 'Failed to download movie. Please try again.', 'error');
-      setDownloading(false);
-    }
-  };
-
-  const showNotification = (message, type = 'info') => {
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.innerHTML = `
-      <div class="notification-content">
-        <span class="notification-message">${message}</span>
-        <button class="notification-close">×</button>
-      </div>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 5000);
-    
-    const closeBtn = notification.querySelector('.notification-close');
-    closeBtn.addEventListener('click', () => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    });
-  };
+  const genreList = useMemo(() => {
+    if (!movie?.genre) return [];
+    return movie.genre.split(/[,|/]/).map((g) => g.trim()).filter(Boolean);
+  }, [movie]);
 
   if (loading) {
     return (
@@ -198,10 +90,7 @@ const MovieDetail = () => {
         <div className="error-state">
           <h3>Error loading movie</h3>
           <p>{error || 'Movie not found'}</p>
-          <button 
-            className="btn btn-primary"
-            onClick={() => navigate('/')}
-          >
+          <button className="btn btn-primary" onClick={() => navigate('/')}>
             Back to Home
           </button>
         </div>
@@ -209,178 +98,130 @@ const MovieDetail = () => {
     );
   }
 
+  const imdb = Number(movie.imdbRating) || 0;
+  const userAvg = Number(movie.averageRating) || 0;
+  const ratingValue = imdb || userAvg;
+
   return (
     <>
       {showPlayer && movie && (
-        <MoviePlayer 
-          movie={movie} 
-          onClose={() => setShowPlayer(false)} 
-        />
+        <MoviePlayer movie={movie} onClose={() => setShowPlayer(false)} />
       )}
-      
-      <div className="movie-detail-container">
-        <button 
-          className="back-button"
+
+      <div className="md-page">
+        <section className="md-hero">
+          <img className="md-hero-img" src={backdropSrc} alt="" aria-hidden="true" />
+          <div className="md-hero-fade" aria-hidden="true" />
+
+          {movie.movieUrl && (
+            <div className="md-watch-stage">
+              <button
+                type="button"
+                className="md-watch-cta"
+                onClick={() => setShowPlayer(true)}
+              >
+                <span className="md-watch-cta-ring" aria-hidden="true" />
+                <span className="md-watch-cta-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </span>
+                <span className="md-watch-cta-label">
+                  <span className="md-watch-cta-kicker">Stream now</span>
+                  <span className="md-watch-cta-title">Watch Now</span>
+                </span>
+              </button>
+            </div>
+          )}
+        </section>
+
+        <button
+          type="button"
+          className="md-icon-btn md-back"
           onClick={() => navigate(-1)}
+          aria-label="Go back"
         >
-          ← Back
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+          </svg>
         </button>
 
-      <div className="movie-detail-content">
-        <div className="movie-detail-poster">
-          {/* Image Gallery */}
-          {movie.images && movie.images.length > 0 ? (
-            <div className="movie-image-gallery">
-              <div className="movie-main-image">
-                <img 
-                  src={movie.images[selectedImageIndex] || movie.images[0]} 
+        <section className="md-body">
+          <div className="md-body-inner">
+            <div className="md-poster-col">
+              <div className="md-poster">
+                <img
+                  src={posterSrc}
                   alt={movie.title}
                   onError={(e) => handleImageError(e, movie.title)}
                 />
               </div>
-              {movie.images.length > 1 && (
-                <div className="movie-image-thumbnails">
-                  {movie.images.map((imageUrl, index) => (
-                    <div 
-                      key={index}
-                      className={`thumbnail-item ${index === selectedImageIndex ? 'active' : ''}`}
+
+              {galleryImages.length > 1 && (
+                <div className="md-thumbs">
+                  {galleryImages.map((imageUrl, index) => (
+                    <button
+                      key={imageUrl + index}
+                      type="button"
+                      className={`md-thumb${index === selectedImageIndex ? ' is-active' : ''}`}
                       onClick={() => setSelectedImageIndex(index)}
                     >
-                      <img 
-                        src={imageUrl} 
+                      <img
+                        src={imageUrl}
                         alt={`${movie.title} ${index + 1}`}
                         onError={(e) => handleImageError(e, `${movie.title} ${index + 1}`)}
                       />
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
             </div>
-          ) : movie.imageUrl ? (
-            <img 
-              src={movie.imageUrl.startsWith('http') ? movie.imageUrl : getMoviePlaceholder(movie.title, 400, 600)} 
-              alt={movie.title}
-              onError={(e) => handleImageError(e, movie.title)}
-            />
-          ) : (
-            <img 
-              src={getMoviePlaceholder(movie.title, 400, 600)} 
-              alt={movie.title}
-              className="movie-placeholder-img"
-            />
-          )}
-        </div>
 
-        <div className="movie-detail-info">
-          <h1 className="movie-detail-title">{movie.title}</h1>
-          
-          <div className="movie-detail-meta">
-            <div className="meta-item">
-              <span className="meta-label">Year:</span>
-              <span className="meta-value">{movie.year}</span>
-            </div>
-            {movie.genre && (
-              <div className="meta-item">
-                <span className="meta-label">Genre:</span>
-                <span className="meta-value">{movie.genre}</span>
-              </div>
-            )}
-            {movie.releaseDate && (
-              <div className="meta-item">
-                <span className="meta-label">Release Date:</span>
-                <span className="meta-value">{movie.releaseDate}</span>
-              </div>
-            )}
-            {movie.source && (
-              <div className="meta-item">
-                <span className="meta-label">Source:</span>
-                <span className="meta-value">{movie.source}</span>
-              </div>
-            )}
-            {movie.subtitle && (
-              <div className="meta-item">
-                <span className="meta-label">Subtitle:</span>
-                <span className="meta-value">{movie.subtitle}</span>
-              </div>
-            )}
-          </div>
+            <div className="md-copy">
+              <h1 className="md-title">{movie.title}</h1>
 
-          {movie.description && (
-            <div className="movie-detail-description">
-              <h3>Description</h3>
-              <p>{movie.description}</p>
-            </div>
-          )}
-
-          <div className="movie-detail-ratings">
-            <div className="rating-item">
-              <span className="rating-label">🎬 IMDB Rating:</span>
-              <span className="rating-value">
-                {movie.imdbRating ? movie.imdbRating.toFixed(1) : 'N/A'}/10
-              </span>
-            </div>
-            <div className="rating-item">
-              <span className="rating-label">⭐ User Rating:</span>
-              <span className="rating-value">
-                {movie.averageRating ? movie.averageRating.toFixed(1) : '0.0'}/10
-                <span className="rating-count">
-                  ({movie.totalRatings || 0} ratings)
-                </span>
-              </span>
-            </div>
-          </div>
-
-          {isAuthenticated && (
-            <div className="movie-detail-rate-section">
-              <h3>Rate this movie</h3>
-              {userRating?.hasRated && (
-                <p className="user-rating-note">
-                  Your rating: {userRating.rating}/10
-                </p>
-              )}
-              <div className="rating-stars-large">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(star => (
-                  <button
-                    key={star}
-                    type="button"
-                    className={`rating-star-large ${userRating?.rating >= star ? 'active' : ''}`}
-                    onClick={() => handleRateMovie(star)}
-                    disabled={ratingLoading}
-                  >
-                    {star}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="movie-detail-actions">
-            {movie.movieUrl && (
-              <>
-                <button
-                  className="btn btn-primary btn-large"
-                  onClick={() => setShowPlayer(true)}
-                >
-                  🎬 Watch Movie
-                </button>
-                {!movie.movieUrl.includes('youtube.com') && !movie.movieUrl.includes('youtu.be') && !movie.movieUrl.includes('vimeo.com') && (
-                  <button
-                    className="btn btn-secondary btn-large"
-                    onClick={handleDownload}
-                    disabled={downloading}
-                  >
-                    {downloading ? '⬇️ Downloading...' : '⬇️ Download Movie'}
-                  </button>
+              <div className="md-meta-row">
+                {ratingValue > 0 && (
+                  <span className="md-meta-item">
+                    <svg className="md-meta-star" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 2l2.9 6.9L22 9.2l-5.5 4.8L18.2 22 12 18.3 5.8 22l1.7-8L2 9.2l7.1-.3L12 2z" />
+                    </svg>
+                    {ratingValue.toFixed(1)}
+                    {movie.totalRatings > 0 ? ` (${movie.totalRatings.toLocaleString()})` : ''}
+                  </span>
                 )}
-              </>
-            )}
+                {movie.year && (
+                  <span className="md-meta-item">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
+                    </svg>
+                    {movie.year}
+                  </span>
+                )}
+              </div>
+
+              {genreList.length > 0 && (
+                <div className="md-genres">
+                  {genreList.map((g) => (
+                    <span key={g} className="md-genre-pill">
+                      {g}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {movie.description && (
+                <div className="md-overview">
+                  <h2 className="md-overview-title">Overview</h2>
+                  <p>{movie.description}</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+        </section>
       </div>
     </>
   );
 };
 
 export default MovieDetail;
-

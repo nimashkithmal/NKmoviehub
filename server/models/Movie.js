@@ -30,6 +30,11 @@ const movieSchema = new mongoose.Schema({
       return this.imageUrl ? [this.imageUrl] : [];
     }
   },
+  // Wide backdrop for the movie detail page — never shown in poster gallery
+  bannerUrl: {
+    type: String,
+    default: null
+  },
   movieUrl: {
     type: String,
     required: [true, 'Movie URL is required'],

@@ -30,6 +30,11 @@ const tvShowSchema = new mongoose.Schema({
       return this.imageUrl ? [this.imageUrl] : [];
     }
   },
+  // Wide backdrop for the detail page — never shown in poster gallery
+  bannerUrl: {
+    type: String,
+    default: null
+  },
   showUrl: {
     type: String,
     required: false,

@@ -505,7 +505,7 @@ router.put('/:id', protect, restrictToAdmin, [
       });
     }
 
-    const { title, year, description, genre, showUrl, imdbRating, imageFile, imageFiles, images, episodeCount, numberOfSeasons, episodes } = req.body;
+    const { title, year, description, genre, showUrl, imdbRating, imageFile, imageFiles, images, episodeCount, numberOfSeasons, episodes, bannerFile, bannerUrl, clearBanner } = req.body;
     const updateData = {};
 
     if (title !== undefined && title !== null && title !== '') updateData.title = title;
@@ -589,6 +589,27 @@ router.put('/:id', protect, restrictToAdmin, [
           success: false,
           message: 'Failed to upload new image'
         });
+      }
+    }
+
+    // Detail-page banner (separate from poster gallery)
+    if (clearBanner === true || clearBanner === 'true') {
+      updateData.bannerUrl = null;
+    } else if (bannerFile && typeof bannerFile === 'string') {
+      try {
+        updateData.bannerUrl = await uploadPoster(bannerFile, { type: 'banner' });
+      } catch (uploadError) {
+        console.error('TV banner upload error:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload detail banner: ' + uploadError.message
+        });
+      }
+    } else if (bannerUrl && typeof bannerUrl === 'string' && bannerUrl.trim().startsWith('http')) {
+      try {
+        updateData.bannerUrl = await uploadPoster(bannerUrl.trim(), { type: 'banner' });
+      } catch (uploadError) {
+        updateData.bannerUrl = bannerUrl.trim();
       }
     }
 

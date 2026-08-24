@@ -407,17 +407,19 @@ router.post('/', protect, restrictToAdmin, [
       fullBody: JSON.stringify(req.body, null, 2)
     });
 
-    const { title, year, description, genre, movieUrl, imdbRating, imageFile, imageFiles } = req.body;
+    const { title, year, description, genre, movieUrl, imdbRating, imageFile, imageFiles, imageUrl: providedImageUrl } = req.body;
     
-    // Custom validation: at least one image must be provided (either imageFile or imageFiles)
-    if (!imageFile && (!imageFiles || !Array.isArray(imageFiles) || imageFiles.length === 0)) {
+    // Custom validation: poster file(s) OR a direct image URL (e.g. TMDB) — video never goes to Cloudinary
+    const hasImageFile = imageFile || (imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0);
+    const hasImageUrl = providedImageUrl && String(providedImageUrl).trim().startsWith('http');
+    if (!hasImageFile && !hasImageUrl) {
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
         errors: [{
           type: 'field',
           value: undefined,
-          msg: 'At least one image is required (imageFile or imageFiles)',
+          msg: 'At least one image is required (imageFile, imageFiles, or imageUrl)',
           path: 'imageFile',
           location: 'body'
         }]
@@ -464,9 +466,8 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
     
-    // Validate required fields - check for either imageFile or imageFiles
-    const hasImageFile = imageFile || (imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0);
-    if (!title || !year || !description || !genre || !movieUrl || imdbRating === undefined || !hasImageFile) {
+    // Validate required fields (poster file upload OR direct imageUrl — video stays as movieUrl only)
+    if (!title || !year || !description || !genre || !movieUrl || imdbRating === undefined || (!hasImageFile && !hasImageUrl)) {
       console.log('Missing required fields:', { 
         title: title || 'MISSING', 
         year: year || 'MISSING', 
@@ -474,8 +475,8 @@ router.post('/', protect, restrictToAdmin, [
         genre: genre || 'MISSING', 
         movieUrl: movieUrl || 'MISSING', 
         imdbRating: imdbRating !== undefined ? imdbRating : 'MISSING', 
-        hasImageFile: !!imageFile,
-        hasImageFiles: !!(imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0)
+        hasImageFile: !!hasImageFile,
+        hasImageUrl: !!hasImageUrl
       });
       
       const missingFields = [];
@@ -485,7 +486,7 @@ router.post('/', protect, restrictToAdmin, [
       if (!genre) missingFields.push('genre');
       if (!movieUrl) missingFields.push('movieUrl');
       if (imdbRating === undefined) missingFields.push('imdbRating');
-      if (!hasImageFile) missingFields.push('imageFile or imageFiles');
+      if (!hasImageFile && !hasImageUrl) missingFields.push('imageFile, imageFiles, or imageUrl');
       
       return res.status(400).json({
         success: false,
@@ -493,45 +494,46 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
 
-    // Upload images to Cloudinary
+    // Poster: use direct URL when given (no Cloudinary). Upload files only when provided.
+    // movieUrl is never uploaded to Cloudinary — embed/stream links stay as-is.
     let imageUrl;
     let images = [];
-    
-    // Support both single imageFile and array of imageFiles
-    const imagesToUpload = imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0 
-      ? imageFiles 
-      : (imageFile ? [imageFile] : []);
-    
-    if (imagesToUpload.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'At least one image is required'
-      });
-    }
-    
-    try {
-      console.log('Starting Cloudinary upload for', imagesToUpload.length, 'image(s)...');
-      
-      // Upload every image to Cloudinary; anything unusable is skipped
-      images = await uploadPosters(imagesToUpload, { type: 'movie' });
 
-      // First image doubles as imageUrl (for backward compatibility)
-      imageUrl = images[0];
-      
-      if (images.length === 0) {
+    if (hasImageUrl && !hasImageFile) {
+      imageUrl = String(providedImageUrl).trim();
+      images = [imageUrl];
+    } else {
+      const imagesToUpload = imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0
+        ? imageFiles
+        : (imageFile ? [imageFile] : []);
+
+      if (imagesToUpload.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'Failed to upload any valid images'
+          message: 'At least one image is required'
         });
       }
-      
-      console.log(`Successfully uploaded ${images.length} image(s)`);
-    } catch (uploadError) {
-      console.error('Cloudinary upload error:', uploadError);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to upload images: ' + uploadError.message
-      });
+
+      try {
+        console.log('Starting Cloudinary upload for', imagesToUpload.length, 'image(s)...');
+        images = await uploadPosters(imagesToUpload, { type: 'movie' });
+        imageUrl = images[0];
+
+        if (images.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Failed to upload any valid images'
+          });
+        }
+
+        console.log(`Successfully uploaded ${images.length} image(s)`);
+      } catch (uploadError) {
+        console.error('Cloudinary upload error:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload images: ' + uploadError.message
+        });
+      }
     }
 
     // Create new movie
@@ -600,7 +602,7 @@ router.put('/:id', protect, restrictToAdmin, [
       });
     }
 
-    const { title, year, description, genre, movieUrl, imdbRating, imageFile, imageFiles, images } = req.body;
+    const { title, year, description, genre, movieUrl, imdbRating, imageFile, imageFiles, images, bannerFile, bannerUrl, clearBanner } = req.body;
     
     console.log('Received update request body:', {
       title,
@@ -719,6 +721,28 @@ router.put('/:id', protect, restrictToAdmin, [
       // Explicitly set empty if all images were removed
       updateData.imageUrl = null;
       updateData.images = [];
+    }
+
+    // Detail-page banner (separate from poster gallery — never stored in images[])
+    if (clearBanner === true || clearBanner === 'true') {
+      updateData.bannerUrl = null;
+    } else if (bannerFile && typeof bannerFile === 'string') {
+      try {
+        updateData.bannerUrl = await uploadPoster(bannerFile, { type: 'banner' });
+      } catch (uploadError) {
+        console.error('Banner upload error:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload detail banner: ' + uploadError.message
+        });
+      }
+    } else if (bannerUrl && typeof bannerUrl === 'string' && bannerUrl.trim().startsWith('http')) {
+      try {
+        updateData.bannerUrl = await uploadPoster(bannerUrl.trim(), { type: 'banner' });
+      } catch (uploadError) {
+        // Fall back to storing the remote URL directly if Cloudinary rejects it
+        updateData.bannerUrl = bannerUrl.trim();
+      }
     }
 
     console.log('Final updateData before database update:', JSON.stringify(updateData, null, 2));

@@ -28,6 +28,9 @@ const AdminDashboard = () => {
   });
   const [movieImageFiles, setMovieImageFiles] = useState([]);
   const [movieImagePreviews, setMovieImagePreviews] = useState([]);
+  const [movieBannerFile, setMovieBannerFile] = useState(null);
+  const [movieBannerPreview, setMovieBannerPreview] = useState('');
+  const [movieClearBanner, setMovieClearBanner] = useState(false);
   const [tvShowFormData, setTVShowFormData] = useState({
     title: '',
     year: new Date().getFullYear(),
@@ -40,6 +43,9 @@ const AdminDashboard = () => {
   });
   const [tvShowImageFiles, setTVShowImageFiles] = useState([]);
   const [tvShowImagePreviews, setTVShowImagePreviews] = useState([]);
+  const [tvShowBannerFile, setTVShowBannerFile] = useState(null);
+  const [tvShowBannerPreview, setTVShowBannerPreview] = useState('');
+  const [tvShowClearBanner, setTVShowClearBanner] = useState(false);
   const [tvShowEpisodes, setTVShowEpisodes] = useState([]);
   const [tvShowSeasons, setTVShowSeasons] = useState([]);
   const [movieStats, setMovieStats] = useState({
@@ -205,15 +211,15 @@ const AdminDashboard = () => {
       movieUrl: movie.movieUrl || '',
       imdbRating: movie.imdbRating || 0
     });
-    // Set existing images as previews
-    if (movie.images && movie.images.length > 0) {
-      setMovieImagePreviews(movie.images);
-    } else if (movie.imageUrl) {
-      setMovieImagePreviews([movie.imageUrl]);
-    } else {
-      setMovieImagePreviews([]);
-    }
-    setMovieImageFiles([]); // Reset new files
+    // Gallery posters only — never include the detail banner
+    const gallery = (movie.images && movie.images.length > 0)
+      ? movie.images.filter((url) => url && url !== movie.bannerUrl)
+      : (movie.imageUrl && movie.imageUrl !== movie.bannerUrl ? [movie.imageUrl] : []);
+    setMovieImagePreviews(gallery);
+    setMovieImageFiles([]);
+    setMovieBannerPreview(movie.bannerUrl || '');
+    setMovieBannerFile(null);
+    setMovieClearBanner(false);
   };
 
   const handleUpdateMovie = async () => {
@@ -288,6 +294,12 @@ const AdminDashboard = () => {
         // All images were removed
         updateData.images = [];
       }
+
+      if (movieClearBanner) {
+        updateData.clearBanner = true;
+      } else if (movieBannerFile) {
+        updateData.bannerFile = await convertImageToBase64(movieBannerFile);
+      }
       
       console.log('Updating movie with data:', updateData);
       console.log('IMDB Rating in updateData:', updateData.imdbRating, 'Type:', typeof updateData.imdbRating);
@@ -321,12 +333,39 @@ const AdminDashboard = () => {
         });
         setMovieImageFiles([]);
         setMovieImagePreviews([]);
+        setMovieBannerFile(null);
+        setMovieBannerPreview('');
+        setMovieClearBanner(false);
         showNotification('Movie updated successfully!', 'success');
       }
     } catch (err) {
       console.error('Error updating movie:', err);
       showNotification(`Error updating movie: ${err.message}`, 'error');
     }
+  };
+
+  const handleMovieBannerChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showNotification('Please select a valid image file', 'error');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      showNotification('Banner image should be less than 8MB', 'error');
+      return;
+    }
+    setMovieBannerFile(file);
+    setMovieClearBanner(false);
+    const reader = new FileReader();
+    reader.onload = () => setMovieBannerPreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const clearMovieBanner = () => {
+    setMovieBannerFile(null);
+    setMovieBannerPreview('');
+    setMovieClearBanner(true);
   };
 
   const handleMovieImageChange = (e) => {
@@ -634,15 +673,15 @@ const AdminDashboard = () => {
       numberOfSeasons: numberOfSeasons
     });
     
-    // Set existing images as previews
-    if (tvShow.images && tvShow.images.length > 0) {
-      setTVShowImagePreviews(tvShow.images);
-    } else if (tvShow.imageUrl) {
-      setTVShowImagePreviews([tvShow.imageUrl]);
-    } else {
-      setTVShowImagePreviews([]);
-    }
-    setTVShowImageFiles([]); // Reset new files
+    // Gallery posters only — never include the detail banner
+    const gallery = (tvShow.images && tvShow.images.length > 0)
+      ? tvShow.images.filter((url) => url && url !== tvShow.bannerUrl)
+      : (tvShow.imageUrl && tvShow.imageUrl !== tvShow.bannerUrl ? [tvShow.imageUrl] : []);
+    setTVShowImagePreviews(gallery);
+    setTVShowImageFiles([]);
+    setTVShowBannerPreview(tvShow.bannerUrl || '');
+    setTVShowBannerFile(null);
+    setTVShowClearBanner(false);
     
     // Group episodes by seasons
     if (tvShow.episodes && tvShow.episodes.length > 0 && numberOfSeasons > 0) {
@@ -769,6 +808,12 @@ const AdminDashboard = () => {
         }
       }
 
+      if (tvShowClearBanner) {
+        updateData.clearBanner = true;
+      } else if (tvShowBannerFile) {
+        updateData.bannerFile = await convertImageToBase64(tvShowBannerFile);
+      }
+
       // Remove showUrl if episodes are provided and showUrl is empty
       if (episodesData.length > 0 && !tvShowFormData.showUrl.trim()) {
         delete updateData.showUrl;
@@ -813,6 +858,9 @@ const AdminDashboard = () => {
         setTVShowSeasons([]);
         setTVShowImageFiles([]);
         setTVShowImagePreviews([]);
+        setTVShowBannerFile(null);
+        setTVShowBannerPreview('');
+        setTVShowClearBanner(false);
         showNotification('TV Show updated successfully!', 'success');
       } else {
         throw new Error(result.message || 'Update failed');
@@ -821,6 +869,30 @@ const AdminDashboard = () => {
       console.error('Error updating TV show:', err);
       showNotification(`Error updating TV show: ${err.message}`, 'error');
     }
+  };
+
+  const handleTVShowBannerChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showNotification('Please select a valid image file', 'error');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      showNotification('Banner image should be less than 8MB', 'error');
+      return;
+    }
+    setTVShowBannerFile(file);
+    setTVShowClearBanner(false);
+    const reader = new FileReader();
+    reader.onload = () => setTVShowBannerPreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const clearTVShowBanner = () => {
+    setTVShowBannerFile(null);
+    setTVShowBannerPreview('');
+    setTVShowClearBanner(true);
   };
 
   const handleDeleteTVShow = async (tvShowId) => {
@@ -1489,6 +1561,33 @@ const AdminDashboard = () => {
               />
             </div>
             <div className="form-group">
+              <label>Detail Page Banner (wide image)</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleMovieBannerChange}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+              />
+              <small>Shown as the backdrop on the movie page. Not added to the poster gallery.</small>
+              {movieBannerPreview && !movieClearBanner && (
+                <div style={{ marginTop: '10px', position: 'relative', maxWidth: '420px' }}>
+                  <img
+                    src={movieBannerPreview}
+                    alt="Detail banner preview"
+                    style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #444' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ marginTop: '8px', padding: '5px 10px', fontSize: '12px' }}
+                    onClick={clearMovieBanner}
+                  >
+                    Remove Banner
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="form-group">
               <label>Add More Images (Optional)</label>
               <input
                 type="file"
@@ -1497,7 +1596,7 @@ const AdminDashboard = () => {
                 onChange={handleMovieImageChange}
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
               />
-              <small>Select one or more images to add to the movie. Max 5MB per image.</small>
+              <small>Select one or more poster images to add to the movie. Max 5MB per image.</small>
             </div>
             {movieImagePreviews.length > 0 && (
               <div className="form-group">
@@ -1561,6 +1660,9 @@ const AdminDashboard = () => {
                   setEditingMovie(null);
                   setMovieImageFiles([]);
                   setMovieImagePreviews([]);
+                  setMovieBannerFile(null);
+                  setMovieBannerPreview('');
+                  setMovieClearBanner(false);
                 }}
               >
                 Cancel
@@ -1771,6 +1873,33 @@ const AdminDashboard = () => {
               />
             </div>
             <div className="form-group">
+              <label>Detail Page Banner (wide image)</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleTVShowBannerChange}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+              />
+              <small>Shown as the backdrop on the TV show page. Not added to the poster gallery.</small>
+              {tvShowBannerPreview && !tvShowClearBanner && (
+                <div style={{ marginTop: '10px', position: 'relative', maxWidth: '420px' }}>
+                  <img
+                    src={tvShowBannerPreview}
+                    alt="Detail banner preview"
+                    style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #444' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ marginTop: '8px', padding: '5px 10px', fontSize: '12px' }}
+                    onClick={clearTVShowBanner}
+                  >
+                    Remove Banner
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="form-group">
               <label>Add More Images (Optional)</label>
               <input
                 type="file"
@@ -1812,7 +1941,7 @@ const AdminDashboard = () => {
                 }}
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
               />
-              <small>Select one or more images to add to the TV show. Max 5MB per image.</small>
+              <small>Select one or more poster images to add to the TV show. Max 5MB per image.</small>
             </div>
             {tvShowImagePreviews.length > 0 && (
               <div className="form-group">
@@ -1884,6 +2013,9 @@ const AdminDashboard = () => {
                   setEditingTVShow(null);
                   setTVShowImageFiles([]);
                   setTVShowImagePreviews([]);
+                  setTVShowBannerFile(null);
+                  setTVShowBannerPreview('');
+                  setTVShowClearBanner(false);
                 }}
               >
                 Cancel

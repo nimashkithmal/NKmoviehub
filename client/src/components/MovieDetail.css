@@ -521,3 +521,471 @@
   }
 }
 
+
+/* ========== Detail page — MovieAI-style hero + overlapping poster ========== */
+.md-page {
+  position: relative;
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  margin-top: calc(-1 * (72px + var(--space-xl)));
+  margin-bottom: calc(-1 * var(--space-xl));
+  min-height: 100vh;
+  background: #050505;
+  color: #fff;
+  overflow-x: hidden;
+}
+
+/* Full-screen banner — content starts below; scroll to read */
+.md-hero {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+.md-hero-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+}
+
+.md-hero-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28%;
+  background: linear-gradient(180deg, transparent 0%, rgba(5, 5, 5, 0.55) 45%, #050505 100%);
+  pointer-events: none;
+}
+
+.md-icon-btn {
+  position: absolute;
+  z-index: 5;
+  top: calc(72px + 0.85rem);
+  width: 2.5rem;
+  height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background 0.15s ease;
+}
+
+.md-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.md-icon-btn svg {
+  width: 1.3rem;
+  height: 1.3rem;
+  fill: currentColor;
+}
+
+.md-back {
+  left: clamp(1rem, 3vw, 2.25rem);
+}
+
+/* Watch Now — alone on banner watermark zone (left) */
+.md-watch-stage {
+  position: absolute;
+  z-index: 4;
+  left: clamp(1.25rem, 5vw, 4rem);
+  bottom: calc(25vh + 1.5rem);
+  pointer-events: none;
+}
+
+.md-watch-cta {
+  pointer-events: auto;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 4.5rem;
+  padding: 0.85rem 1.85rem 0.85rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  backdrop-filter: blur(4px) saturate(1.1);
+  -webkit-backdrop-filter: blur(4px) saturate(1.1);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.md-watch-cta:hover {
+  transform: translateY(-3px) scale(1.02);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.md-watch-cta:active {
+  transform: translateY(-1px) scale(0.99);
+}
+
+.md-watch-cta-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  animation: mdWatchPulse 2.4s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes mdWatchPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  70% {
+    transform: scale(1.06);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.06);
+    opacity: 0;
+  }
+}
+
+.md-watch-cta-icon {
+  flex-shrink: 0;
+  width: 3.35rem;
+  height: 3.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.md-watch-cta-icon svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  fill: currentColor;
+  margin-left: 2px;
+}
+
+.md-watch-cta-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding-right: 0.55rem;
+}
+
+.md-watch-cta-kicker {
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.md-watch-cta-title {
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: #fff;
+}
+
+/* Content starts ~1/4 up from banner bottom — blurred dark watermark panel */
+.md-body {
+  position: relative;
+  z-index: 3;
+  margin-top: -25vh;
+  padding: 2rem clamp(1.25rem, 5vw, 4rem) 3.5rem;
+  padding-right: clamp(1rem, 8vw, 6rem);
+  background: rgba(5, 5, 5, 0.18);
+  backdrop-filter: blur(3px) saturate(1.05);
+  -webkit-backdrop-filter: blur(3px) saturate(1.05);
+  box-shadow: 0 -24px 48px rgba(0, 0, 0, 0.35);
+}
+
+.md-body-inner {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 34rem);
+  gap: 1.75rem;
+  align-items: start;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  margin-right: auto;
+  justify-content: start;
+}
+
+.md-poster-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.md-poster {
+  width: 220px;
+  max-width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+  background: #1a1a1a;
+}
+
+.md-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.md-thumbs {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  max-width: 220px;
+}
+
+.md-thumb {
+  flex: 0 0 52px;
+  height: 78px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 0.35rem;
+  overflow: hidden;
+  cursor: pointer;
+  opacity: 0.7;
+  background: transparent;
+}
+
+.md-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.md-thumb.is-active,
+.md-thumb:hover {
+  opacity: 1;
+  border-color: #e50914;
+}
+
+.md-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding-top: 0.35rem;
+  text-align: left;
+  align-items: flex-start;
+}
+
+.md-title {
+  margin: 0;
+  font-size: clamp(1.9rem, 3.6vw, 2.85rem);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  /* Override global h1 purple gradient */
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: #fff !important;
+  color: #fff !important;
+}
+
+.md-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.15rem;
+}
+
+.md-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.md-meta-item svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: rgba(255, 255, 255, 0.72);
+  flex-shrink: 0;
+}
+
+.md-meta-item .md-meta-star {
+  fill: #f5c518;
+}
+
+.md-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.md-genre-pill {
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: none;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: #2a2a2a;
+}
+
+.md-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.1rem;
+}
+
+.md-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.85rem;
+  padding: 0.65rem 1.35rem;
+  border-radius: 0.7rem;
+  border: none;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.md-btn svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+}
+
+.md-btn-primary {
+  background: #fff;
+  color: #111;
+}
+
+.md-btn-primary:hover {
+  transform: translateY(-1px);
+  background: #f0f0f0;
+}
+
+.md-btn-secondary {
+  background: #2a2a2a;
+  color: #fff;
+}
+
+.md-btn-secondary:hover {
+  background: #363636;
+}
+
+.md-overview {
+  margin-top: 0.45rem;
+}
+
+.md-overview-title {
+  margin: 0 0 0.5rem !important;
+  font-size: 1.2rem !important;
+  font-weight: 700 !important;
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: #fff !important;
+  color: #fff !important;
+}
+
+.md-overview p {
+  margin: 0;
+  max-width: 34rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.98rem;
+  line-height: 1.65;
+}
+
+@media (max-width: 860px) {
+  .md-hero {
+    height: 100vh;
+    min-height: 100vh;
+  }
+
+  .md-watch-stage {
+    bottom: calc(22vh + 0.85rem);
+    left: clamp(1rem, 4vw, 2rem);
+  }
+
+  .md-watch-cta {
+    min-height: 3.85rem;
+    gap: 0.75rem;
+    padding: 0.65rem 1.35rem 0.65rem 0.65rem;
+  }
+
+  .md-watch-cta-icon {
+    width: 2.85rem;
+    height: 2.85rem;
+  }
+
+  .md-watch-cta-title {
+    font-size: 1.2rem;
+  }
+
+  .md-body {
+    margin-top: -22vh;
+    padding-top: 1.25rem;
+    background: rgba(5, 5, 5, 0.18);
+    backdrop-filter: blur(3px) saturate(1.05);
+    -webkit-backdrop-filter: blur(3px) saturate(1.05);
+  }
+
+  .md-body-inner {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .md-poster {
+    width: 180px;
+  }
+
+  .md-poster-col,
+  .md-thumbs {
+    align-items: flex-start;
+    max-width: 100%;
+  }
+
+  .md-copy {
+    align-items: flex-start;
+    padding-top: 0.25rem;
+  }
+
+  .md-meta-row,
+  .md-genres,
+  .md-actions {
+    justify-content: flex-start;
+  }
+
+  .md-title {
+    font-size: clamp(1.65rem, 6.5vw, 2.2rem);
+  }
+}
