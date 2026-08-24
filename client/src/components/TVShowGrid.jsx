@@ -1,107 +1,38 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import CatalogCard from './CatalogCard';
+import './CatalogGrid.css';
 
 const TVShowGrid = ({ tvShows, searchTerm = '', selectedGenre = '', selectedYear = '' }) => {
   const navigate = useNavigate();
 
-  // Check if there are active filters and no results
   const hasSearchTerm = searchTerm && searchTerm.trim().length > 0;
   const hasGenreFilter = selectedGenre && selectedGenre.trim().length > 0;
   const hasYearFilter = selectedYear && selectedYear.trim().length > 0;
   const hasActiveFilters = hasSearchTerm || hasGenreFilter || hasYearFilter;
   const hasTVShows = tvShows && tvShows.length > 0;
-  const displayTVShows = hasTVShows ? tvShows : [];
-  const showNoTVShowsMessage = hasActiveFilters && !hasTVShows;
 
   return (
-    <div className="movie-grid-container">
-      {showNoTVShowsMessage ? (
+    <div className="catalog-grid-wrap">
+      {!hasTVShows ? (
         <div className="no-movies-message">
-          <div className="no-movies-icon">📺</div>
           <h3>No TV Shows Available</h3>
           <p>
-            {hasSearchTerm && hasGenreFilter && hasYearFilter && 
-              `Sorry, we couldn't find any TV shows matching "${searchTerm}" in ${selectedGenre} genre from ${selectedYear}.`}
-            {hasSearchTerm && hasGenreFilter && !hasYearFilter && 
-              `Sorry, we couldn't find any TV shows matching "${searchTerm}" in ${selectedGenre} genre.`}
-            {hasSearchTerm && !hasGenreFilter && hasYearFilter && 
-              `Sorry, we couldn't find any TV shows matching "${searchTerm}" from ${selectedYear}.`}
-            {hasSearchTerm && !hasGenreFilter && !hasYearFilter && 
-              `Sorry, we couldn't find any TV show matching "${searchTerm}".`}
-            {!hasSearchTerm && hasGenreFilter && hasYearFilter && 
-              `Sorry, we couldn't find any ${selectedGenre} TV shows from ${selectedYear}.`}
-            {!hasSearchTerm && hasGenreFilter && !hasYearFilter && 
-              `Sorry, we couldn't find any ${selectedGenre} TV shows.`}
-            {!hasSearchTerm && !hasGenreFilter && hasYearFilter && 
-              `Sorry, we couldn't find any TV shows from ${selectedYear}.`}
+            {hasActiveFilters
+              ? 'Nothing matched these filters. Try another genre or year.'
+              : 'No TV shows in the catalog yet.'}
           </p>
-          <p className="no-movies-suggestion">Please try different filters or browse our collection.</p>
         </div>
       ) : (
-        <div className="movie-grid">
-          {displayTVShows.map((tvShow, index) => (
-          <div 
-            key={tvShow._id} 
-            className="movie-poster-card"
-            onClick={() => navigate(`/tvshow/${tvShow._id}`)}
-            style={{ cursor: 'pointer', '--index': index }}
-          >
-            {/* TV Show Poster */}
-            <div className="movie-poster">
-              {tvShow.images && tvShow.images.length > 0 ? (
-                <img 
-                  src={tvShow.images[0]} 
-                  alt={tvShow.title}
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    const placeholder = e.target.parentElement.querySelector('.movie-placeholder') || document.createElement('div');
-                    placeholder.className = 'movie-placeholder';
-                    placeholder.innerHTML = '<span>📺</span>';
-                    if (!e.target.parentElement.querySelector('.movie-placeholder')) {
-                      e.target.parentElement.appendChild(placeholder);
-                    } else {
-                      e.target.parentElement.querySelector('.movie-placeholder').style.display = 'flex';
-                    }
-                  }}
-                />
-              ) : tvShow.imageUrl ? (
-                <img 
-                  src={tvShow.imageUrl} 
-                  alt={tvShow.title}
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    const placeholder = e.target.parentElement.querySelector('.movie-placeholder') || document.createElement('div');
-                    placeholder.className = 'movie-placeholder';
-                    placeholder.innerHTML = '<span>📺</span>';
-                    if (!e.target.parentElement.querySelector('.movie-placeholder')) {
-                      e.target.parentElement.appendChild(placeholder);
-                    } else {
-                      e.target.parentElement.querySelector('.movie-placeholder').style.display = 'flex';
-                    }
-                  }}
-                />
-              ) : (
-                <div className="movie-placeholder">
-                  <span>📺</span>
-                </div>
-              )}
-            </div>
-            
-            {/* TV Show Info */}
-            <div className="movie-info">
-              <h3 className="movie-title-main">{tvShow.title}</h3>
-              <div className="movie-year-main">{tvShow.year}</div>
-              {tvShow.genre && (
-                <div className="movie-genre-main">{tvShow.genre}</div>
-              )}
-              {tvShow.imdbRating && (
-                <div className="movie-imdb-main">
-                  📺 IMDB: {tvShow.imdbRating.toFixed(1)}/10
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+        <div className="catalog-grid">
+          {tvShows.map((tvShow) => (
+            <CatalogCard
+              key={tvShow._id}
+              item={tvShow}
+              kind="tvshow"
+              onClick={() => navigate(`/tvshow/${tvShow._id}`)}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -109,4 +40,3 @@ const TVShowGrid = ({ tvShows, searchTerm = '', selectedGenre = '', selectedYear
 };
 
 export default TVShowGrid;
-

@@ -9,7 +9,7 @@
 
 main {
   flex: 1;
-  padding: var(--space-xl) 0;
+  padding: calc(72px + var(--space-xl)) 0 var(--space-xl);
   width: 100%;
   max-width: 100%;
 }
@@ -2290,17 +2290,19 @@ html {
 }
 
 .footer-brand .subtitle-underline {
-  height: 1px;
-  width: 100%;
-  background: var(--white);
-  opacity: 0.8;
-  border-radius: 1px;
-  transition: all 0.3s ease;
+  display: block;
+  height: 2px;
+  width: 42px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e50914 0%, #ef4444 55%, transparent 100%);
+  box-shadow: 0 0 10px rgba(229, 9, 20, 0.45);
+  opacity: 1;
+  transition: width 0.3s ease, box-shadow 0.3s ease;
 }
 
 .footer-brand:hover .subtitle-underline {
-  opacity: 1;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+  width: 64px;
+  box-shadow: 0 0 14px rgba(229, 9, 20, 0.65);
 }
 
 .logo-text {
@@ -2726,14 +2728,22 @@ html {
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
-  background: var(--gradient-primary);
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(229, 9, 20, 0.55) 18%,
+    rgba(255, 255, 255, 0.35) 50%,
+    rgba(229, 9, 20, 0.55) 82%,
+    transparent 100%
+  );
   border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+  box-shadow: 0 0 12px rgba(229, 9, 20, 0.25);
 }
 
 /* Enhanced Card Styling */
 .card:hover {
-  border-color: var(--primary-color);
+  border-color: rgba(229, 9, 20, 0.35);
 }
 
 /* Enhanced Loading States */
