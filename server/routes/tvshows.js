@@ -6,20 +6,90 @@ const { protect, restrictToAdmin } = require('../middleware/auth');
 // Cloudinary is configured once in utils/cloudinaryUpload; every poster that
 // reaches the database is uploaded there first
 const { cloudinary, uploadPoster, uploadPosters } = require('../utils/cloudinaryUpload');
+const {
+  extractTvTmdbId,
+  getTrendingTmdbIds,
+  orderDocsByTrending
+} = require('../utils/trendingPopular');
+const {
+  promoteReleasedComingSoon,
+  sortComingSoon,
+  filterUpcomingOnly
+} = require('../utils/comingSoon');
 
 const router = express.Router();
+
+const parseMoneyInput = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, value);
+  const raw = String(value).trim().replace(/[$,\s]/g, '');
+  if (!raw) return null;
+  const match = raw.match(/^([\d.]+)\s*([kmb])?$/i);
+  if (!match) {
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.max(0, n) : null;
+  }
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) return null;
+  const suffix = (match[2] || '').toLowerCase();
+  const mult = suffix === 'b' ? 1e9 : suffix === 'm' ? 1e6 : suffix === 'k' ? 1e3 : 1;
+  return Math.max(0, amount * mult);
+};
+
+const normalizeTrailerUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const id =
+    raw.match(/youtube\.com\/watch\?[^#]*v=([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    raw.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    raw.match(/youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    null;
+  if (id) return `https://www.youtube.com/embed/${id}`;
+  return raw.slice(0, 500);
+};
+
+const pickMetaFields = (body = {}) => {
+  const meta = {};
+  if (body.tagline !== undefined) meta.tagline = String(body.tagline || '').trim().slice(0, 300);
+  if (body.director !== undefined) meta.director = String(body.director || '').trim().slice(0, 200);
+  if (body.language !== undefined) meta.language = String(body.language || '').trim().slice(0, 80);
+  if (body.releaseStatus !== undefined) meta.releaseStatus = String(body.releaseStatus || '').trim().slice(0, 80);
+  if (body.releaseDate !== undefined) meta.releaseDate = String(body.releaseDate || '').trim().slice(0, 40);
+  if (body.trailerUrl !== undefined) meta.trailerUrl = normalizeTrailerUrl(body.trailerUrl);
+  if (body.runtime !== undefined && body.runtime !== null && body.runtime !== '') {
+    const runtime = parseInt(body.runtime, 10);
+    meta.runtime = Number.isFinite(runtime) && runtime >= 0 ? runtime : null;
+  }
+  if (body.budget !== undefined) meta.budget = parseMoneyInput(body.budget);
+  if (body.revenue !== undefined) meta.revenue = parseMoneyInput(body.revenue);
+  return meta;
+};
 
 // @route   GET /api/tvshows
 // @desc    Get all TV shows (public)
 // @access  Public
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 1000, search = '', genre = '', year = '', status = 'active' } = req.query;
+    const { page = 1, limit = 1000, search = '', genre = '', year = '', status = 'active', sort = 'latest' } = req.query;
     
-    // Build filter object
-    const filter = { status: 'active' };
+    // Public catalog: active by default; Coming Soon category uses status=coming_soon
+    // Search should also find Coming Soon titles
+    const hasSearch = Boolean(search && String(search).trim());
+    const comingSoonOnly = status === 'coming_soon';
+    if (comingSoonOnly) {
+      await promoteReleasedComingSoon(TVShow);
+    }
+
+    const filter = {};
+    if (comingSoonOnly) {
+      filter.status = 'coming_soon';
+    } else if (hasSearch) {
+      filter.status = { $in: ['active', 'coming_soon'] };
+    } else {
+      filter.status = 'active';
+    }
     
-    if (search && search.trim()) {
+    if (hasSearch) {
       filter.$or = [
         { title: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
@@ -28,7 +98,11 @@ router.get('/', async (req, res) => {
     }
     
     if (genre) {
-      filter.genre = { $regex: genre, $options: 'i' };
+      const escaped = String(genre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.genre = {
+        $regex: `(^|[,|/]\\s*)${escaped}(?=\\s*[,|/]|$)`,
+        $options: 'i'
+      };
     }
     
     if (year) {
@@ -36,14 +110,74 @@ router.get('/', async (req, res) => {
     }
 
     // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(2000, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    // Coming Soon browse: only future releases, nearest first
+    if (comingSoonOnly) {
+      const candidates = await TVShow.find(filter)
+        .populate('addedBy', 'name email')
+        .lean();
+      const upcoming = filterUpcomingOnly(candidates);
+      const total = upcoming.length;
+      const tvShows = upcoming.slice(skip, skip + limitNum);
+
+      return res.json({
+        success: true,
+        data: {
+          tvShows,
+          pagination: {
+            currentPage: pageNum,
+            totalPages: Math.max(1, Math.ceil(total / limitNum) || 1),
+            totalTVShows: total,
+            tvShowsPerPage: limitNum
+          }
+        }
+      });
+    }
+
+    // Popular: order by 2embed trending TV (only titles we have in DB)
+    if (sort === 'popular') {
+      const trendingIds = await getTrendingTmdbIds('tv');
+      const candidates = await TVShow.find(filter)
+        .select('_id showUrl episodes.episodeUrl')
+        .lean();
+      const orderedIds = orderDocsByTrending(candidates, trendingIds, extractTvTmdbId).map(
+        (doc) => doc._id
+      );
+      const total = orderedIds.length;
+      const pageIds = orderedIds.slice(skip, skip + limitNum);
+      const found = await TVShow.find({ _id: { $in: pageIds } })
+        .populate('addedBy', 'name email')
+        .lean();
+      const byId = new Map(found.map((s) => [String(s._id), s]));
+      const tvShows = pageIds.map((id) => byId.get(String(id))).filter(Boolean);
+
+      return res.json({
+        success: true,
+        data: {
+          tvShows,
+          pagination: {
+            currentPage: pageNum,
+            totalPages: Math.max(1, Math.ceil(total / limitNum) || 1),
+            totalTVShows: total,
+            tvShowsPerPage: limitNum
+          }
+        }
+      });
+    }
+
+    let sortSpec = { year: -1, createdAt: -1 };
+    if (sort === 'rated') sortSpec = { imdbRating: -1, averageRating: -1, createdAt: -1 };
+    else if (sort === 'az') sortSpec = { title: 1 };
     
     // Get TV shows with pagination
     const tvShows = await TVShow.find(filter)
       .populate('addedBy', 'name email')
-      .sort({ createdAt: -1 })
+      .sort(sortSpec)
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(limitNum);
     
     // Get total count for pagination
     const total = await TVShow.countDocuments(filter);
@@ -53,10 +187,10 @@ router.get('/', async (req, res) => {
       data: {
         tvShows,
         pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / parseInt(limit)),
+          currentPage: pageNum,
+          totalPages: Math.max(1, Math.ceil(total / limitNum)),
           totalTVShows: total,
-          tvShowsPerPage: parseInt(limit)
+          tvShowsPerPage: limitNum
         }
       }
     });
@@ -89,7 +223,11 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
     }
     
     if (genre) {
-      filter.genre = { $regex: genre, $options: 'i' };
+      const escaped = String(genre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.genre = {
+        $regex: `(^|[,|/]\\s*)${escaped}(?=\\s*[,|/]|$)`,
+        $options: 'i'
+      };
     }
     
     if (status) {
@@ -135,8 +273,18 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
 // @access  Public
 router.get('/filters', async (req, res) => {
   try {
-    // Get unique genres
-    const genres = await TVShow.distinct('genre', { status: 'active' });
+    // Split combined strings like "Action, Adventure, Comedy" into single genres
+    const rawGenres = await TVShow.distinct('genre', { status: 'active' });
+    const genreSet = new Set();
+    for (const value of rawGenres) {
+      String(value || '')
+        .split(/[,|/]+/)
+        .forEach((g) => {
+          const cleaned = g.trim();
+          if (cleaned) genreSet.add(cleaned);
+        });
+    }
+    const genres = Array.from(genreSet).sort((a, b) => a.localeCompare(b));
     
     // Get unique years, sorted descending
     const years = await TVShow.distinct('year', { status: 'active' });
@@ -145,7 +293,7 @@ router.get('/filters', async (req, res) => {
     res.json({
       success: true,
       data: {
-        genres: genres.sort(),
+        genres,
         years: sortedYears
       }
     });
@@ -158,13 +306,39 @@ router.get('/filters', async (req, res) => {
   }
 });
 
+// @route   GET /api/tvshows/coming-soon
+// @desc    TV shows marked Coming Soon for the home catalog row
+// @access  Public
+router.get('/coming-soon', async (req, res) => {
+  try {
+    await promoteReleasedComingSoon(TVShow);
+
+    const tvShows = await TVShow.find({ status: 'coming_soon' })
+      .select('-__v')
+      .lean();
+
+    const upcoming = filterUpcomingOnly(tvShows);
+
+    res.json({
+      success: true,
+      data: { tvShows: upcoming.slice(0, 40) }
+    });
+  } catch (error) {
+    console.error('Get coming soon TV shows error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching coming soon TV shows'
+    });
+  }
+});
+
 // @route   GET /api/tvshows/:id
 // @desc    Get TV show by ID (public)
 // @access  Public
 router.get('/:id', async (req, res) => {
   try {
     // Prevent special routes from being matched as IDs
-    const specialRoutes = ['admin', 'filters'];
+    const specialRoutes = ['admin', 'filters', 'coming-soon'];
     if (specialRoutes.includes(req.params.id)) {
       return res.status(404).json({
         success: false,
@@ -357,6 +531,7 @@ router.post('/', protect, restrictToAdmin, [
     }
 
     // Create new TV show
+    const meta = pickMetaFields(req.body);
     const tvShowData = {
       title,
       year: parseInt(year),
@@ -369,6 +544,7 @@ router.post('/', protect, restrictToAdmin, [
       imdbRating: parseFloat(imdbRating),
       imageUrl,
       images: images, // Store array of images
+      ...meta,
       addedBy: req.user.id
     };
     
@@ -482,7 +658,7 @@ router.put('/:id', protect, restrictToAdmin, [
       });
     }
 
-    const { title, year, description, genre, showUrl, imdbRating, imageFile, imageFiles, images, episodeCount, numberOfSeasons, episodes } = req.body;
+    const { title, year, description, genre, showUrl, imdbRating, imageFile, imageFiles, images, episodeCount, numberOfSeasons, episodes, bannerFile, bannerUrl, clearBanner } = req.body;
     const updateData = {};
 
     if (title !== undefined && title !== null && title !== '') updateData.title = title;
@@ -492,6 +668,7 @@ router.put('/:id', protect, restrictToAdmin, [
     if (showUrl !== undefined && showUrl !== null && showUrl !== '') updateData.showUrl = showUrl;
     if (imdbRating !== undefined && imdbRating !== null && imdbRating !== '') updateData.imdbRating = parseFloat(imdbRating);
     if (numberOfSeasons !== undefined && numberOfSeasons !== null && numberOfSeasons !== '') updateData.numberOfSeasons = parseInt(numberOfSeasons);
+    Object.assign(updateData, pickMetaFields(req.body));
     
     // Handle episodes if provided
     if (episodes && Array.isArray(episodes)) {
@@ -566,6 +743,27 @@ router.put('/:id', protect, restrictToAdmin, [
           success: false,
           message: 'Failed to upload new image'
         });
+      }
+    }
+
+    // Detail-page banner (separate from poster gallery)
+    if (clearBanner === true || clearBanner === 'true') {
+      updateData.bannerUrl = null;
+    } else if (bannerFile && typeof bannerFile === 'string') {
+      try {
+        updateData.bannerUrl = await uploadPoster(bannerFile, { type: 'banner' });
+      } catch (uploadError) {
+        console.error('TV banner upload error:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload detail banner: ' + uploadError.message
+        });
+      }
+    } else if (bannerUrl && typeof bannerUrl === 'string' && bannerUrl.trim().startsWith('http')) {
+      try {
+        updateData.bannerUrl = await uploadPoster(bannerUrl.trim(), { type: 'banner' });
+      } catch (uploadError) {
+        updateData.bannerUrl = bannerUrl.trim();
       }
     }
 
@@ -652,7 +850,11 @@ router.patch('/:id/status', protect, restrictToAdmin, async (req, res) => {
       });
     }
 
-    const newStatus = tvShow.status === 'active' ? 'inactive' : 'active';
+    const allowed = ['active', 'inactive', 'coming_soon'];
+    const requested = req.body?.status;
+    const newStatus = allowed.includes(requested)
+      ? requested
+      : (tvShow.status === 'active' ? 'inactive' : 'active');
     tvShow.status = newStatus;
     await tvShow.save();
 

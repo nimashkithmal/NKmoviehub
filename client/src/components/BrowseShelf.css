@@ -1,0 +1,394 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+
+/*
+  NK browse shelf — inspired by catalog UX (type switch + chips),
+  but its own layout: editorial title, underline tabs, square chips.
+  Not a clone of any third-party browse page.
+*/
+
+.browse-shelf {
+  --bs-bg: #0f0f0f;
+  --bs-panel: #171717;
+  --bs-line: rgba(255, 255, 255, 0.1);
+  --bs-muted: #9ca3af;
+  --bs-text: #f5f5f5;
+  --bs-accent: #e50914;
+  font-family: 'Outfit', system-ui, sans-serif;
+  color: var(--bs-text);
+  background:
+    radial-gradient(ellipse 70% 40% at 0% 0%, rgba(229, 9, 20, 0.08), transparent 55%),
+    var(--bs-bg);
+  margin: calc(-1 * (72px + var(--space-xl))) calc(-1 * var(--space-lg)) 0;
+  padding: calc(72px + 1.5rem) 1rem 2rem;
+  min-height: 70vh;
+}
+
+@media (min-width: 768px) {
+  .browse-shelf {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+}
+
+.browse-shelf-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.browse-shelf-meta {
+  margin: 0;
+  color: var(--bs-muted);
+  font-size: 0.88rem;
+}
+
+.browse-shelf-meta-solo {
+  font-size: 0.95rem;
+}
+
+.browse-shelf-meta strong {
+  color: #e5e5e5;
+  font-weight: 600;
+}
+
+.browse-shelf-clear {
+  border: 1px solid var(--bs-line);
+  background: transparent;
+  color: #d4d4d8;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.55rem 0.9rem;
+  border-radius: 0.45rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.browse-shelf-clear:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.browse-shelf-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.browse-filters-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(229, 9, 20, 0.45);
+  background: rgba(229, 9, 20, 0.08);
+  color: #fecaca;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 0.55rem 0.95rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.browse-filters-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.browse-filters-btn:hover,
+.browse-filters-btn.is-open {
+  background: rgba(229, 9, 20, 0.16);
+  border-color: rgba(229, 9, 20, 0.75);
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(229, 9, 20, 0.18);
+}
+
+.browse-filters-btn.has-active {
+  color: #fff;
+}
+
+.browse-filters-count {
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--bs-accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.browse-filters-panel {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  margin-bottom: 0;
+  transition: max-height 0.35s ease, opacity 0.25s ease, margin 0.25s ease;
+}
+
+.browse-filters-panel.is-open {
+  max-height: 420px;
+  opacity: 1;
+  margin-bottom: 1rem;
+}
+
+.browse-filters-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 1rem 1.25rem;
+  background: var(--bs-panel);
+  border: 1px solid var(--bs-line);
+  border-radius: 0.85rem;
+  padding: 1rem 1.1rem 1.15rem;
+}
+
+.browse-filters-heading {
+  margin: 0 0 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.browse-filters-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+}
+
+/* Type switch — underline tabs, not filled white pills */
+.browse-type-tabs {
+  display: flex;
+  gap: 0.15rem;
+  border-bottom: 1px solid var(--bs-line);
+  margin-bottom: 1.1rem;
+}
+
+.browse-type-tab {
+  position: relative;
+  border: none;
+  background: none;
+  color: var(--bs-muted);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.7rem 1.1rem 0.85rem;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.browse-type-tab:hover {
+  color: #e5e5e5;
+}
+
+.browse-type-tab.is-active {
+  color: #fff;
+}
+
+.browse-type-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0.85rem;
+  right: 0.85rem;
+  bottom: -1px;
+  height: 2px;
+  background: var(--bs-accent);
+  border-radius: 2px 2px 0 0;
+  box-shadow: 0 0 10px rgba(229, 9, 20, 0.55);
+}
+
+/* Sort row */
+.browse-sort-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.browse-sort-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-right: 0.25rem;
+}
+
+.browse-sort-chip {
+  border: 1px solid var(--bs-line);
+  background: rgba(255, 255, 255, 0.03);
+  color: #d4d4d8;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.browse-sort-chip:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.browse-sort-chip.is-active {
+  background: rgba(229, 9, 20, 0.14);
+  border-color: rgba(229, 9, 20, 0.65);
+  color: #fff;
+  box-shadow: inset 3px 0 0 var(--bs-accent);
+}
+
+/* Genre / year chips (inside filters panel) */
+.browse-chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--bs-line);
+  background: transparent;
+  color: #c4c4c4;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.38rem 0.75rem;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.browse-chip:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.browse-chip.is-active {
+  background: #fff;
+  border-color: #fff;
+  color: #111;
+  font-weight: 700;
+}
+
+.browse-active-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.15rem 0 1.1rem;
+}
+
+.browse-active-note span {
+  font-size: 0.75rem;
+  color: #a1a1aa;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--bs-line);
+  border-radius: 0.35rem;
+  padding: 0.25rem 0.55rem;
+}
+
+.browse-shelf-body {
+  margin-top: 0.5rem;
+}
+
+.browse-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--bs-line);
+}
+
+.browse-page-btn {
+  min-width: 2.35rem;
+  height: 2.35rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--bs-line);
+  border-radius: 0.45rem;
+  background: rgba(255, 255, 255, 0.03);
+  color: #d4d4d8;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.browse-page-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.browse-page-btn.is-active {
+  background: var(--bs-accent);
+  border-color: var(--bs-accent);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(229, 9, 20, 0.35);
+}
+
+.browse-page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.browse-page-next {
+  padding-inline: 0.9rem;
+}
+
+.browse-page-ellipsis {
+  color: #6b7280;
+  padding: 0 0.15rem;
+  user-select: none;
+}
+
+.browse-shelf .movie-grid-container {
+  padding: 0;
+}
+
+.browse-shelf .loading-state,
+.browse-shelf .error-state {
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .browse-filters-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .browse-shelf {
+    padding-top: calc(72px + 1rem);
+  }
+
+  .browse-type-tab {
+    flex: 1;
+    text-align: center;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .browse-shelf-actions {
+    width: 100%;
+  }
+
+  .browse-filters-btn,
+  .browse-shelf-clear {
+    flex: 1;
+    justify-content: center;
+  }
+}

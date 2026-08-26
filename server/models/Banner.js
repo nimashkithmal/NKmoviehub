@@ -1,11 +1,9 @@
 const mongoose = require('mongoose');
 
 /**
- * A single slide in the home page slideshow.
- *
- * The image always lives on Cloudinary under the home page banner folder;
- * publicId is kept so the image can be removed from Cloudinary when the slide
- * is deleted or its image is replaced.
+ * Home banner slide.
+ * imageUrl = uploaded artwork (not the poster).
+ * Link exactly one of: movie OR tvShow.
  */
 const bannerSchema = new mongoose.Schema({
   imageUrl: {
@@ -16,13 +14,22 @@ const bannerSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  movie: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Movie',
+    default: null
+  },
+  tvShow: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'TVShow',
+    default: null
+  },
   title: {
     type: String,
     trim: true,
     maxlength: [100, 'Title cannot exceed 100 characters'],
     default: ''
   },
-  // Lower numbers show first; ties fall back to creation order
   order: {
     type: Number,
     default: 0
@@ -42,5 +49,14 @@ const bannerSchema = new mongoose.Schema({
 });
 
 bannerSchema.index({ status: 1, order: 1 });
+
+bannerSchema.pre('validate', function validateLink(next) {
+  const hasMovie = Boolean(this.movie);
+  const hasTvShow = Boolean(this.tvShow);
+  if (!hasMovie && !hasTvShow) {
+    this.invalidate('movie', 'Select a movie or a TV show for this banner');
+  }
+  next();
+});
 
 module.exports = mongoose.model('Banner', bannerSchema);

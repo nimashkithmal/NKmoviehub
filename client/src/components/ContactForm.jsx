@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const ContactForm = () => {
+const ContactForm = ({ compact = false, onDone }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -96,6 +96,9 @@ const ContactForm = () => {
           message: ''
         });
         setValidationErrors({});
+        if (typeof onDone === 'function') {
+          setTimeout(() => onDone(), 1800);
+        }
       } else {
         setError(result.message || 'Failed to send message. Please try again.');
       }
@@ -118,25 +121,25 @@ const ContactForm = () => {
   if (success) {
     return (
       <div className="contact-success">
-        <div className="success-icon">✅</div>
-        <h3>Message Sent Successfully!</h3>
-        <p>Thank you for contacting us. We will get back to you within 24 hours.</p>
+        <div className="success-icon">✓</div>
+        <h3>Message sent</h3>
+        <p>Thanks — we will get back to you within 24 hours.</p>
         <button 
           className="btn btn-primary"
           onClick={() => setSuccess(false)}
         >
-          Send Another Message
+          Send another
         </button>
       </div>
     );
   }
 
   return (
-    <div className="contact-form-container">
+    <div className={`contact-form-container${compact ? ' is-compact' : ''}`}>
       <form onSubmit={handleSubmit} className="contact-form">
         <div className="form-row">
           <div className="form-group">
-            <label htmlFor="name">Full Name *</label>
+            <label htmlFor="name">Name *</label>
             <input
               type="text"
               id="name"
@@ -144,7 +147,7 @@ const ContactForm = () => {
               value={formData.name}
               onChange={handleInputChange}
               className={`form-input ${getFieldError('name') ? 'form-error' : isFieldValid('name') && formData.name ? 'form-valid' : ''}`}
-              placeholder="Enter your full name"
+              placeholder="Your name"
               maxLength={100}
             />
             {getFieldError('name') && (
@@ -153,7 +156,7 @@ const ContactForm = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="email">Email Address *</label>
+            <label htmlFor="email">Email *</label>
             <input
               type="email"
               id="email"
@@ -161,7 +164,7 @@ const ContactForm = () => {
               value={formData.email}
               onChange={handleInputChange}
               className={`form-input ${getFieldError('email') ? 'form-error' : isFieldValid('email') && formData.email ? 'form-valid' : ''}`}
-              placeholder="Enter your email address"
+              placeholder="you@email.com"
               maxLength={100}
             />
             {getFieldError('email') && (
@@ -179,7 +182,7 @@ const ContactForm = () => {
             value={formData.subject}
             onChange={handleInputChange}
             className={`form-input ${getFieldError('subject') ? 'form-error' : isFieldValid('subject') && formData.subject ? 'form-valid' : ''}`}
-            placeholder="What is this about?"
+            placeholder="What's this about?"
             maxLength={200}
           />
           {getFieldError('subject') && (
@@ -195,13 +198,15 @@ const ContactForm = () => {
             value={formData.message}
             onChange={handleInputChange}
             className={`form-textarea ${getFieldError('message') ? 'form-error' : isFieldValid('message') && formData.message ? 'form-valid' : ''}`}
-            placeholder="Tell us more about your inquiry..."
-            rows={6}
+            placeholder="Tell us more..."
+            rows={compact ? 3 : 6}
             maxLength={2000}
           />
-          <div className="character-count">
-            {formData.message.length}/2000 characters
-          </div>
+          {!compact && (
+            <div className="character-count">
+              {formData.message.length}/2000 characters
+            </div>
+          )}
           {getFieldError('message') && (
             <small className="error-message">{getFieldError('message')}</small>
           )}
@@ -209,7 +214,7 @@ const ContactForm = () => {
 
         {error && (
           <div className="error-alert">
-            <span className="error-icon">⚠️</span>
+            <span className="error-icon">!</span>
             {error}
           </div>
         )}
@@ -222,12 +227,10 @@ const ContactForm = () => {
           {loading ? (
             <>
               <span className="loading-spinner"></span>
-              Sending Message...
+              Sending...
             </>
           ) : (
-            <>
-              📧 Send Message
-            </>
+            'Send message'
           )}
         </button>
       </form>

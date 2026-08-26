@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 const API_URL = '/api/users/admins';
 
@@ -9,7 +10,8 @@ const API_URL = '/api/users/admins';
  * emailed to the new admin's address, and the account is only created once
  * that code is entered here.
  */
-const AdminManagement = ({ token, admins = [], onAdminCreated }) => {
+const AdminManagement = ({ token }) => {
+  const { user: currentUser } = useAuth();
   // details -> otp
   const [step, setStep] = useState('details');
   const [formData, setFormData] = useState({
@@ -23,6 +25,39 @@ const AdminManagement = ({ token, admins = [], onAdminCreated }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [admins, setAdmins] = useState([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState('');
+  const [statusUpdatingId, setStatusUpdatingId] = useState(null);
+
+  const currentUserId = String(currentUser?.id || currentUser?._id || '');
+
+  const fetchAdmins = useCallback(async () => {
+    try {
+      setListLoading(true);
+      setListError('');
+      const response = await fetch(API_URL, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setAdmins(data.data.admins || []);
+      } else {
+        setAdmins([]);
+        setListError(data.message || 'Could not load administrators');
+      }
+    } catch (err) {
+      console.error('Error fetching admins:', err);
+      setAdmins([]);
+      setListError('Failed to load administrators. Is the server running?');
+    } finally {
+      setListLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (token) fetchAdmins();
+  }, [token, fetchAdmins]);
 
   // Count the resend cooldown down to zero
   useEffect(() => {
@@ -32,6 +67,35 @@ const AdminManagement = ({ token, admins = [], onAdminCreated }) => {
     return () => clearTimeout(timer);
   }, [cooldown]);
 
+  const handleToggleStatus = async (admin) => {
+    const adminId = admin._id || admin.id;
+    const nextLabel = admin.status === 'active' ? 'deactivate' : 'activate';
+    if (!window.confirm(`Are you sure you want to ${nextLabel} ${admin.name}?`)) {
+      return;
+    }
+
+    try {
+      setStatusUpdatingId(adminId);
+      setError('');
+      setSuccess('');
+      const response = await fetch(`${API_URL}/${adminId}/status`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setSuccess(data.message);
+        await fetchAdmins();
+      } else {
+        setError(data.message || 'Could not update administrator status');
+      }
+    } catch (err) {
+      console.error('Toggle admin status error:', err);
+      setError('Network error. Please try again.');
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  };
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -132,7 +196,7 @@ const AdminManagement = ({ token, admins = [], onAdminCreated }) => {
         setFormData({ name: '', email: '', password: '', confirmPassword: '' });
         setOtp('');
         setCooldown(0);
-        if (onAdminCreated) onAdminCreated();
+        fetchAdmins();
       } else {
         setError(data.message || 'Verification failed.');
       }
@@ -196,7 +260,21 @@ const AdminManagement = ({ token, admins = [], onAdminCreated }) => {
       )}
 
       <h3 style={{ marginTop: '10px' }}>Current Administrators</h3>
-      {admins.length === 0 ? (
+      {listLoading ? (
+        <p style={{ color: '#666' }}>Loading administrators...</p>
+      ) : listError ? (
+        <div className="alert alert-error">
+          {listError}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ marginLeft: '10px' }}
+            onClick={fetchAdmins}
+          >
+            Retry
+          </button>
+        </div>
+      ) : admins.length === 0 ? (
         <div className="empty-state">
           <h3>No administrators found</h3>
         </div>
@@ -207,26 +285,57 @@ const AdminManagement = ({ token, admins = [], onAdminCreated }) => {
               <th>Name</th>
               <th>Email</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {admins.map((admin) => (
-              <tr key={admin._id || admin.id}>
-                <td>{admin.name}</td>
-                <td>{admin.email}</td>
-                <td>
-                  <span style={{
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    backgroundColor: admin.status === 'active' ? '#28a745' : '#6c757d',
-                    color: 'white',
-                    fontSize: '12px'
-                  }}>
-                    {admin.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {admins.map((admin) => {
+              const adminId = String(admin._id || admin.id || '');
+              const isSelf = adminId === currentUserId;
+              const isUpdating = statusUpdatingId === adminId || statusUpdatingId === admin._id;
+
+              return (
+                <tr key={adminId}>
+                  <td>
+                    {admin.name}
+                    {isSelf ? (
+                      <span style={{ marginLeft: '8px', color: '#888', fontSize: '12px' }}>(you)</span>
+                    ) : null}
+                  </td>
+                  <td>{admin.email}</td>
+                  <td>
+                    <span style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: admin.status === 'active' ? '#28a745' : '#6c757d',
+                      color: 'white',
+                      fontSize: '12px'
+                    }}>
+                      {admin.status}
+                    </span>
+                  </td>
+                  <td>
+                    {isSelf ? (
+                      <span style={{ color: '#999', fontSize: '12px' }}>—</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '5px 10px', fontSize: '12px' }}
+                        disabled={isUpdating}
+                        onClick={() => handleToggleStatus(admin)}
+                      >
+                        {isUpdating
+                          ? 'Updating...'
+                          : admin.status === 'active'
+                            ? 'Deactivate'
+                            : 'Activate'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

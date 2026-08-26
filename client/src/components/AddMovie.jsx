@@ -14,6 +14,14 @@ const AddMovie = () => {
     genre: '',
     movieUrl: '',
     imdbRating: 0,
+    director: '',
+    language: '',
+    budget: '',
+    revenue: '',
+    runtime: '',
+    releaseDate: '',
+    tagline: '',
+    trailerUrl: '',
     imageFiles: []
   });
   const [imagePreviews, setImagePreviews] = useState([]);
@@ -169,6 +177,14 @@ const AddMovie = () => {
         genre: formData.genre,
         movieUrl: formData.movieUrl,
         imdbRating: formData.imdbRating,
+        director: formData.director,
+        language: formData.language,
+        budget: formData.budget,
+        revenue: formData.revenue,
+        runtime: formData.runtime,
+        releaseDate: formData.releaseDate,
+        tagline: formData.tagline,
+        trailerUrl: formData.trailerUrl,
         imageFiles: base64Images // Send array of base64 images
       };
       
@@ -422,6 +438,110 @@ const AddMovie = () => {
             {getFieldError('description') && (
               <small className="error-message">{getFieldError('description')}</small>
             )}
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="director">Director</label>
+              <input
+                type="text"
+                id="director"
+                name="director"
+                value={formData.director}
+                onChange={handleInputChange}
+                placeholder="e.g. Joe Russo"
+                maxLength="200"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="language">Language</label>
+              <input
+                type="text"
+                id="language"
+                name="language"
+                value={formData.language}
+                onChange={handleInputChange}
+                placeholder="e.g. English"
+                maxLength="80"
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="budget">Budget</label>
+              <input
+                type="text"
+                id="budget"
+                name="budget"
+                value={formData.budget}
+                onChange={handleInputChange}
+                placeholder="e.g. 356M or 356000000"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="revenue">Revenue</label>
+              <input
+                type="text"
+                id="revenue"
+                name="revenue"
+                value={formData.revenue}
+                onChange={handleInputChange}
+                placeholder="e.g. 2799M or 2799000000"
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="runtime">Runtime (minutes)</label>
+              <input
+                type="number"
+                id="runtime"
+                name="runtime"
+                value={formData.runtime}
+                onChange={handleInputChange}
+                min="0"
+                placeholder="e.g. 181"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="releaseDate">Release Date</label>
+              <input
+                type="text"
+                id="releaseDate"
+                name="releaseDate"
+                value={formData.releaseDate}
+                onChange={handleInputChange}
+                placeholder="e.g. 2019-04-26"
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="tagline">Tagline</label>
+            <input
+              type="text"
+              id="tagline"
+              name="tagline"
+              value={formData.tagline}
+              onChange={handleInputChange}
+              placeholder="Optional short tagline"
+              maxLength="300"
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="trailerUrl">Trailer URL (Watch Trailer)</label>
+            <input
+              type="url"
+              id="trailerUrl"
+              name="trailerUrl"
+              value={formData.trailerUrl}
+              onChange={handleInputChange}
+              placeholder="https://www.youtube.com/watch?v=... or embed URL"
+            />
+            <small>YouTube watch/share/embed links work. Shown as the Watch Trailer button.</small>
           </div>
 
           <div className="form-group">

@@ -54,6 +54,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
   padding: var(--space-lg) var(--space-xl);
   background: var(--gray-200);
   border-bottom: 1px solid var(--gray-300);
@@ -65,9 +66,39 @@
   color: var(--gray-900);
   margin: 0;
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.movie-player-servers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.movie-player-server-btn {
+  border: 1px solid var(--gray-400);
+  background: var(--gray-100);
+  color: var(--gray-800);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.movie-player-server-btn:hover {
+  background: var(--gray-300);
+}
+
+.movie-player-server-btn.is-active {
+  background: #e50914;
+  border-color: #e50914;
+  color: #fff;
 }
 
 .movie-player-close {

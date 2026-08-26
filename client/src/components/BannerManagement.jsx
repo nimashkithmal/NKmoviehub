@@ -1,30 +1,27 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import ImageCropper from './ImageCropper';
 
 const API_URL = '/api/banners';
-
-// Matches BANNER_TRANSFORMATION on the server, so a cropped image arrives at
-// Cloudinary already the right shape and is not cropped a second time
 const BANNER_WIDTH = 1920;
 const BANNER_HEIGHT = 800;
 
 /**
- * Home page banner section of the admin dashboard.
- *
- * Uploaded files are sent as data URIs; the server pushes them to Cloudinary
- * and stores only the resulting URL, so nothing is kept locally.
+ * Admin: add a home banner image and link it to a movie or TV show.
+ * Uploaded image = hero artwork; linked title supplies the details.
  */
 const BannerManagement = ({ token, showNotification }) => {
   const [banners, setBanners] = useState([]);
+  const [movies, setMovies] = useState([]);
+  const [tvShows, setTVShows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [editingBanner, setEditingBanner] = useState(null);
-  const [title, setTitle] = useState('');
+  const [linkType, setLinkType] = useState('movie'); // 'movie' | 'tvshow'
+  const [linkedId, setLinkedId] = useState('');
+  const [catalogQuery, setCatalogQuery] = useState('');
   const [imageFile, setImageFile] = useState('');
   const [imagePreview, setImagePreview] = useState('');
-  const [imageUrlInput, setImageUrlInput] = useState('');
-  // The image currently open in the cropper; null when it is closed
   const [cropSource, setCropSource] = useState(null);
 
   const authHeaders = useCallback(() => ({
@@ -36,15 +33,10 @@ const BannerManagement = ({ token, showNotification }) => {
     try {
       setLoading(true);
       setError(null);
-
       const response = await fetch(`${API_URL}/admin`, { headers: authHeaders() });
       const result = await response.json();
-
-      if (result.success) {
-        setBanners(result.data.banners);
-      } else {
-        setError(result.message || 'Failed to load banners');
-      }
+      if (result.success) setBanners(result.data.banners);
+      else setError(result.message || 'Failed to load banners');
     } catch (err) {
       console.error('Error fetching banners:', err);
       setError('Failed to load banners. Please try again.');
@@ -53,17 +45,73 @@ const BannerManagement = ({ token, showNotification }) => {
     }
   }, [authHeaders]);
 
+  const fetchCatalog = useCallback(async () => {
+    try {
+      const [moviesRes, tvRes] = await Promise.all([
+        fetch('/api/movies?limit=20000', { headers: authHeaders() }),
+        fetch('/api/tvshows?limit=20000', { headers: authHeaders() })
+      ]);
+      const moviesJson = await moviesRes.json();
+      const tvJson = await tvRes.json();
+      if (moviesJson.success) setMovies(moviesJson.data.movies || []);
+      if (tvJson.success) setTVShows(tvJson.data.tvShows || []);
+    } catch (err) {
+      console.error('Error fetching catalog for banners:', err);
+    }
+  }, [authHeaders]);
+
   useEffect(() => {
     fetchBanners();
-  }, [fetchBanners]);
+    fetchCatalog();
+  }, [fetchBanners, fetchCatalog]);
 
   const resetForm = () => {
     setEditingBanner(null);
-    setTitle('');
+    setLinkType('movie');
+    setLinkedId('');
+    setCatalogQuery('');
     setImageFile('');
     setImagePreview('');
-    setImageUrlInput('');
     setCropSource(null);
+  };
+
+  const selectedItem = useMemo(() => {
+    if (!linkedId) return null;
+    if (linkType === 'tvshow') return tvShows.find((t) => t._id === linkedId) || null;
+    return movies.find((m) => m._id === linkedId) || null;
+  }, [linkedId, linkType, movies, tvShows]);
+
+  const filterByQuery = (items) => {
+    const q = catalogQuery.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((item) => {
+      const hay = `${item.title || ''} ${item.year || ''} ${item.genre || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  };
+
+  const filteredMovies = useMemo(() => filterByQuery(movies), [movies, catalogQuery]);
+  const filteredTVShows = useMemo(() => filterByQuery(tvShows), [tvShows, catalogQuery]);
+
+  const selectLink = (type, id) => {
+    setLinkType(type);
+    setLinkedId(id);
+  };
+
+  const handleEdit = (banner) => {
+    setEditingBanner(banner);
+    if (banner.tvShow?._id) {
+      setLinkType('tvshow');
+      setLinkedId(banner.tvShow._id);
+    } else {
+      setLinkType('movie');
+      setLinkedId(banner.movie?._id || '');
+    }
+    setCatalogQuery('');
+    setImageFile('');
+    setImagePreview(banner.imageUrl || '');
+    setCropSource(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleFileChange = (e) => {
@@ -75,7 +123,6 @@ const BannerManagement = ({ token, showNotification }) => {
       return;
     }
 
-    // 10MB keeps the base64 payload inside the server's request limit
     if (file.size > 10 * 1024 * 1024) {
       showNotification('Image must be smaller than 10MB', 'error');
       return;
@@ -83,59 +130,61 @@ const BannerManagement = ({ token, showNotification }) => {
 
     const reader = new FileReader();
     reader.onloadend = () => {
-      // Selected straight away, so cancelling the crop still leaves a usable
-      // image; the crop step only refines what is already chosen
       setImageFile(reader.result);
       setImagePreview(reader.result);
-      setImageUrlInput('');
       setCropSource(reader.result);
     };
     reader.readAsDataURL(file);
-
-    // Picking the same file twice fires no change event unless the input is
-    // cleared, which would otherwise leave the cropper closed
     e.target.value = '';
   };
 
-  const handleUrlChange = (e) => {
-    const value = e.target.value;
-    setImageUrlInput(value);
-    setImageFile('');
-    setImagePreview(value);
-  };
-
   const handleCropDone = (croppedDataUri) => {
-    // A cropped image is an upload from here on, even if it started as a URL
     setImageFile(croppedDataUri);
     setImagePreview(croppedDataUri);
-    setImageUrlInput('');
     setCropSource(null);
-    showNotification('Image adjusted. Save the slide to upload it.', 'success');
+    showNotification(
+      editingBanner
+        ? 'New banner image ready. Save to update.'
+        : 'Banner image ready. Pick a title and save.',
+      'success'
+    );
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const image = imageFile || imageUrlInput.trim();
+    const isEditing = Boolean(editingBanner);
 
-    if (!image && !editingBanner) {
-      showNotification('Please choose an image file or paste an image URL', 'error');
+    if (!isEditing && !imageFile) {
+      showNotification('Please upload a banner image', 'error');
+      return;
+    }
+    if (!linkedId) {
+      showNotification('Please select a movie or TV show', 'error');
       return;
     }
 
     try {
       setSaving(true);
 
-      const isEditing = Boolean(editingBanner);
+      const payload = {
+        title: selectedItem?.title || ''
+      };
+      if (linkType === 'tvshow') {
+        payload.tvShowId = linkedId;
+      } else {
+        payload.movieId = linkedId;
+      }
+      if (imageFile) payload.image = imageFile;
+
       const response = await fetch(
         isEditing ? `${API_URL}/${editingBanner._id}` : API_URL,
         {
           method: isEditing ? 'PUT' : 'POST',
           headers: authHeaders(),
-          body: JSON.stringify(image ? { image, title } : { title })
+          body: JSON.stringify(payload)
         }
       );
-
       const result = await response.json();
 
       if (result.success) {
@@ -153,15 +202,6 @@ const BannerManagement = ({ token, showNotification }) => {
     }
   };
 
-  const handleEdit = (banner) => {
-    setEditingBanner(banner);
-    setTitle(banner.title || '');
-    setImageFile('');
-    setImageUrlInput('');
-    setImagePreview(banner.imageUrl);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
   const handleToggleStatus = async (banner) => {
     try {
       const response = await fetch(`${API_URL}/${banner._id}/status`, {
@@ -169,7 +209,6 @@ const BannerManagement = ({ token, showNotification }) => {
         headers: authHeaders()
       });
       const result = await response.json();
-
       if (result.success) {
         showNotification(result.message, 'success');
         fetchBanners();
@@ -183,7 +222,7 @@ const BannerManagement = ({ token, showNotification }) => {
   };
 
   const handleDelete = async (banner) => {
-    if (!window.confirm('Delete this slide? The image is removed from Cloudinary too.')) {
+    if (!window.confirm('Delete this banner? The uploaded image is removed from Cloudinary too.')) {
       return;
     }
 
@@ -193,7 +232,6 @@ const BannerManagement = ({ token, showNotification }) => {
         headers: authHeaders()
       });
       const result = await response.json();
-
       if (result.success) {
         showNotification(result.message, 'success');
         if (editingBanner && editingBanner._id === banner._id) resetForm();
@@ -207,7 +245,6 @@ const BannerManagement = ({ token, showNotification }) => {
     }
   };
 
-  // Moving a slide swaps it with its neighbour, then saves the whole order
   const handleMove = async (index, direction) => {
     const target = index + direction;
     if (target < 0 || target >= banners.length) return;
@@ -223,7 +260,6 @@ const BannerManagement = ({ token, showNotification }) => {
         body: JSON.stringify({ order: reordered.map((b) => b._id) })
       });
       const result = await response.json();
-
       if (!result.success) {
         showNotification(result.message || 'Could not save the new order', 'error');
         fetchBanners();
@@ -234,6 +270,41 @@ const BannerManagement = ({ token, showNotification }) => {
       fetchBanners();
     }
   };
+
+  const linkedLabel = (banner) => {
+    if (banner.movie?.title) {
+      return `Movie · ${banner.movie.title}${banner.movie.year ? ` (${banner.movie.year})` : ''}`;
+    }
+    if (banner.tvShow?.title) {
+      return `TV · ${banner.tvShow.title}${banner.tvShow.year ? ` (${banner.tvShow.year})` : ''}`;
+    }
+    return null;
+  };
+
+  const renderPickerList = (items, type) => (
+    <div className="banner-picker-list">
+      {items.length === 0 ? (
+        <div className="banner-picker-empty">No matches</div>
+      ) : (
+        items.map((item) => {
+          const active = linkType === type && linkedId === item._id;
+          return (
+            <button
+              key={item._id}
+              type="button"
+              className={`banner-picker-item${active ? ' is-active' : ''}`}
+              onClick={() => selectLink(type, item._id)}
+            >
+              <span className="banner-picker-item-title">{item.title}</span>
+              <span className="banner-picker-item-meta">
+                {[item.year, item.genre].filter(Boolean).join(' · ')}
+              </span>
+            </button>
+          );
+        })
+      )}
+    </div>
+  );
 
   return (
     <div className="card">
@@ -249,20 +320,28 @@ const BannerManagement = ({ token, showNotification }) => {
       )}
 
       <div className="dashboard-header">
-        <h2>Home Page Banner</h2>
+        <h2>Home Banner</h2>
         <p>
-          These slides make up the slideshow on the home page. Images are stored
-          in Cloudinary under the home page banner folder.
+          Upload a banner image, then pick a movie or TV show for the hero details.
+          The poster is never used as the banner.
         </p>
       </div>
 
       <h3 style={{ marginTop: '10px' }}>
-        {editingBanner ? 'Edit Slide' : 'Add Slide'}
+        {editingBanner ? 'Edit Banner' : 'Add Banner'}
       </h3>
+
+      {editingBanner && !editingBanner.movie && !editingBanner.tvShow && (
+        <p style={{ color: '#fbbf24', marginBottom: '12px' }}>
+          This banner has no linked title. Select a movie or TV show below and save.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit}>
         <div className="form-group">
-          <label htmlFor="banner-file">Banner Image</label>
+          <label htmlFor="banner-file">
+            Banner Image {editingBanner ? '(optional)' : '*'}
+          </label>
           <input
             type="file"
             id="banner-file"
@@ -270,37 +349,72 @@ const BannerManagement = ({ token, showNotification }) => {
             onChange={handleFileChange}
           />
           <small>
-            Wide images work best. Choosing a file opens a crop step so you can
-            pick exactly what shows in the {BANNER_WIDTH}×{BANNER_HEIGHT} banner.
+            {editingBanner
+              ? 'Leave empty to keep the current banner image.'
+              : `Wide artwork only (${BANNER_WIDTH}×${BANNER_HEIGHT}).`}
           </small>
         </div>
 
         <div className="form-group">
-          <label htmlFor="banner-url" className="optional">Or Image URL</label>
+          <label htmlFor="banner-catalog-search">Related title *</label>
           <input
-            type="text"
-            id="banner-url"
-            value={imageUrlInput}
-            onChange={handleUrlChange}
-            placeholder="https://example.com/wallpaper.jpg"
+            type="search"
+            id="banner-catalog-search"
+            value={catalogQuery}
+            onChange={(e) => setCatalogQuery(e.target.value)}
+            placeholder="Type to search movies or TV shows…"
           />
-          <small>Used when no file is chosen; the image is copied into Cloudinary</small>
+          <small>Search both lists, then click one item in either window.</small>
         </div>
 
-        <div className="form-group">
-          <label htmlFor="banner-title" className="optional">Title</label>
-          <input
-            type="text"
-            id="banner-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="A label to help you recognise this slide"
-          />
+        <div className="banner-picker-windows">
+          <div className="banner-picker-window">
+            <div className="banner-picker-window-head">
+              Movies ({filteredMovies.length})
+            </div>
+            {renderPickerList(filteredMovies, 'movie')}
+          </div>
+          <div className="banner-picker-window">
+            <div className="banner-picker-window-head">
+              TV Shows ({filteredTVShows.length})
+            </div>
+            {renderPickerList(filteredTVShows, 'tvshow')}
+          </div>
         </div>
+
+        {selectedItem && (
+          <div
+            className="form-group"
+            style={{
+              marginTop: '14px',
+              padding: '12px 14px',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.12)',
+              background: 'rgba(255,255,255,0.04)'
+            }}
+          >
+            <strong style={{ display: 'block', marginBottom: '6px' }}>
+              Hero will show ({linkType === 'tvshow' ? 'TV Show' : 'Movie'})
+            </strong>
+            <div>{selectedItem.title}</div>
+            <div style={{ opacity: 0.75, fontSize: '0.9rem', marginTop: '4px' }}>
+              {[selectedItem.year, selectedItem.genre, selectedItem.imdbRating != null ? `IMDb ${selectedItem.imdbRating}` : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </div>
+            {selectedItem.description && (
+              <p style={{ margin: '8px 0 0', opacity: 0.8, fontSize: '0.9rem' }}>
+                {selectedItem.description.length > 160
+                  ? `${selectedItem.description.slice(0, 160)}…`
+                  : selectedItem.description}
+              </p>
+            )}
+          </div>
+        )}
 
         {imagePreview && (
           <div className="form-group">
-            <label>Preview</label>
+            <label>Banner preview</label>
             <img
               src={imagePreview}
               alt="Banner preview"
@@ -319,7 +433,7 @@ const BannerManagement = ({ token, showNotification }) => {
               onClick={() => setCropSource(imagePreview)}
               style={{ marginTop: '10px' }}
             >
-              ✂️ Crop &amp; adjust
+              Crop &amp; adjust
             </button>
           </div>
         )}
@@ -328,23 +442,25 @@ const BannerManagement = ({ token, showNotification }) => {
           <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving
               ? 'Saving...'
-              : editingBanner ? 'Update Slide' : 'Add Slide'}
+              : editingBanner
+                ? 'Update Banner'
+                : 'Add Banner'}
           </button>
-          {editingBanner && (
+          {(editingBanner || imagePreview || linkedId) && (
             <button
               type="button"
               className="btn btn-secondary"
               onClick={resetForm}
               disabled={saving}
             >
-              Cancel
+              {editingBanner ? 'Cancel' : 'Clear'}
             </button>
           )}
         </div>
       </form>
 
       <h3 style={{ marginTop: '30px' }}>
-        Current Slides {banners.length > 0 && `(${banners.length})`}
+        Current Banners {banners.length > 0 && `(${banners.length})`}
       </h3>
 
       {loading ? (
@@ -360,16 +476,16 @@ const BannerManagement = ({ token, showNotification }) => {
         </div>
       ) : banners.length === 0 ? (
         <div className="empty-state">
-          <h3>No slides yet</h3>
-          <p>Add one above and it appears on the home page straight away.</p>
+          <h3>No banners yet</h3>
+          <p>Add one above — image + movie or TV show.</p>
         </div>
       ) : (
         <table className="table">
           <thead>
             <tr>
               <th>Order</th>
-              <th>Image</th>
-              <th>Title</th>
+              <th>Banner</th>
+              <th>Linked Title</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
@@ -405,7 +521,7 @@ const BannerManagement = ({ token, showNotification }) => {
                 <td>
                   <img
                     src={banner.imageUrl}
-                    alt={banner.title || `Slide ${index + 1}`}
+                    alt={linkedLabel(banner) || `Banner ${index + 1}`}
                     style={{
                       width: '150px',
                       height: '63px',
@@ -415,7 +531,11 @@ const BannerManagement = ({ token, showNotification }) => {
                     }}
                   />
                 </td>
-                <td>{banner.title || <em style={{ color: '#999' }}>Untitled</em>}</td>
+                <td>
+                  {linkedLabel(banner) || (
+                    <em style={{ color: '#999' }}>Title missing</em>
+                  )}
+                </td>
                 <td>
                   <span style={{
                     padding: '4px 8px',
@@ -455,6 +575,77 @@ const BannerManagement = ({ token, showNotification }) => {
           </tbody>
         </table>
       )}
+
+      <style>{`
+        .banner-picker-windows {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          margin-top: 8px;
+        }
+        .banner-picker-window {
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 10px;
+          overflow: hidden;
+          background: rgba(0,0,0,0.25);
+          min-height: 220px;
+          display: flex;
+          flex-direction: column;
+        }
+        .banner-picker-window-head {
+          padding: 10px 12px;
+          font-weight: 700;
+          font-size: 0.85rem;
+          border-bottom: 1px solid rgba(255,255,255,0.1);
+          background: rgba(255,255,255,0.04);
+        }
+        .banner-picker-list {
+          overflow-y: auto;
+          max-height: 260px;
+          padding: 6px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .banner-picker-empty {
+          padding: 18px 10px;
+          text-align: center;
+          opacity: 0.6;
+          font-size: 0.9rem;
+        }
+        .banner-picker-item {
+          text-align: left;
+          border: 1px solid transparent;
+          background: transparent;
+          color: inherit;
+          border-radius: 8px;
+          padding: 8px 10px;
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .banner-picker-item:hover {
+          background: rgba(255,255,255,0.06);
+        }
+        .banner-picker-item.is-active {
+          background: rgba(229, 9, 20, 0.18);
+          border-color: rgba(229, 9, 20, 0.55);
+        }
+        .banner-picker-item-title {
+          font-weight: 600;
+          font-size: 0.92rem;
+        }
+        .banner-picker-item-meta {
+          font-size: 0.78rem;
+          opacity: 0.7;
+        }
+        @media (max-width: 768px) {
+          .banner-picker-windows {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </div>
   );
 };

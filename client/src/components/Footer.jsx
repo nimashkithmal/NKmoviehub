@@ -50,8 +50,8 @@ const Footer = () => {
                     </div>
                   </div>
                   <div className="logo-subtitle-section">
-                    <span className="subtitle-underline"></span>
                     <span className="logo-subtitle">Entertainment Platform</span>
+                    <span className="subtitle-underline" aria-hidden="true"></span>
                   </div>
                 </div>
               </Link>

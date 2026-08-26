@@ -4,42 +4,51 @@ import { useNavigate } from 'react-router-dom';
 import ContactManagement from './ContactManagement';
 import AdminManagement from './AdminManagement';
 import BannerManagement from './BannerManagement';
+import CollectionManagement from './CollectionManagement';
+import './AdminDashboard.css';
 
 const AdminDashboard = () => {
   const { user, token } = useAuth();
   const navigate = useNavigate();
-  const [users, setUsers] = useState([]);
   const [movies, setMovies] = useState([]);
   const [tvShows, setTVShows] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [moviesLoading, setMoviesLoading] = useState(false);
   const [tvShowsLoading, setTVShowsLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [moviesError, setMoviesError] = useState(null);
   const [tvShowsError, setTVShowsError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [movieSearchTerm, setMovieSearchTerm] = useState('');
+  const [moviesPage, setMoviesPage] = useState(1);
+  const [moviesPagination, setMoviesPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalMovies: 0,
+    moviesPerPage: 30
+  });
   const [tvShowSearchTerm, setTVShowSearchTerm] = useState('');
-  const [showAddUserModal, setShowAddUserModal] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
+  const MOVIES_PAGE_SIZE = 30;
   const [editingMovie, setEditingMovie] = useState(null);
   const [editingTVShow, setEditingTVShow] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    role: 'user'
-  });
   const [movieFormData, setMovieFormData] = useState({
     title: '',
     year: new Date().getFullYear(),
     description: '',
     genre: '',
     movieUrl: '',
-    imdbRating: 0
+    imdbRating: 0,
+    director: '',
+    language: '',
+    budget: '',
+    revenue: '',
+    runtime: '',
+    releaseDate: '',
+    tagline: '',
+    trailerUrl: ''
   });
   const [movieImageFiles, setMovieImageFiles] = useState([]);
   const [movieImagePreviews, setMovieImagePreviews] = useState([]);
+  const [movieBannerFile, setMovieBannerFile] = useState(null);
+  const [movieBannerPreview, setMovieBannerPreview] = useState('');
+  const [movieClearBanner, setMovieClearBanner] = useState(false);
   const [tvShowFormData, setTVShowFormData] = useState({
     title: '',
     year: new Date().getFullYear(),
@@ -48,18 +57,23 @@ const AdminDashboard = () => {
     showUrl: '',
     imdbRating: 0,
     episodeCount: 0,
-    numberOfSeasons: 0
+    numberOfSeasons: 0,
+    director: '',
+    language: '',
+    budget: '',
+    revenue: '',
+    runtime: '',
+    releaseDate: '',
+    tagline: '',
+    trailerUrl: ''
   });
   const [tvShowImageFiles, setTVShowImageFiles] = useState([]);
   const [tvShowImagePreviews, setTVShowImagePreviews] = useState([]);
+  const [tvShowBannerFile, setTVShowBannerFile] = useState(null);
+  const [tvShowBannerPreview, setTVShowBannerPreview] = useState('');
+  const [tvShowClearBanner, setTVShowClearBanner] = useState(false);
   const [tvShowEpisodes, setTVShowEpisodes] = useState([]);
   const [tvShowSeasons, setTVShowSeasons] = useState([]);
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    activeUsers: 0,
-    adminUsers: 0,
-    newUsersThisMonth: 0
-  });
   const [movieStats, setMovieStats] = useState({
     totalMovies: 0,
     activeMovies: 0,
@@ -72,7 +86,7 @@ const AdminDashboard = () => {
     averageRating: 0,
     newTVShowsThisMonth: 0
   });
-  const [activeTab, setActiveTab] = useState('users'); // 'users', 'admins', 'movies', 'tvshows', 'banners', or 'contacts'
+  const [activeTab, setActiveTab] = useState('admins'); // 'admins', 'movies', 'tvshows', 'banners', 'collections', or 'contacts'
 
   // Notification system
   const showNotification = (message, type = 'info') => {
@@ -105,62 +119,19 @@ const AdminDashboard = () => {
     });
   };
 
-  // Fetch users from backend
-  const fetchUsers = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await fetch('/api/users', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        setUsers(result.data.users);
-        
-        // Calculate stats
-        const totalUsers = result.data.users.length;
-        const activeUsers = result.data.users.filter(u => u.status === 'active').length;
-        const adminUsers = result.data.users.filter(u => u.role === 'admin').length;
-        const newUsersThisMonth = result.data.users.filter(u => {
-          const userDate = new Date(u.createdAt);
-          const now = new Date();
-          return userDate.getMonth() === now.getMonth() && userDate.getFullYear() === now.getFullYear();
-        }).length;
-
-        setStats({
-          totalUsers,
-          activeUsers,
-          adminUsers,
-          newUsersThisMonth
-        });
-      } else {
-        throw new Error(result.message || 'Failed to fetch users');
-      }
-    } catch (err) {
-      console.error('Error fetching users:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  // Fetch movies from backend
-  const fetchMovies = useCallback(async () => {
+  // Fetch movies from backend (30 per page)
+  const fetchMovies = useCallback(async (page = 1, search = '') => {
     try {
       setMoviesLoading(true);
       setMoviesError(null);
+
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(MOVIES_PAGE_SIZE)
+      });
+      if (search && search.trim()) params.set('search', search.trim());
       
-      const response = await fetch('/api/movies/admin?limit=1000', {
+      const response = await fetch(`/api/movies/admin?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -175,22 +146,12 @@ const AdminDashboard = () => {
       
       if (result.success) {
         setMovies(result.data.movies);
-        
-        // Calculate movie stats
-        const totalMovies = result.data.movies.length;
-        const activeMovies = result.data.movies.filter(m => m.status === 'active').length;
-        const averageImdbRating = result.data.movies.reduce((sum, m) => sum + m.imdbRating, 0) / totalMovies || 0;
-        const newMoviesThisMonth = result.data.movies.filter(m => {
-          const movieDate = new Date(m.createdAt);
-          const now = new Date();
-          return movieDate.getMonth() === now.getMonth() && movieDate.getFullYear() === now.getFullYear();
-        }).length;
-
-        setMovieStats({
-          totalMovies,
-          activeMovies,
-          averageRating: Math.round(averageImdbRating * 10) / 10,
-          newMoviesThisMonth
+        const pagination = result.data.pagination || {};
+        setMoviesPagination({
+          currentPage: pagination.currentPage || page,
+          totalPages: Math.max(1, pagination.totalPages || 1),
+          totalMovies: pagination.totalMovies || 0,
+          moviesPerPage: pagination.moviesPerPage || MOVIES_PAGE_SIZE
         });
       } else {
         throw new Error(result.message || 'Failed to fetch movies');
@@ -203,13 +164,36 @@ const AdminDashboard = () => {
     }
   }, [token]);
 
+  const fetchMovieStats = useCallback(async () => {
+    try {
+      const response = await fetch('/api/movies/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!response.ok) return;
+      const result = await response.json();
+      if (!result.success) return;
+      const data = result.data || {};
+      setMovieStats({
+        totalMovies: data.totalMovies || 0,
+        activeMovies: data.activeMovies || 0,
+        averageRating: Math.round((data.averageRating || 0) * 10) / 10,
+        newMoviesThisMonth: data.newMoviesThisMonth || 0
+      });
+    } catch (err) {
+      console.error('Error fetching movie stats:', err);
+    }
+  }, [token]);
+
   // Fetch TV shows from backend
   const fetchTVShows = useCallback(async () => {
     try {
       setTVShowsLoading(true);
       setTVShowsError(null);
       
-      const response = await fetch('/api/tvshows/admin?limit=1000', {
+      const response = await fetch('/api/tvshows/admin?limit=20000', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -252,165 +236,23 @@ const AdminDashboard = () => {
     }
   }, [token]);
 
-  // Fetch data on component mount
+  // Fetch movies page when page / search changes
+  useEffect(() => {
+    if (!token) return undefined;
+    const delay = movieSearchTerm ? 300 : 0;
+    const timer = setTimeout(() => {
+      fetchMovies(moviesPage, movieSearchTerm);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [token, moviesPage, movieSearchTerm, fetchMovies]);
+
+  // Fetch stats + TV shows on mount
   useEffect(() => {
     if (token) {
-      fetchUsers();
-      fetchMovies();
+      fetchMovieStats();
       fetchTVShows();
     }
-  }, [token, fetchUsers, fetchMovies, fetchTVShows]);
-
-  const handleAddUser = async () => {
-    if (!formData.name || !formData.email || !formData.password) {
-      showNotification('Please fill in all fields', 'error');
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-          role: formData.role
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create user');
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        // Refresh users list
-        await fetchUsers();
-        setFormData({ name: '', email: '', password: '', role: 'user' });
-        setShowAddUserModal(false);
-        showNotification('User created successfully!', 'success');
-      }
-    } catch (err) {
-      console.error('Error creating user:', err);
-      showNotification(`Error creating user: ${err.message}`, 'error');
-    }
-  };
-
-  const handleEditUser = (user) => {
-    setEditingUser(user);
-    setFormData({
-      name: user.name,
-      email: user.email,
-      password: '',
-      role: user.role
-    });
-  };
-
-  const handleUpdateUser = async () => {
-    if (!formData.name || !formData.email) {
-      showNotification('Please fill in all fields', 'error');
-      return;
-    }
-
-    try {
-      const updateData = {
-        name: formData.name,
-        email: formData.email,
-        role: formData.role
-      };
-
-      const response = await fetch(`/api/users/${editingUser._id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updateData)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update user');
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        // Refresh users list
-        await fetchUsers();
-        setEditingUser(null);
-        setFormData({ name: '', email: '', password: '', role: 'user' });
-        showNotification('User updated successfully!', 'success');
-      }
-    } catch (err) {
-      console.error('Error updating user:', err);
-      showNotification(`Error updating user: ${err.message}`, 'error');
-    }
-  };
-
-  const handleDeleteUser = async (userId) => {
-    if (window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      try {
-        const response = await fetch(`/api/users/${userId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to delete user');
-        }
-
-        const result = await response.json();
-        
-        if (result.success) {
-          // Refresh users list
-          await fetchUsers();
-          showNotification('User deleted successfully!', 'success');
-        }
-      } catch (err) {
-        console.error('Error deleting user:', err);
-        showNotification(`Error deleting user: ${err.message}`, 'error');
-      }
-    }
-  };
-
-  const handleToggleUserStatus = async (userId) => {
-    try {
-      const response = await fetch(`/api/users/${userId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update user status');
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        // Refresh users list
-        await fetchUsers();
-        showNotification(`User status updated successfully!`, 'success');
-      }
-    } catch (err) {
-      console.error('Error updating user status:', err);
-      showNotification(`Error updating user status: ${err.message}`, 'error');
-    }
-  };
+  }, [token, fetchMovieStats, fetchTVShows]);
 
   // Movie management functions
 
@@ -422,17 +264,25 @@ const AdminDashboard = () => {
       description: movie.description || '',
       genre: movie.genre || '',
       movieUrl: movie.movieUrl || '',
-      imdbRating: movie.imdbRating || 0
+      imdbRating: movie.imdbRating || 0,
+      director: movie.director || '',
+      language: movie.language || '',
+      budget: movie.budget != null ? String(movie.budget) : '',
+      revenue: movie.revenue != null ? String(movie.revenue) : '',
+      runtime: movie.runtime != null ? String(movie.runtime) : '',
+      releaseDate: movie.releaseDate || '',
+      tagline: movie.tagline || '',
+      trailerUrl: movie.trailerUrl || ''
     });
-    // Set existing images as previews
-    if (movie.images && movie.images.length > 0) {
-      setMovieImagePreviews(movie.images);
-    } else if (movie.imageUrl) {
-      setMovieImagePreviews([movie.imageUrl]);
-    } else {
-      setMovieImagePreviews([]);
-    }
-    setMovieImageFiles([]); // Reset new files
+    // Gallery posters only — never include the detail banner
+    const gallery = (movie.images && movie.images.length > 0)
+      ? movie.images.filter((url) => url && url !== movie.bannerUrl)
+      : (movie.imageUrl && movie.imageUrl !== movie.bannerUrl ? [movie.imageUrl] : []);
+    setMovieImagePreviews(gallery);
+    setMovieImageFiles([]);
+    setMovieBannerPreview(movie.bannerUrl || '');
+    setMovieBannerFile(null);
+    setMovieClearBanner(false);
   };
 
   const handleUpdateMovie = async () => {
@@ -447,7 +297,15 @@ const AdminDashboard = () => {
         year: movieFormData.year,
         description: movieFormData.description,
         genre: movieFormData.genre,
-        movieUrl: movieFormData.movieUrl
+        movieUrl: movieFormData.movieUrl,
+        director: movieFormData.director,
+        language: movieFormData.language,
+        budget: movieFormData.budget,
+        revenue: movieFormData.revenue,
+        runtime: movieFormData.runtime,
+        releaseDate: movieFormData.releaseDate,
+        tagline: movieFormData.tagline,
+        trailerUrl: movieFormData.trailerUrl
       };
       
       // Always include imdbRating in the update
@@ -507,6 +365,12 @@ const AdminDashboard = () => {
         // All images were removed
         updateData.images = [];
       }
+
+      if (movieClearBanner) {
+        updateData.clearBanner = true;
+      } else if (movieBannerFile) {
+        updateData.bannerFile = await convertImageToBase64(movieBannerFile);
+      }
       
       console.log('Updating movie with data:', updateData);
       console.log('IMDB Rating in updateData:', updateData.imdbRating, 'Type:', typeof updateData.imdbRating);
@@ -528,7 +392,7 @@ const AdminDashboard = () => {
       const result = await response.json();
       
       if (result.success) {
-        await fetchMovies();
+        await fetchMovies(moviesPage, movieSearchTerm);
         setEditingMovie(null);
         setMovieFormData({
           title: '',
@@ -536,16 +400,51 @@ const AdminDashboard = () => {
           description: '',
           genre: '',
           movieUrl: '',
-          imdbRating: 0
+          imdbRating: 0,
+          director: '',
+          language: '',
+          budget: '',
+          revenue: '',
+          runtime: '',
+          releaseDate: '',
+          tagline: '',
+          trailerUrl: ''
         });
         setMovieImageFiles([]);
         setMovieImagePreviews([]);
+        setMovieBannerFile(null);
+        setMovieBannerPreview('');
+        setMovieClearBanner(false);
         showNotification('Movie updated successfully!', 'success');
       }
     } catch (err) {
       console.error('Error updating movie:', err);
       showNotification(`Error updating movie: ${err.message}`, 'error');
     }
+  };
+
+  const handleMovieBannerChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showNotification('Please select a valid image file', 'error');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      showNotification('Banner image should be less than 8MB', 'error');
+      return;
+    }
+    setMovieBannerFile(file);
+    setMovieClearBanner(false);
+    const reader = new FileReader();
+    reader.onload = () => setMovieBannerPreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const clearMovieBanner = () => {
+    setMovieBannerFile(null);
+    setMovieBannerPreview('');
+    setMovieClearBanner(true);
   };
 
   const handleMovieImageChange = (e) => {
@@ -617,7 +516,7 @@ const AdminDashboard = () => {
         const result = await response.json();
         
         if (result.success) {
-          await fetchMovies();
+          await fetchMovies(moviesPage, movieSearchTerm);
           showNotification('Movie deleted successfully!', 'success');
         }
       } catch (err) {
@@ -627,14 +526,15 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleToggleMovieStatus = async (movieId) => {
+  const handleToggleMovieStatus = async (movieId, status) => {
     try {
       const response = await fetch(`/api/movies/${movieId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ status })
       });
 
       if (!response.ok) {
@@ -645,7 +545,7 @@ const AdminDashboard = () => {
       const result = await response.json();
       
       if (result.success) {
-        await fetchMovies();
+        await fetchMovies(moviesPage, movieSearchTerm);
         showNotification(`Movie status updated successfully!`, 'success');
       }
     } catch (err) {
@@ -696,7 +596,7 @@ const AdminDashboard = () => {
       if (result.success) {
         // Only refresh movies list for non-image updates to avoid double refresh
         if (!imageFile && (!imageFiles || imageFiles.length === 0)) {
-          await fetchMovies();
+          await fetchMovies(moviesPage, movieSearchTerm);
         }
         showNotification('Movie updated successfully!', 'success');
       }
@@ -762,7 +662,7 @@ const AdminDashboard = () => {
         if (result && result.success) {
           // Refresh the movies list to show the updated images
           console.log('Image update successful, refreshing movies list...');
-          await fetchMovies();
+          await fetchMovies(moviesPage, movieSearchTerm);
           showNotification(`${validFiles.length} image(s) updated successfully!`, 'success');
         } else {
           const errorMsg = result?.message || 'Failed to update images. Please try again.';
@@ -794,16 +694,7 @@ const AdminDashboard = () => {
     });
   };
 
-  const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const filteredMovies = movies.filter(movie =>
-    movie.title.toLowerCase().includes(movieSearchTerm.toLowerCase()) ||
-    movie.year.toString().includes(movieSearchTerm) ||
-    movie.genre.toLowerCase().includes(movieSearchTerm.toLowerCase())
-  );
+  const filteredMovies = movies;
 
   const filteredTVShows = tvShows.filter(tvShow =>
     tvShow.title.toLowerCase().includes(tvShowSearchTerm.toLowerCase()) ||
@@ -811,33 +702,90 @@ const AdminDashboard = () => {
     tvShow.genre.toLowerCase().includes(tvShowSearchTerm.toLowerCase())
   );
 
+  const goToMoviesPage = (page) => {
+    const next = Math.min(Math.max(1, page), moviesPagination.totalPages || 1);
+    setMoviesPage(next);
+  };
+
+  const refreshMovies = () => {
+    fetchMovies(moviesPage, movieSearchTerm);
+    fetchMovieStats();
+  };
+
   // TV Show management functions
-  // Helper function to group episodes into seasons
+  // Helper function to group episodes into seasons (prefer URL season markers)
   const groupEpisodesBySeasons = (episodes, numberOfSeasons) => {
     if (!episodes || episodes.length === 0 || !numberOfSeasons || numberOfSeasons === 0) {
       return [];
     }
 
     const sortedEpisodes = [...episodes].sort((a, b) => a.episodeNumber - b.episodeNumber);
-    const episodesPerSeason = Math.ceil(sortedEpisodes.length / numberOfSeasons);
-    const seasons = [];
+    const episodesBySeason = {};
+    let detectedFromUrl = 0;
 
-    for (let seasonNum = 1; seasonNum <= numberOfSeasons; seasonNum++) {
-      const startIdx = (seasonNum - 1) * episodesPerSeason;
-      const endIdx = Math.min(startIdx + episodesPerSeason, sortedEpisodes.length);
-      const seasonEpisodes = sortedEpisodes.slice(startIdx, endIdx);
+    sortedEpisodes.forEach((ep, i) => {
+      const url = ep.episodeUrl || '';
+      const seasonMatch =
+        url.match(/[?&]s=(\d{1,2})(?:&|$)/i) ||
+        url.match(/embedtv\/\d+[&?]s=(\d{1,2})/i) ||
+        url.match(/[sS](\d{1,2})[eE]/) ||
+        url.match(/season[_\s-]?(\d{1,2})/i) ||
+        url.match(/\/s(\d{1,2})\//);
 
-      seasons.push({
-        seasonNumber: seasonNum,
-        episodeCount: seasonEpisodes.length,
-        episodes: seasonEpisodes.map(ep => ({
-          episodeNumber: ep.episodeNumber,
-          episodeUrl: ep.episodeUrl || '',
-          episodeTitle: ep.episodeTitle || ''
-        }))
+      let seasonNum = null;
+      if (seasonMatch) {
+        const n = parseInt(seasonMatch[1], 10);
+        if (n >= 1 && n <= numberOfSeasons) {
+          seasonNum = n;
+          detectedFromUrl += 1;
+        }
+      }
+
+      if (!seasonNum) {
+        const episodesPerSeason = Math.ceil(sortedEpisodes.length / numberOfSeasons);
+        seasonNum = Math.min(numberOfSeasons, Math.floor(i / episodesPerSeason) + 1);
+      }
+
+      if (!episodesBySeason[seasonNum]) episodesBySeason[seasonNum] = [];
+      episodesBySeason[seasonNum].push({
+        episodeNumber: ep.episodeNumber,
+        episodeUrl: ep.episodeUrl || '',
+        episodeTitle: ep.episodeTitle || ''
       });
+    });
+
+    // If almost nothing came from URLs, fall back to even chunks
+    if (detectedFromUrl < Math.max(1, Math.floor(sortedEpisodes.length * 0.5))) {
+      const episodesPerSeason = Math.ceil(sortedEpisodes.length / numberOfSeasons);
+      const seasons = [];
+      for (let seasonNum = 1; seasonNum <= numberOfSeasons; seasonNum++) {
+        const startIdx = (seasonNum - 1) * episodesPerSeason;
+        const endIdx = Math.min(startIdx + episodesPerSeason, sortedEpisodes.length);
+        const seasonEpisodes = sortedEpisodes.slice(startIdx, endIdx);
+        seasons.push({
+          seasonNumber: seasonNum,
+          episodeCount: seasonEpisodes.length,
+          episodes: seasonEpisodes.map((ep) => ({
+            episodeNumber: ep.episodeNumber,
+            episodeUrl: ep.episodeUrl || '',
+            episodeTitle: ep.episodeTitle || ''
+          }))
+        });
+      }
+      return seasons;
     }
 
+    const seasons = [];
+    for (let seasonNum = 1; seasonNum <= numberOfSeasons; seasonNum++) {
+      const seasonEpisodes = episodesBySeason[seasonNum] || [];
+      if (seasonEpisodes.length > 0) {
+        seasons.push({
+          seasonNumber: seasonNum,
+          episodeCount: seasonEpisodes.length,
+          episodes: seasonEpisodes
+        });
+      }
+    }
     return seasons;
   };
 
@@ -854,18 +802,26 @@ const AdminDashboard = () => {
       showUrl: tvShow.showUrl || '',
       imdbRating: tvShow.imdbRating || 0,
       episodeCount: episodeCount,
-      numberOfSeasons: numberOfSeasons
+      numberOfSeasons: numberOfSeasons,
+      director: tvShow.director || '',
+      language: tvShow.language || '',
+      budget: tvShow.budget != null ? String(tvShow.budget) : '',
+      revenue: tvShow.revenue != null ? String(tvShow.revenue) : '',
+      runtime: tvShow.runtime != null ? String(tvShow.runtime) : '',
+      releaseDate: tvShow.releaseDate || '',
+      tagline: tvShow.tagline || '',
+      trailerUrl: tvShow.trailerUrl || ''
     });
     
-    // Set existing images as previews
-    if (tvShow.images && tvShow.images.length > 0) {
-      setTVShowImagePreviews(tvShow.images);
-    } else if (tvShow.imageUrl) {
-      setTVShowImagePreviews([tvShow.imageUrl]);
-    } else {
-      setTVShowImagePreviews([]);
-    }
-    setTVShowImageFiles([]); // Reset new files
+    // Gallery posters only — never include the detail banner
+    const gallery = (tvShow.images && tvShow.images.length > 0)
+      ? tvShow.images.filter((url) => url && url !== tvShow.bannerUrl)
+      : (tvShow.imageUrl && tvShow.imageUrl !== tvShow.bannerUrl ? [tvShow.imageUrl] : []);
+    setTVShowImagePreviews(gallery);
+    setTVShowImageFiles([]);
+    setTVShowBannerPreview(tvShow.bannerUrl || '');
+    setTVShowBannerFile(null);
+    setTVShowClearBanner(false);
     
     // Group episodes by seasons
     if (tvShow.episodes && tvShow.episodes.length > 0 && numberOfSeasons > 0) {
@@ -992,6 +948,12 @@ const AdminDashboard = () => {
         }
       }
 
+      if (tvShowClearBanner) {
+        updateData.clearBanner = true;
+      } else if (tvShowBannerFile) {
+        updateData.bannerFile = await convertImageToBase64(tvShowBannerFile);
+      }
+
       // Remove showUrl if episodes are provided and showUrl is empty
       if (episodesData.length > 0 && !tvShowFormData.showUrl.trim()) {
         delete updateData.showUrl;
@@ -1030,12 +992,23 @@ const AdminDashboard = () => {
           showUrl: '',
           imdbRating: 0,
           episodeCount: 0,
-          numberOfSeasons: 0
+          numberOfSeasons: 0,
+          director: '',
+          language: '',
+          budget: '',
+          revenue: '',
+          runtime: '',
+          releaseDate: '',
+          tagline: '',
+          trailerUrl: ''
         });
         setTVShowEpisodes([]);
         setTVShowSeasons([]);
         setTVShowImageFiles([]);
         setTVShowImagePreviews([]);
+        setTVShowBannerFile(null);
+        setTVShowBannerPreview('');
+        setTVShowClearBanner(false);
         showNotification('TV Show updated successfully!', 'success');
       } else {
         throw new Error(result.message || 'Update failed');
@@ -1044,6 +1017,30 @@ const AdminDashboard = () => {
       console.error('Error updating TV show:', err);
       showNotification(`Error updating TV show: ${err.message}`, 'error');
     }
+  };
+
+  const handleTVShowBannerChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showNotification('Please select a valid image file', 'error');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      showNotification('Banner image should be less than 8MB', 'error');
+      return;
+    }
+    setTVShowBannerFile(file);
+    setTVShowClearBanner(false);
+    const reader = new FileReader();
+    reader.onload = () => setTVShowBannerPreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const clearTVShowBanner = () => {
+    setTVShowBannerFile(null);
+    setTVShowBannerPreview('');
+    setTVShowClearBanner(true);
   };
 
   const handleDeleteTVShow = async (tvShowId) => {
@@ -1075,14 +1072,15 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleToggleTVShowStatus = async (tvShowId) => {
+  const handleToggleTVShowStatus = async (tvShowId, status) => {
     try {
       const response = await fetch(`/api/tvshows/${tvShowId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ status })
       });
 
       if (!response.ok) {
@@ -1102,36 +1100,8 @@ const AdminDashboard = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="card">
-        <div className="loading-state">
-          <h3>Loading users...</h3>
-          <p>Please wait while we fetch the latest user data.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="card">
-        <div className="error-state">
-          <h3>Error loading users</h3>
-          <p>{error}</p>
-          <button 
-            className="btn btn-primary"
-            onClick={fetchUsers}
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div>
+    <div className="admin-dashboard">
       <div className="dashboard-header">
         <h1>Admin Dashboard</h1>
         <p>Welcome back, {user?.name}!</p>
@@ -1139,12 +1109,6 @@ const AdminDashboard = () => {
 
       {/* Tab Navigation */}
       <div className="dashboard-tabs">
-        <button 
-          className={`tab-button ${activeTab === 'users' ? 'active' : ''}`}
-          onClick={() => setActiveTab('users')}
-        >
-          User Management
-        </button>
         <button
           className={`tab-button ${activeTab === 'admins' ? 'active' : ''}`}
           onClick={() => setActiveTab('admins')}
@@ -1169,6 +1133,12 @@ const AdminDashboard = () => {
         >
           Home Banner
         </button>
+        <button
+          className={`tab-button ${activeTab === 'collections' ? 'active' : ''}`}
+          onClick={() => setActiveTab('collections')}
+        >
+          Collections
+        </button>
         <button 
           className={`tab-button ${activeTab === 'contacts' ? 'active' : ''}`}
           onClick={() => setActiveTab('contacts')}
@@ -1177,29 +1147,10 @@ const AdminDashboard = () => {
         </button>
       </div>
 
-      {/* Statistics Cards - the banner tab has no numbers worth showing */}
-      {activeTab !== 'banners' && (
+      {/* Statistics Cards */}
+      {activeTab !== 'banners' && activeTab !== 'admins' && activeTab !== 'contacts' && activeTab !== 'collections' && (
       <div className="dashboard-stats">
-        {activeTab === 'users' ? (
-          <>
-            <div className="stat-card">
-              <h3>{stats.totalUsers}</h3>
-              <p>Total Users</p>
-            </div>
-            <div className="stat-card">
-              <h3>{stats.activeUsers}</h3>
-              <p>Active Users</p>
-            </div>
-            <div className="stat-card">
-              <h3>{stats.adminUsers}</h3>
-              <p>Admin Users</p>
-            </div>
-            <div className="stat-card">
-              <h3>{stats.newUsersThisMonth}</h3>
-              <p>New This Month</p>
-            </div>
-          </>
-        ) : activeTab === 'tvshows' ? (
+        {activeTab === 'tvshows' ? (
           <>
             <div className="stat-card">
               <h3>{tvShowStats.totalTVShows}</h3>
@@ -1241,123 +1192,6 @@ const AdminDashboard = () => {
       </div>
       )}
 
-      {/* User Management Section */}
-      {activeTab === 'users' && (
-        <div className="card">
-          <div className="dashboard-header">
-            <h2>User Management</h2>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button 
-                className="btn btn-primary"
-                onClick={() => setShowAddUserModal(true)}
-              >
-                Add New User
-              </button>
-            </div>
-          </div>
-
-          <div className="search-bar">
-            <input
-              type="text"
-              placeholder="Search users by name or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          <div className="user-actions">
-            <button 
-              className="btn btn-secondary"
-              onClick={() => setSearchTerm('')}
-            >
-              Clear Search
-            </button>
-            <button 
-              className="btn btn-secondary"
-              onClick={fetchUsers}
-            >
-              Refresh
-            </button>
-          </div>
-
-          {filteredUsers.length === 0 ? (
-            <div className="empty-state">
-              <h3>No users found</h3>
-              <p>{searchTerm ? 'Try adjusting your search terms.' : 'No users have been registered yet.'}</p>
-            </div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map(user => (
-                  <tr key={user._id}>
-                    <td>{user.name}</td>
-                    <td>{user.email}</td>
-                    <td>
-                      <span style={{ 
-                        padding: '4px 8px', 
-                        borderRadius: '4px', 
-                        backgroundColor: user.role === 'admin' ? '#dc3545' : '#28a745',
-                        color: 'white',
-                        fontSize: '12px'
-                      }}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ 
-                        padding: '4px 8px', 
-                        borderRadius: '4px', 
-                        backgroundColor: user.status === 'active' ? '#28a745' : '#6c757d',
-                        color: 'white',
-                        fontSize: '12px'
-                      }}>
-                        {user.status}
-                      </span>
-                    </td>
-                    <td>{new Date(user.createdAt).toLocaleDateString()}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '5px' }}>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
-                          onClick={() => handleEditUser(user)}
-                        >
-                          Edit
-                        </button>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
-                          onClick={() => handleToggleUserStatus(user._id)}
-                        >
-                          {user.status === 'active' ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
-                          onClick={() => handleDeleteUser(user._id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
       {/* Movie Management Section */}
       {activeTab === 'movies' && (
         <div className="card">
@@ -1378,23 +1212,32 @@ const AdminDashboard = () => {
               type="text"
               placeholder="Search movies by title, year, or genre..."
               value={movieSearchTerm}
-              onChange={(e) => setMovieSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setMovieSearchTerm(e.target.value);
+                setMoviesPage(1);
+              }}
             />
           </div>
 
           <div className="user-actions">
             <button 
               className="btn btn-secondary"
-              onClick={() => setMovieSearchTerm('')}
+              onClick={() => {
+                setMovieSearchTerm('');
+                setMoviesPage(1);
+              }}
             >
               Clear Search
             </button>
             <button 
               className="btn btn-secondary"
-              onClick={fetchMovies}
+              onClick={refreshMovies}
             >
               Refresh
             </button>
+            <span className="admin-page-meta">
+              {moviesPagination.totalMovies} movies · Page {moviesPagination.currentPage} of {moviesPagination.totalPages}
+            </span>
           </div>
 
           {moviesLoading ? (
@@ -1408,7 +1251,7 @@ const AdminDashboard = () => {
               <p>{moviesError}</p>
               <button 
                 className="btn btn-primary"
-                onClick={fetchMovies}
+                onClick={refreshMovies}
               >
                 Try Again
               </button>
@@ -1419,6 +1262,7 @@ const AdminDashboard = () => {
               <p>{movieSearchTerm ? 'Try adjusting your search terms.' : 'No movies have been added yet.'}</p>
             </div>
           ) : (
+            <>
             <table className="table">
               <thead>
                 <tr>
@@ -1517,33 +1361,41 @@ const AdminDashboard = () => {
                       <span style={{ 
                         padding: '4px 8px', 
                         borderRadius: '4px', 
-                        backgroundColor: movie.status === 'active' ? '#28a745' : '#6c757d',
+                        backgroundColor:
+                          movie.status === 'active'
+                            ? '#28a745'
+                            : movie.status === 'coming_soon'
+                              ? '#e50914'
+                              : '#6c757d',
                         color: 'white',
                         fontSize: '12px'
                       }}>
-                        {movie.status}
+                        {movie.status === 'coming_soon' ? 'coming soon' : movie.status}
                       </span>
                     </td>
                     <td>{movie.addedBy?.name || 'Unknown'}</td>
                     <td>
-                      <div style={{ display: 'flex', gap: '5px' }}>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                      <div className="table-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-table"
                           onClick={() => handleEditMovie(movie)}
                         >
                           Edit
                         </button>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
-                          onClick={() => handleToggleMovieStatus(movie._id)}
+                        <select
+                          className={`status-select status-select--${movie.status || 'active'}`}
+                          value={movie.status || 'active'}
+                          onChange={(e) => handleToggleMovieStatus(movie._id, e.target.value)}
+                          aria-label={`Status for ${movie.title}`}
                         >
-                          {movie.status === 'active' ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                          <option value="active">Active</option>
+                          <option value="coming_soon">Coming Soon</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-table"
                           onClick={() => handleDeleteMovie(movie._id)}
                         >
                           Delete
@@ -1554,6 +1406,30 @@ const AdminDashboard = () => {
                 ))}
               </tbody>
             </table>
+            {moviesPagination.totalPages > 1 && (
+              <nav className="admin-pagination" aria-label="Movies pages">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={moviesPage <= 1 || moviesLoading}
+                  onClick={() => goToMoviesPage(moviesPage - 1)}
+                >
+                  Previous
+                </button>
+                <span className="admin-page-meta">
+                  Page {moviesPagination.currentPage} / {moviesPagination.totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={moviesPage >= moviesPagination.totalPages || moviesLoading}
+                  onClick={() => goToMoviesPage(moviesPage + 1)}
+                >
+                  Next
+                </button>
+              </nav>
+            )}
+            </>
           )}
         </div>
       )}
@@ -1703,33 +1579,41 @@ const AdminDashboard = () => {
                       <span style={{ 
                         padding: '4px 8px', 
                         borderRadius: '4px', 
-                        backgroundColor: tvShow.status === 'active' ? '#28a745' : '#6c757d',
+                        backgroundColor:
+                          tvShow.status === 'active'
+                            ? '#28a745'
+                            : tvShow.status === 'coming_soon'
+                              ? '#e50914'
+                              : '#6c757d',
                         color: 'white',
                         fontSize: '12px'
                       }}>
-                        {tvShow.status}
+                        {tvShow.status === 'coming_soon' ? 'coming soon' : tvShow.status}
                       </span>
                     </td>
                     <td>{tvShow.addedBy?.name || 'Unknown'}</td>
                     <td>
-                      <div style={{ display: 'flex', gap: '5px' }}>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                      <div className="table-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-table"
                           onClick={() => handleEditTVShow(tvShow)}
                         >
                           Edit
                         </button>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
-                          onClick={() => handleToggleTVShowStatus(tvShow._id)}
+                        <select
+                          className={`status-select status-select--${tvShow.status || 'active'}`}
+                          value={tvShow.status || 'active'}
+                          onChange={(e) => handleToggleTVShowStatus(tvShow._id, e.target.value)}
+                          aria-label={`Status for ${tvShow.title}`}
                         >
-                          {tvShow.status === 'active' ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                          <option value="active">Active</option>
+                          <option value="coming_soon">Coming Soon</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-table"
                           onClick={() => handleDeleteTVShow(tvShow._id)}
                         >
                           Delete
@@ -1741,135 +1625,6 @@ const AdminDashboard = () => {
               </tbody>
             </table>
           )}
-        </div>
-      )}
-
-      {/* Add User Modal */}
-      {showAddUserModal && (
-        <div className="modal">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3>Add New User</h3>
-              <button 
-                className="close-btn"
-                onClick={() => setShowAddUserModal(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="form-group">
-              <label>Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                placeholder="Enter user name"
-              />
-            </div>
-            <div className="form-group">
-              <label>Email</label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
-                placeholder="Enter user email"
-              />
-            </div>
-            <div className="form-group">
-              <label>Password</label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({...formData, password: e.target.value})}
-                placeholder="Enter user password"
-              />
-            </div>
-            <div className="form-group">
-              <label>Role</label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({...formData, role: e.target.value})}
-                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-              >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <div className="form-actions">
-              <button 
-                className="btn btn-primary"
-                onClick={handleAddUser}
-              >
-                Add User
-              </button>
-              <button 
-                className="btn btn-secondary"
-                onClick={() => setShowAddUserModal(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit User Modal */}
-      {editingUser && (
-        <div className="modal">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3>Edit User</h3>
-              <button 
-                className="close-btn"
-                onClick={() => setEditingUser(null)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="form-group">
-              <label>Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                placeholder="Enter user name"
-              />
-            </div>
-            <div className="form-group">
-              <label>Email</label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
-                placeholder="Enter user email"
-              />
-            </div>
-            <div className="form-group">
-              <label>Role</label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({...formData, role: e.target.value})}
-                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
-              >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <div className="form-actions">
-              <button 
-                className="btn btn-primary"
-                onClick={handleUpdateUser}
-              >
-                Update User
-              </button>
-              <button 
-                className="btn btn-secondary"
-                onClick={() => setEditingUser(null)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -1994,6 +1749,107 @@ const AdminDashboard = () => {
               />
             </div>
             <div className="form-group">
+              <label>Director</label>
+              <input
+                type="text"
+                value={movieFormData.director || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, director: e.target.value})}
+                placeholder="e.g. Joe Russo"
+              />
+            </div>
+            <div className="form-group">
+              <label>Language</label>
+              <input
+                type="text"
+                value={movieFormData.language || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, language: e.target.value})}
+                placeholder="e.g. English"
+              />
+            </div>
+            <div className="form-group">
+              <label>Budget</label>
+              <input
+                type="text"
+                value={movieFormData.budget || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, budget: e.target.value})}
+                placeholder="e.g. 356M or 356000000"
+              />
+            </div>
+            <div className="form-group">
+              <label>Revenue</label>
+              <input
+                type="text"
+                value={movieFormData.revenue || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, revenue: e.target.value})}
+                placeholder="e.g. 2799M or 2799000000"
+              />
+            </div>
+            <div className="form-group">
+              <label>Runtime (minutes)</label>
+              <input
+                type="number"
+                value={movieFormData.runtime || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, runtime: e.target.value})}
+                min="0"
+                placeholder="e.g. 181"
+              />
+            </div>
+            <div className="form-group">
+              <label>Release Date</label>
+              <input
+                type="text"
+                value={movieFormData.releaseDate || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, releaseDate: e.target.value})}
+                placeholder="e.g. 2019-04-26"
+              />
+            </div>
+            <div className="form-group">
+              <label>Tagline</label>
+              <input
+                type="text"
+                value={movieFormData.tagline || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, tagline: e.target.value})}
+                placeholder="Optional short tagline"
+              />
+            </div>
+            <div className="form-group">
+              <label>Trailer URL (Watch Trailer)</label>
+              <input
+                type="url"
+                value={movieFormData.trailerUrl || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, trailerUrl: e.target.value})}
+                placeholder="https://www.youtube.com/watch?v=..."
+              />
+              <small>YouTube watch/share/embed URL for the Watch Trailer button.</small>
+            </div>
+            <div className="form-group">
+              <label>Detail Page Banner (wide image)</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleMovieBannerChange}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+              />
+              <small>Shown as the backdrop on the movie page. Not added to the poster gallery.</small>
+              {movieBannerPreview && !movieClearBanner && (
+                <div style={{ marginTop: '10px', position: 'relative', maxWidth: '420px' }}>
+                  <img
+                    src={movieBannerPreview}
+                    alt="Detail banner preview"
+                    style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #444' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ marginTop: '8px', padding: '5px 10px', fontSize: '12px' }}
+                    onClick={clearMovieBanner}
+                  >
+                    Remove Banner
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="form-group">
               <label>Add More Images (Optional)</label>
               <input
                 type="file"
@@ -2002,7 +1858,7 @@ const AdminDashboard = () => {
                 onChange={handleMovieImageChange}
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
               />
-              <small>Select one or more images to add to the movie. Max 5MB per image.</small>
+              <small>Select one or more poster images to add to the movie. Max 5MB per image.</small>
             </div>
             {movieImagePreviews.length > 0 && (
               <div className="form-group">
@@ -2066,6 +1922,9 @@ const AdminDashboard = () => {
                   setEditingMovie(null);
                   setMovieImageFiles([]);
                   setMovieImagePreviews([]);
+                  setMovieBannerFile(null);
+                  setMovieBannerPreview('');
+                  setMovieClearBanner(false);
                 }}
               >
                 Cancel
@@ -2276,6 +2135,107 @@ const AdminDashboard = () => {
               />
             </div>
             <div className="form-group">
+              <label>Director / Creator</label>
+              <input
+                type="text"
+                value={tvShowFormData.director || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, director: e.target.value})}
+                placeholder="e.g. Joe Russo"
+              />
+            </div>
+            <div className="form-group">
+              <label>Language</label>
+              <input
+                type="text"
+                value={tvShowFormData.language || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, language: e.target.value})}
+                placeholder="e.g. English"
+              />
+            </div>
+            <div className="form-group">
+              <label>Budget</label>
+              <input
+                type="text"
+                value={tvShowFormData.budget || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, budget: e.target.value})}
+                placeholder="e.g. 356M or 356000000"
+              />
+            </div>
+            <div className="form-group">
+              <label>Revenue</label>
+              <input
+                type="text"
+                value={tvShowFormData.revenue || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, revenue: e.target.value})}
+                placeholder="e.g. 2799M or 2799000000"
+              />
+            </div>
+            <div className="form-group">
+              <label>Runtime (minutes)</label>
+              <input
+                type="number"
+                value={tvShowFormData.runtime || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, runtime: e.target.value})}
+                min="0"
+                placeholder="e.g. 45"
+              />
+            </div>
+            <div className="form-group">
+              <label>Release Date</label>
+              <input
+                type="text"
+                value={tvShowFormData.releaseDate || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, releaseDate: e.target.value})}
+                placeholder="e.g. 2019-04-26"
+              />
+            </div>
+            <div className="form-group">
+              <label>Tagline</label>
+              <input
+                type="text"
+                value={tvShowFormData.tagline || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, tagline: e.target.value})}
+                placeholder="Optional short tagline"
+              />
+            </div>
+            <div className="form-group">
+              <label>Trailer URL (Watch Trailer)</label>
+              <input
+                type="url"
+                value={tvShowFormData.trailerUrl || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, trailerUrl: e.target.value})}
+                placeholder="https://www.youtube.com/watch?v=..."
+              />
+              <small>YouTube watch/share/embed URL for the Watch Trailer button.</small>
+            </div>
+            <div className="form-group">
+              <label>Detail Page Banner (wide image)</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleTVShowBannerChange}
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
+              />
+              <small>Shown as the backdrop on the TV show page. Not added to the poster gallery.</small>
+              {tvShowBannerPreview && !tvShowClearBanner && (
+                <div style={{ marginTop: '10px', position: 'relative', maxWidth: '420px' }}>
+                  <img
+                    src={tvShowBannerPreview}
+                    alt="Detail banner preview"
+                    style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #444' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ marginTop: '8px', padding: '5px 10px', fontSize: '12px' }}
+                    onClick={clearTVShowBanner}
+                  >
+                    Remove Banner
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="form-group">
               <label>Add More Images (Optional)</label>
               <input
                 type="file"
@@ -2317,7 +2277,7 @@ const AdminDashboard = () => {
                 }}
                 style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
               />
-              <small>Select one or more images to add to the TV show. Max 5MB per image.</small>
+              <small>Select one or more poster images to add to the TV show. Max 5MB per image.</small>
             </div>
             {tvShowImagePreviews.length > 0 && (
               <div className="form-group">
@@ -2389,6 +2349,9 @@ const AdminDashboard = () => {
                   setEditingTVShow(null);
                   setTVShowImageFiles([]);
                   setTVShowImagePreviews([]);
+                  setTVShowBannerFile(null);
+                  setTVShowBannerPreview('');
+                  setTVShowClearBanner(false);
                 }}
               >
                 Cancel
@@ -2400,16 +2363,20 @@ const AdminDashboard = () => {
 
       {/* Admin Management Section */}
       {activeTab === 'admins' && (
-        <AdminManagement
-          token={token}
-          admins={users.filter(u => u.role === 'admin')}
-          onAdminCreated={fetchUsers}
-        />
+        <AdminManagement token={token} />
       )}
 
       {/* Home Page Banner Section */}
       {activeTab === 'banners' && (
         <BannerManagement
+          token={token}
+          showNotification={showNotification}
+        />
+      )}
+
+      {/* Collections Section */}
+      {activeTab === 'collections' && (
+        <CollectionManagement
           token={token}
           showNotification={showNotification}
         />

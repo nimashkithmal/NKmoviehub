@@ -1,19 +1,17 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Banner = require('../models/Banner');
+const Movie = require('../models/Movie');
+const TVShow = require('../models/TVShow');
 const { protect, restrictToAdmin } = require('../middleware/auth');
-// Every banner image is pushed to Cloudinary before it reaches the database
 const { cloudinary, uploadImage } = require('../utils/cloudinaryUpload');
 
 const router = express.Router();
 
-/**
- * Remove an image from Cloudinary, ignoring failures.
- * A slide should still be deletable even if the remote file has already gone.
- */
+const DETAIL_FIELDS = 'title year description genre imdbRating averageRating imageUrl images';
+
 const destroyImage = async (publicId) => {
   if (!publicId) return;
-
   try {
     await cloudinary.uploader.destroy(publicId);
   } catch (error) {
@@ -21,14 +19,17 @@ const destroyImage = async (publicId) => {
   }
 };
 
+const populateBanner = (query) =>
+  query
+    .populate('movie', DETAIL_FIELDS)
+    .populate('tvShow', DETAIL_FIELDS);
+
 // @route   GET /api/banners
-// @desc    Get the active home page slides
-// @access  Public
 router.get('/', async (req, res) => {
   try {
-    const banners = await Banner.find({ status: 'active' })
-      .sort({ order: 1, createdAt: 1 })
-      .select('imageUrl title order');
+    const banners = await populateBanner(
+      Banner.find({ status: 'active' }).sort({ order: 1, createdAt: 1 })
+    ).select('imageUrl title order movie tvShow');
 
     res.json({
       success: true,
@@ -44,13 +45,13 @@ router.get('/', async (req, res) => {
 });
 
 // @route   GET /api/banners/admin
-// @desc    Get every slide, including inactive ones (admin only)
-// @access  Private/Admin
 router.get('/admin', protect, restrictToAdmin, async (req, res) => {
   try {
-    const banners = await Banner.find()
-      .populate('addedBy', 'name email')
-      .sort({ order: 1, createdAt: 1 });
+    const banners = await populateBanner(
+      Banner.find()
+        .populate('addedBy', 'name email')
+        .sort({ order: 1, createdAt: 1 })
+    );
 
     res.json({
       success: true,
@@ -65,21 +66,37 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
   }
 });
 
+const resolveLink = async ({ movieId, tvShowId }) => {
+  if (movieId) {
+    const movie = await Movie.findById(movieId).select('_id title');
+    if (!movie) return { error: 'Selected movie was not found' };
+    return { movie: movie._id, tvShow: null, title: movie.title };
+  }
+  if (tvShowId) {
+    const tvShow = await TVShow.findById(tvShowId).select('_id title');
+    if (!tvShow) return { error: 'Selected TV show was not found' };
+    return { movie: null, tvShow: tvShow._id, title: tvShow.title };
+  }
+  return { error: 'Please select a movie or a TV show' };
+};
+
 // @route   POST /api/banners
-// @desc    Add a home page slide (admin only)
-// @access  Private/Admin
 router.post('/', protect, restrictToAdmin, [
   body('image')
     .notEmpty()
     .withMessage('An image file or image URL is required'),
+  body('movieId')
+    .optional({ checkFalsy: true })
+    .isMongoId()
+    .withMessage('Invalid movie id'),
+  body('tvShowId')
+    .optional({ checkFalsy: true })
+    .isMongoId()
+    .withMessage('Invalid TV show id'),
   body('title')
     .optional({ checkFalsy: true })
     .isLength({ max: 100 })
-    .withMessage('Title cannot exceed 100 characters'),
-  body('order')
-    .optional()
-    .isInt({ min: 0 })
-    .withMessage('Order must be a positive number')
+    .withMessage('Title cannot exceed 100 characters')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -91,7 +108,25 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
 
-    const { image, title = '', status = 'active' } = req.body;
+    const { image, movieId, tvShowId, title = '', status = 'active' } = req.body;
+
+    if (!movieId && !tvShowId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select a movie or a TV show'
+      });
+    }
+    if (movieId && tvShowId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Select either a movie or a TV show, not both'
+      });
+    }
+
+    const link = await resolveLink({ movieId, tvShowId });
+    if (link.error) {
+      return res.status(400).json({ success: false, message: link.error });
+    }
 
     let uploaded;
     try {
@@ -104,7 +139,6 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
 
-    // New slides go to the end of the slideshow unless an order is given
     const order = req.body.order !== undefined
       ? parseInt(req.body.order, 10)
       : await Banner.countDocuments();
@@ -112,16 +146,22 @@ router.post('/', protect, restrictToAdmin, [
     const banner = await Banner.create({
       imageUrl: uploaded.secure_url,
       publicId: uploaded.public_id,
-      title,
+      movie: link.movie,
+      tvShow: link.tvShow,
+      title: title || link.title,
       order,
       status: status === 'inactive' ? 'inactive' : 'active',
       addedBy: req.user._id
     });
 
+    await populateBanner(Banner.findById(banner._id)).then((doc) => doc);
+
+    const populated = await populateBanner(Banner.findById(banner._id));
+
     res.status(201).json({
       success: true,
       message: 'Banner added successfully',
-      data: { banner }
+      data: { banner: populated }
     });
   } catch (error) {
     console.error('Create banner error:', error);
@@ -133,8 +173,6 @@ router.post('/', protect, restrictToAdmin, [
 });
 
 // @route   PUT /api/banners/:id
-// @desc    Update a slide's image, title or position (admin only)
-// @access  Private/Admin
 router.put('/:id', protect, restrictToAdmin, async (req, res) => {
   try {
     const banner = await Banner.findById(req.params.id);
@@ -146,9 +184,35 @@ router.put('/:id', protect, restrictToAdmin, async (req, res) => {
       });
     }
 
-    const { image, title, order, status } = req.body;
+    const { image, title, order, status, movieId, tvShowId } = req.body;
 
-    // Replacing the image also clears the old one out of Cloudinary
+    const cleanMovieId = movieId && String(movieId).trim() ? String(movieId).trim() : null;
+    const cleanTvShowId = tvShowId && String(tvShowId).trim() ? String(tvShowId).trim() : null;
+
+    if (cleanMovieId || cleanTvShowId) {
+      if (cleanMovieId && cleanTvShowId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Select either a movie or a TV show, not both'
+        });
+      }
+
+      const link = await resolveLink({
+        movieId: cleanMovieId || undefined,
+        tvShowId: cleanTvShowId || undefined
+      });
+      if (link.error) {
+        return res.status(400).json({ success: false, message: link.error });
+      }
+
+      // Explicitly clear the other link so old "movie required" docs migrate cleanly
+      banner.movie = link.movie || null;
+      banner.tvShow = link.tvShow || null;
+      if (title === undefined || title === null || title === '') {
+        banner.title = link.title;
+      }
+    }
+
     if (image && image !== banner.imageUrl) {
       let uploaded;
       try {
@@ -167,29 +231,30 @@ router.put('/:id', protect, restrictToAdmin, async (req, res) => {
       await destroyImage(previousPublicId);
     }
 
-    if (title !== undefined) banner.title = title;
+    if (title !== undefined && title !== null && title !== '') banner.title = title;
     if (order !== undefined) banner.order = parseInt(order, 10);
     if (status === 'active' || status === 'inactive') banner.status = status;
 
     await banner.save();
+    const populated = await populateBanner(Banner.findById(banner._id));
 
     res.json({
       success: true,
       message: 'Banner updated successfully',
-      data: { banner }
+      data: { banner: populated }
     });
   } catch (error) {
     console.error('Update banner error:', error);
-    res.status(500).json({
+    const message = error?.name === 'ValidationError'
+      ? Object.values(error.errors).map((e) => e.message).join(', ')
+      : 'Server error while updating the banner';
+    res.status(error?.name === 'ValidationError' ? 400 : 500).json({
       success: false,
-      message: 'Server error while updating the banner'
+      message
     });
   }
 });
 
-// @route   PATCH /api/banners/:id/status
-// @desc    Show or hide a slide without deleting it (admin only)
-// @access  Private/Admin
 router.patch('/:id/status', protect, restrictToAdmin, async (req, res) => {
   try {
     const banner = await Banner.findById(req.params.id);
@@ -218,9 +283,6 @@ router.patch('/:id/status', protect, restrictToAdmin, async (req, res) => {
   }
 });
 
-// @route   PUT /api/banners/reorder
-// @desc    Save a new slide order (admin only)
-// @access  Private/Admin
 router.put('/reorder/all', protect, restrictToAdmin, async (req, res) => {
   try {
     const { order } = req.body;
@@ -236,7 +298,9 @@ router.put('/reorder/all', protect, restrictToAdmin, async (req, res) => {
       order.map((id, index) => Banner.findByIdAndUpdate(id, { order: index }))
     );
 
-    const banners = await Banner.find().sort({ order: 1, createdAt: 1 });
+    const banners = await populateBanner(
+      Banner.find().sort({ order: 1, createdAt: 1 })
+    );
 
     res.json({
       success: true,
@@ -252,9 +316,6 @@ router.put('/reorder/all', protect, restrictToAdmin, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/banners/:id
-// @desc    Delete a slide and its Cloudinary image (admin only)
-// @access  Private/Admin
 router.delete('/:id', protect, restrictToAdmin, async (req, res) => {
   try {
     const banner = await Banner.findById(req.params.id);

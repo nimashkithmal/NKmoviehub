@@ -1,11 +1,29 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
-import Header from './Header';
 import MovieGrid from './MovieGrid';
 import TVShowGrid from './TVShowGrid';
 import ContactSection from './ContactSection';
+import ContentRow from './ContentRow';
+import PosterCard from './PosterCard';
+import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
+import { buildMoviesUrl, buildTVShowsUrl } from '../utils/fetchAllPaged';
 import './MovieGrid.css';
+import './HomeDiscovery.css';
+import './BrowseShelf.css';
+
+const PAGE_SIZE = 20;
+/** Server batch size — UI still shows PAGE_SIZE; next batch loads when you leave this window. */
+const BATCH_SIZE = 500;
+
+const getItemImage = (item) => {
+  if (item?.images?.length) return item.images[0];
+  if (item?.imageUrl) return item.imageUrl;
+  return null;
+};
+
+const batchIndexForPage = (page) =>
+  Math.floor(((Math.max(1, page) - 1) * PAGE_SIZE) / BATCH_SIZE);
 
 const Home = () => {
   const { isAuthenticated, token } = useAuth();
@@ -18,103 +36,141 @@ const Home = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
+  const [comingSoonOnly, setComingSoonOnly] = useState(false);
   const [userRatings, setUserRatings] = useState({});
   const [ratingLoading, setRatingLoading] = useState({});
-  const [showGenrePanel, setShowGenrePanel] = useState(false);
-  const [showYearPanel, setShowYearPanel] = useState(false);
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [contentType, setContentType] = useState('movies'); // 'movies' or 'tvshows'
+  const [contentType, setContentType] = useState('movies');
   const [availableGenres, setAvailableGenres] = useState([]);
   const [availableYears, setAvailableYears] = useState([]);
   const [filtersLoading, setFiltersLoading] = useState(false);
+  const [homeBanners, setHomeBanners] = useState([]);
+  const [comingSoonItems, setComingSoonItems] = useState([]);
+  const [comingSoonLoading, setComingSoonLoading] = useState(true);
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [heroReady, setHeroReady] = useState(false);
+  const [forceBrowse, setForceBrowse] = useState(false);
+  const [sortBy, setSortBy] = useState('latest'); // popular | latest | rated | az
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [catalogTotal, setCatalogTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [topRatedMovies, setTopRatedMovies] = useState([]);
+  const [trendingNow, setTrendingNow] = useState([]);
+  const [nowPlaying, setNowPlaying] = useState([]);
+  const [trendingTVShows, setTrendingTVShows] = useState([]);
+  const [loadedBatchIndex, setLoadedBatchIndex] = useState(-1);
+  const batchCacheRef = useRef(new Map());
+  const catalogQueryKeyRef = useRef('');
 
-  // Slideshow images are configured by an admin and stored in Cloudinary
-  const [slideshowImages, setSlideshowImages] = useState([]);
+  const hasActiveFilters = Boolean(searchTerm || selectedGenre || selectedYear || comingSoonOnly);
+  const isDiscoveryMode = !hasActiveFilters && contentType === 'movies' && !forceBrowse;
 
   useEffect(() => {
     const fetchBanners = async () => {
       try {
         const response = await fetch('/api/banners');
         const result = await response.json();
-
         if (result.success) {
-          setSlideshowImages(result.data.banners.map((banner) => banner.imageUrl));
+          const banners = (result.data.banners || []).filter((b) => b.imageUrl);
+          setHomeBanners(banners);
         }
-      } catch (error) {
-        console.error('Error fetching banners:', error);
+      } catch (err) {
+        console.error('Error fetching banners:', err);
+      }
+    };
+
+    const fetchComingSoon = async () => {
+      try {
+        setComingSoonLoading(true);
+        const [moviesRes, tvRes] = await Promise.all([
+          fetch('/api/movies/coming-soon'),
+          fetch('/api/tvshows/coming-soon')
+        ]);
+        const moviesJson = await moviesRes.json();
+        const tvJson = await tvRes.json();
+        const movies = moviesJson.success
+          ? (moviesJson.data.movies || []).map((m) => ({ ...m, _kind: 'movie' }))
+          : [];
+        const shows = tvJson.success
+          ? (tvJson.data.tvShows || []).map((t) => ({ ...t, _kind: 'tvshow' }))
+          : [];
+        setComingSoonItems(
+          [...movies, ...shows].sort((a, b) => {
+            const key = (item) => {
+              if (item.releaseDate) {
+                const iso = String(item.releaseDate).match(/^(\d{4}-\d{2}-\d{2})/);
+                if (iso) return iso[1];
+                const t = Date.parse(item.releaseDate);
+                if (!Number.isNaN(t)) return new Date(t).toISOString().slice(0, 10);
+              }
+              if (item.year) return `${item.year}-12-31`;
+              return '9999-12-31';
+            };
+            const diff = key(a).localeCompare(key(b));
+            if (diff !== 0) return diff;
+            return String(a.title || '').localeCompare(String(b.title || ''));
+          })
+        );
+      } catch (err) {
+        console.error('Error fetching coming soon:', err);
+      } finally {
+        setComingSoonLoading(false);
       }
     };
 
     fetchBanners();
+    fetchComingSoon();
   }, []);
 
-  // Handle URL parameters from navbar search
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const searchParam = params.get('search');
-    const genreParam = params.get('genre');
-    const yearParam = params.get('year');
-    const typeParam = params.get('type');
-    
-    // Always update the states based on URL parameters
-    setSearchTerm(searchParam || '');
-    setSelectedGenre(genreParam || '');
-    setSelectedYear(yearParam || '');
-    setContentType(typeParam === 'tvshows' ? 'tvshows' : 'movies');
-    
-    // Scroll to movies section if genre/year filter is applied (helps when navigating from other pages)
-    if (genreParam || yearParam) {
+    setSearchTerm(params.get('search') || '');
+    setSelectedGenre(params.get('genre') || '');
+    setSelectedYear(params.get('year') || '');
+    setComingSoonOnly(params.get('category') === 'coming-soon');
+    setContentType(params.get('type') === 'tvshows' ? 'tvshows' : 'movies');
+    setForceBrowse(params.get('browse') === '1');
+    const sortParam = params.get('sort');
+    if (sortParam === 'popular' || sortParam === 'rated' || sortParam === 'az' || sortParam === 'latest') {
+      setSortBy(sortParam);
+    }
+    setCurrentPage(1);
+
+    if (
+      params.get('genre') ||
+      params.get('year') ||
+      params.get('search') ||
+      params.get('type') === 'tvshows' ||
+      params.get('browse') === '1' ||
+      params.get('category') === 'coming-soon'
+    ) {
       setTimeout(() => {
-        const moviesSection = document.getElementById('movies-section');
-        if (moviesSection) {
-          moviesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }, 500);
+        document.getElementById('movies-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 400);
     }
   }, [location.search]);
 
-  // Auto-advance slideshow
   useEffect(() => {
-    if (slideshowImages.length === 0) return undefined;
-
+    if (homeBanners.length === 0) return undefined;
     const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slideshowImages.length);
-    }, 5000); // Change slide every 5 seconds
-
+      setCurrentSlide((prev) => (prev + 1) % homeBanners.length);
+    }, 6000);
     return () => clearInterval(interval);
-  }, [slideshowImages.length]);
+  }, [homeBanners.length]);
 
-  // Manual slide navigation
-  const goToSlide = (index) => {
-    setCurrentSlide(index);
-  };
-
-  const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % slideshowImages.length);
-  };
-
-  const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + slideshowImages.length) % slideshowImages.length);
-  };
-
-  // Fetch available genres and years based on content type
   useEffect(() => {
     const fetchFilters = async () => {
       try {
         setFiltersLoading(true);
-        const apiEndpoint = contentType === 'tvshows' 
-          ? '/api/tvshows/filters'
-          : '/api/movies/filters';
-        
+        const apiEndpoint = contentType === 'tvshows' ? '/api/tvshows/filters' : '/api/movies/filters';
         const response = await fetch(apiEndpoint);
         const result = await response.json();
-        
         if (result.success) {
           setAvailableGenres(result.data.genres || []);
           setAvailableYears(result.data.years || []);
         }
-      } catch (error) {
-        console.error('Error fetching filters:', error);
+      } catch (err) {
+        console.error('Error fetching filters:', err);
         setAvailableGenres([]);
         setAvailableYears([]);
       } finally {
@@ -125,195 +181,268 @@ const Home = () => {
     fetchFilters();
   }, [contentType]);
 
-  // Close panels when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showGenrePanel && !event.target.closest('.filter-select-group')) {
-        setShowGenrePanel(false);
-      }
-      if (showYearPanel && !event.target.closest('.filter-select-group')) {
-        setShowYearPanel(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showGenrePanel, showYearPanel]);
-
-  // Handle genre selection
-  const handleGenreSelect = (genre) => {
-    const params = new URLSearchParams(location.search);
-    
-    if (selectedGenre === genre) {
-      // Toggle off - remove genre
-      params.delete('genre');
-    } else {
-      // Set new genre
-      params.set('genre', genre);
-      params.delete('search'); // Clear search when selecting genre
-    }
-    
-    // Preserve type parameter
-    if (contentType === 'tvshows') {
-      params.set('type', 'tvshows');
-    } else {
-      params.delete('type');
-    }
-    
-    const queryString = params.toString();
-    navigate(queryString ? `/?${queryString}` : '/', { replace: true });
-    setShowGenrePanel(false);
-  };
-
-  // Handle year selection
-  const handleYearSelect = (year) => {
-    const params = new URLSearchParams(location.search);
-    
-    if (selectedYear === year.toString()) {
-      // Toggle off - remove year
-      params.delete('year');
-    } else {
-      // Set new year
-      params.set('year', year);
-      params.delete('search'); // Clear search when selecting year
-    }
-    
-    // Preserve type parameter
-    if (contentType === 'tvshows') {
-      params.set('type', 'tvshows');
-    } else {
-      params.delete('type');
-    }
-    
-    const queryString = params.toString();
-    navigate(queryString ? `/?${queryString}` : '/', { replace: true });
-    setShowYearPanel(false);
-  };
-
-  // Fetch movies from backend
-  const fetchMovies = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      let url = '/api/movies?limit=1000';
-      if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
-      if (selectedGenre) url += `&genre=${encodeURIComponent(selectedGenre)}`;
-      if (selectedYear) url += `&year=${selectedYear}`;
-      
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        setMovies(result.data.movies);
-      } else {
-        throw new Error(result.message || 'Failed to fetch movies');
-      }
-    } catch (err) {
-      console.error('Error fetching movies:', err);
-      setError(err.message || 'Failed to load movies. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [searchTerm, selectedGenre, selectedYear]);
-
-  // Fetch TV shows from backend
-  const fetchTVShows = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      let url = '/api/tvshows?limit=1000';
-      if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
-      if (selectedGenre) url += `&genre=${encodeURIComponent(selectedGenre)}`;
-      if (selectedYear) url += `&year=${selectedYear}`;
-      
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        setTVShows(result.data.tvShows);
-      } else {
-        throw new Error(result.message || 'Failed to fetch TV shows');
-      }
-    } catch (err) {
-      console.error('Error fetching TV shows:', err);
-      setError(err.message || 'Failed to load TV shows. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [searchTerm, selectedGenre, selectedYear]);
-
-  // Unified fetch effect - handles all filter changes including initial load
-  useEffect(() => {
-    // Debounce for search terms longer than 2 characters
-    if (searchTerm.trim().length > 2) {
-      const timeoutId = setTimeout(() => {
-        if (contentType === 'tvshows') {
-          fetchTVShows();
-        } else {
-          fetchMovies();
-        }
-      }, 300);
-
-      return () => clearTimeout(timeoutId);
-    } else {
-      // Immediate fetch for genre/year changes, short search terms, or initial load
+  const buildBrowseParams = useCallback(
+    (mutator) => {
+      const params = new URLSearchParams(location.search);
+      mutator(params);
       if (contentType === 'tvshows') {
-        fetchTVShows();
+        params.set('type', 'tvshows');
+        params.delete('browse');
       } else {
-        fetchMovies();
+        params.delete('type');
+        params.set('browse', '1');
       }
+      const queryString = params.toString();
+      navigate(queryString ? `/?${queryString}` : '/?browse=1', { replace: true });
+    },
+    [navigate, location.search, contentType]
+  );
+
+  const handleGenreSelect = (genre) => {
+    buildBrowseParams((params) => {
+      if (!genre || selectedGenre === genre) params.delete('genre');
+      else {
+        params.set('genre', genre);
+        params.delete('search');
+      }
+    });
+  };
+
+  const handleYearSelect = (year) => {
+    buildBrowseParams((params) => {
+      const value = year == null ? '' : String(year);
+      if (!value || selectedYear === value) params.delete('year');
+      else {
+        params.set('year', value);
+        params.delete('search');
+      }
+    });
+  };
+
+  const handleComingSoonSelect = (enabled) => {
+    buildBrowseParams((params) => {
+      if (!enabled || comingSoonOnly) params.delete('category');
+      else {
+        params.set('category', 'coming-soon');
+        params.delete('search');
+      }
+    });
+  };
+
+  const openComingSoonCategory = () => {
+    navigate('/?browse=1&category=coming-soon');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const switchContentType = (nextType) => {
+    if (nextType === 'tvshows') navigate('/?type=tvshows');
+    else navigate('/?browse=1');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const catalogQueryKey = useMemo(
+    () =>
+      [
+        contentType,
+        searchTerm.trim(),
+        selectedGenre,
+        selectedYear,
+        comingSoonOnly ? 'coming-soon' : '',
+        sortBy
+      ].join('|'),
+    [contentType, searchTerm, selectedGenre, selectedYear, comingSoonOnly, sortBy]
+  );
+
+  const applyBatchToState = useCallback(
+    (batchIndex, items, total) => {
+      if (contentType === 'tvshows') setTVShows(items);
+      else setMovies(items);
+      setLoadedBatchIndex(batchIndex);
+      setCatalogTotal(total);
+      setTotalPages(Math.max(1, Math.ceil(total / PAGE_SIZE)));
+    },
+    [contentType]
+  );
+
+  const fetchCatalogBatch = useCallback(
+    async (batchIndex, { signal, silent = false } = {}) => {
+      if (batchIndex < 0) return null;
+
+      const cacheKey = `${catalogQueryKey}#${batchIndex}`;
+      const cached = batchCacheRef.current.get(cacheKey);
+      if (cached) {
+        if (!silent) applyBatchToState(batchIndex, cached.items, cached.total);
+        return cached;
+      }
+
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
+
+      const buildUrl = contentType === 'tvshows' ? buildTVShowsUrl : buildMoviesUrl;
+      const listKey = contentType === 'tvshows' ? 'tvShows' : 'movies';
+      const totalKey = contentType === 'tvshows' ? 'totalTVShows' : 'totalMovies';
+
+      const response = await fetch(
+        buildUrl({
+          page: batchIndex + 1,
+          limit: BATCH_SIZE,
+          search: searchTerm,
+          genre: selectedGenre,
+          year: selectedYear,
+          sort: sortBy,
+          status: comingSoonOnly ? 'coming_soon' : ''
+        }),
+        signal ? { signal } : undefined
+      );
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(
+          result.message ||
+            (contentType === 'tvshows' ? 'Failed to load TV shows' : 'Failed to load movies')
+        );
+      }
+
+      const items = result.data?.[listKey] || [];
+      const total = Number(result.data?.pagination?.[totalKey]) || 0;
+      const payload = { items, total };
+      batchCacheRef.current.set(cacheKey, payload);
+
+      if (!silent) applyBatchToState(batchIndex, items, total);
+      return payload;
+    },
+    [
+      catalogQueryKey,
+      contentType,
+      searchTerm,
+      selectedGenre,
+      selectedYear,
+      comingSoonOnly,
+      sortBy,
+      applyBatchToState
+    ]
+  );
+
+  // Discovery: live home rows matched to local catalog; refresh periodically
+  useEffect(() => {
+    if (!isDiscoveryMode) return undefined;
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const loadDiscovery = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch('/api/discovery/home?limit=20', {
+          signal: controller.signal
+        });
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.message || 'Failed to load home discovery');
+        }
+
+        if (cancelled) return;
+        setTrendingNow(result.data.trendingNow || []);
+        setNowPlaying(result.data.nowPlaying || []);
+        setTrendingTVShows(result.data.trendingTVShows || []);
+        setTopRatedMovies(result.data.topRatedMovies || []);
+        // Keep legacy state in sync for any leftover references
+        setMovies(result.data.trendingNow || []);
+        setTVShows(result.data.trendingTVShows || []);
+      } catch (err) {
+        if (err.name === 'AbortError' || cancelled) return;
+        console.error('Error loading discovery catalog:', err);
+        setError('Failed to load the catalog.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadDiscovery();
+    const refreshId = setInterval(loadDiscovery, 10 * 60 * 1000);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearInterval(refreshId);
+    };
+  }, [isDiscoveryMode]);
+
+  // Browse: 500-item batches, 20 shown per UI page.
+  useEffect(() => {
+    if (isDiscoveryMode) return undefined;
+
+    if (catalogQueryKeyRef.current !== catalogQueryKey) {
+      catalogQueryKeyRef.current = catalogQueryKey;
+      batchCacheRef.current.clear();
+      setLoadedBatchIndex(-1);
+      setLoading(true);
+      setError(null);
+      if (contentType === 'tvshows') setTVShows([]);
+      else setMovies([]);
     }
-  }, [contentType, selectedGenre, selectedYear, searchTerm, fetchMovies, fetchTVShows]);
+
+    const controller = new AbortController();
+    const batchIndex = batchIndexForPage(currentPage);
+    const delay = searchTerm.trim().length > 2 ? 300 : 0;
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        const cacheKey = `${catalogQueryKey}#${batchIndex}`;
+        if (!batchCacheRef.current.has(cacheKey)) {
+          setLoading(true);
+          setError(null);
+        }
+
+        const payload = await fetchCatalogBatch(batchIndex, {
+          signal: controller.signal
+        });
+
+        // Prefetch next 500 so the following ~25 UI pages stay instant
+        if (payload && (batchIndex + 1) * BATCH_SIZE < payload.total) {
+          fetchCatalogBatch(batchIndex + 1, {
+            signal: controller.signal,
+            silent: true
+          }).catch(() => {});
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.error('Error fetching catalog batch:', err);
+        setError(err.message || 'Failed to load catalog. Please try again.');
+        if (contentType === 'tvshows') setTVShows([]);
+        else setMovies([]);
+        setLoadedBatchIndex(batchIndexForPage(currentPage));
+        setCatalogTotal(0);
+        setTotalPages(1);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, delay);
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [isDiscoveryMode, catalogQueryKey, currentPage, searchTerm, fetchCatalogBatch, contentType]);
 
   const clearFilters = useCallback(() => {
-    const params = new URLSearchParams(location.search);
-    
-    // Clear all filter parameters
-    params.delete('search');
-    params.delete('genre');
-    params.delete('year');
-    
-    // Preserve type parameter
-    if (contentType === 'tvshows') {
-      params.set('type', 'tvshows');
-    } else {
-      params.delete('type');
-    }
-    
-    const queryString = params.toString();
-    navigate(queryString ? `/?${queryString}` : '/', { replace: true });
-  }, [navigate, location.search, contentType]);
+    if (contentType === 'tvshows') navigate('/?type=tvshows', { replace: true });
+    else navigate('/?browse=1', { replace: true });
+  }, [navigate, contentType]);
 
-
-  // Fetch user ratings for movies
   const fetchUserRatings = useCallback(async () => {
-    if (!isAuthenticated) return;
-    
+    if (!isAuthenticated || contentType === 'tvshows') return;
+    const start = ((currentPage - 1) * PAGE_SIZE) % BATCH_SIZE;
+    const visible = movies.slice(start, start + PAGE_SIZE);
+    if (visible.length === 0) return;
     try {
-      const ratingPromises = movies.map(async (movie) => {
+      const ratingPromises = visible.map(async (movie) => {
         try {
           const response = await fetch(`/api/movies/${movie._id}/rating`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
+            headers: { Authorization: `Bearer ${token}` }
           });
-          
           if (response.ok) {
             const result = await response.json();
             return { movieId: movie._id, ...result.data };
@@ -326,71 +455,16 @@ const Home = () => {
 
       const ratings = await Promise.all(ratingPromises);
       const ratingsMap = {};
-      ratings.forEach(rating => {
+      ratings.forEach((rating) => {
         ratingsMap[rating.movieId] = rating;
       });
-      setUserRatings(ratingsMap);
+      setUserRatings((prev) => ({ ...prev, ...ratingsMap }));
     } catch (err) {
       console.error('Error fetching user ratings:', err);
     }
-  }, [movies, isAuthenticated, token]);
+  }, [movies, currentPage, isAuthenticated, token, contentType]);
 
-  // Handle movie rating
-  const handleRateMovie = async (movieId, rating, review = '') => {
-    if (!isAuthenticated) return;
-    
-    try {
-      setRatingLoading(prev => ({ ...prev, [movieId]: true }));
-      
-      const response = await fetch(`/api/movies/${movieId}/rate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ rating, review })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        
-        // Update local state
-        setUserRatings(prev => ({
-          ...prev,
-          [movieId]: {
-            movieId,
-            rating,
-            review,
-            hasRated: true
-          }
-        }));
-
-        // Update movie in the list with new average rating
-        setMovies(prev => prev.map(movie => 
-          movie._id === movieId 
-            ? { ...movie, averageRating: result.data.movie.averageRating, totalRatings: result.data.movie.totalRatings }
-            : movie
-        ));
-
-        // Show success message
-        const successMessage = result.message || 'Rating submitted successfully!';
-        showNotification(successMessage, 'success');
-      } else {
-        const errorData = await response.json();
-        const errorMessage = errorData.message || 'Failed to rate movie';
-        showNotification(errorMessage, 'error');
-      }
-    } catch (err) {
-      console.error('Error rating movie:', err);
-      showNotification('Failed to rate movie. Please try again.', 'error');
-    } finally {
-      setRatingLoading(prev => ({ ...prev, [movieId]: false }));
-    }
-  };
-
-  // Notification system
   const showNotification = (message, type = 'info') => {
-    // Create notification element
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     notification.innerHTML = `
@@ -399,306 +473,648 @@ const Home = () => {
         <button class="notification-close">×</button>
       </div>
     `;
-    
-    // Add to page
     document.body.appendChild(notification);
-    
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 5000);
-    
-    // Close button functionality
-    const closeBtn = notification.querySelector('.notification-close');
-    closeBtn.addEventListener('click', () => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
+    setTimeout(() => notification.parentNode?.removeChild(notification), 5000);
+    notification.querySelector('.notification-close').addEventListener('click', () => {
+      notification.parentNode?.removeChild(notification);
     });
   };
 
-  // Fetch user ratings when movies change
+  const handleRateMovie = async (movieId, rating, review = '') => {
+    if (!isAuthenticated) return;
+    try {
+      setRatingLoading((prev) => ({ ...prev, [movieId]: true }));
+      const response = await fetch(`/api/movies/${movieId}/rate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ rating, review })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setUserRatings((prev) => ({
+          ...prev,
+          [movieId]: { movieId, rating, review, hasRated: true }
+        }));
+        setMovies((prev) =>
+          prev.map((movie) =>
+            movie._id === movieId
+              ? {
+                  ...movie,
+                  averageRating: result.data.movie.averageRating,
+                  totalRatings: result.data.movie.totalRatings
+                }
+              : movie
+          )
+        );
+        showNotification(result.message || 'Rating submitted successfully!', 'success');
+      } else {
+        const errorData = await response.json();
+        showNotification(errorData.message || 'Failed to rate movie', 'error');
+      }
+    } catch (err) {
+      console.error('Error rating movie:', err);
+      showNotification('Failed to rate movie. Please try again.', 'error');
+    } finally {
+      setRatingLoading((prev) => ({ ...prev, [movieId]: false }));
+    }
+  };
+
   useEffect(() => {
-    if (movies.length > 0 && isAuthenticated) {
+    if (movies.length > 0 && isAuthenticated && !isDiscoveryMode) {
       fetchUserRatings();
     }
-  }, [movies, isAuthenticated, token, fetchUserRatings]);
+  }, [movies, isAuthenticated, token, fetchUserRatings, isDiscoveryMode]);
 
-  return (
-    
-    <div>
-      {/* Header Navigation */}
-      <Header />
-      
-      {/* Movie Browsing Section */}
-      <div className="card">
-        {/* Slideshow Wallpaper - hidden until an admin has added slides */}
-        {slideshowImages.length > 0 && (
-        <div className="slideshow-container">
-          <div className="slideshow-wrapper">
-            {slideshowImages.map((image, index) => (
-              <div
-                key={index}
-                className={`slide ${index === currentSlide ? 'active' : ''}`}
-                style={{
-                  backgroundImage: `url(${image})`,
-                  transform: `translateX(${(index - currentSlide) * 100}%)`
-                }}
-              />
-            ))}
-          </div>
-          
-          {/* Text Overlay */}
-          <div className="slideshow-overlay">
-            <div className="slideshow-content">
-              <h3>🎬 Welcome to NK Movie Hub</h3>
-              <p>Discover thousands of amazing films from every genre, era, and culture</p>
-              <div className="slideshow-features">
-                <span className="feature-tag">✨ Latest Releases</span>
-                <span className="feature-tag">🎭 All Genres</span>
-                <span className="feature-tag">⭐ User Ratings</span>
+  const catalogItems = contentType === 'tvshows' ? tvShows : movies;
+  const catalogCount = catalogTotal;
+
+  // Slice the current 500-batch into a 20-item UI page (instant when batch is cached)
+  const pagedItems = useMemo(() => {
+    if (isDiscoveryMode) return catalogItems;
+    const neededBatch = batchIndexForPage(currentPage);
+    if (loadedBatchIndex !== neededBatch) return [];
+    const start = ((currentPage - 1) * PAGE_SIZE) % BATCH_SIZE;
+    return catalogItems.slice(start, start + PAGE_SIZE);
+  }, [isDiscoveryMode, catalogItems, currentPage, loadedBatchIndex]);
+
+  const catalogWaitingForBatch =
+    !isDiscoveryMode && loadedBatchIndex !== batchIndexForPage(currentPage);
+
+  // Keep current page in range when totals shrink (e.g. after filtering)
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const pageNumbers = useMemo(() => {
+    const pages = [];
+    const windowSize = 5;
+    let start = Math.max(1, currentPage - Math.floor(windowSize / 2));
+    let end = Math.min(totalPages, start + windowSize - 1);
+    start = Math.max(1, end - windowSize + 1);
+    for (let i = start; i <= end; i += 1) pages.push(i);
+    return pages;
+  }, [currentPage, totalPages]);
+
+  const goToPage = (page) => {
+    const next = Math.min(totalPages, Math.max(1, page));
+    setCurrentPage(next);
+    document.getElementById('movies-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const featuredMovie = useMemo(() => {
+    const pool = [...trendingNow, ...nowPlaying, ...topRatedMovies, ...movies];
+    const withImages = pool.filter((m) => getItemImage(m));
+    if (withImages.length === 0) return movies.find((m) => getItemImage(m)) || movies[0] || null;
+    return withImages[Math.min(2, withImages.length - 1)];
+  }, [trendingNow, nowPlaying, topRatedMovies, movies]);
+
+  // Active hero slide: banner artwork + linked movie/TV details (never poster)
+  const activeBanner = homeBanners[currentSlide] || null;
+  const heroContent = activeBanner?.movie || activeBanner?.tvShow || featuredMovie;
+  const heroIsTV = Boolean(activeBanner?.tvShow && !activeBanner?.movie);
+
+  const heroImage =
+    activeBanner?.imageUrl ||
+    getItemImage(featuredMovie) ||
+    getMoviePlaceholder(featuredMovie?.title || 'NK Movie Hub', 1280, 720);
+
+  const heroTitle = heroContent?.title || activeBanner?.title || 'NK Movie Hub';
+  const heroDesc =
+    heroContent?.description ||
+    'Discover movies and TV shows from every genre — stream your next favourite tonight.';
+  const heroRating = heroContent
+    ? Number(heroContent.imdbRating ?? heroContent.averageRating)
+    : null;
+  const heroYear = heroContent?.year;
+  const heroGenre = heroContent?.genre;
+  const heroContentId = heroContent?._id;
+  const openHeroContent = () => {
+    if (!heroContentId) {
+      openBrowseMovies();
+      return;
+    }
+    navigate(heroIsTV ? `/tvshow/${heroContentId}` : `/movie/${heroContentId}`);
+  };
+
+  const openBrowseMovies = () => navigate('/?browse=1');
+
+  const renderDiscovery = () => (
+    <div className="home-discovery">
+      <>
+          <section className="home-hero">
+            <div className="home-hero-media">
+              {homeBanners.length > 0 ? (
+                homeBanners.map((banner, index) => (
+                  <div
+                    key={banner._id || banner.imageUrl + index}
+                    className={`home-hero-slide${index === currentSlide ? ' is-visible' : ''}`}
+                    style={{ backgroundImage: `url(${banner.imageUrl})` }}
+                  />
+                ))
+              ) : (
+                <img
+                  src={heroImage}
+                  alt={heroTitle}
+                  className={heroReady ? 'is-visible' : ''}
+                  onLoad={() => setHeroReady(true)}
+                  onError={(e) => {
+                    handleImageError(e, heroTitle);
+                    setHeroReady(true);
+                  }}
+                />
+              )}
+            </div>
+            <div className="home-hero-gradient-x" />
+            <div className="home-hero-gradient-y" />
+
+            <div className="home-hero-body">
+              <div className="home-hero-copy">
+                <div className="home-hero-meta">
+                  {heroRating > 0 && (
+                    <span className="home-hero-rating">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 2l2.9 6.9L22 9.2l-5.5 4.8L18.2 22 12 18.3 5.8 22l1.7-8L2 9.2l7.1-.3L12 2z" />
+                      </svg>
+                      {heroRating.toFixed(1)}
+                    </span>
+                  )}
+                  {heroYear && (
+                    <>
+                      <span className="home-hero-dot">·</span>
+                      <span className="home-hero-year">{heroYear}</span>
+                    </>
+                  )}
+                  {heroGenre && (
+                    <>
+                      <span className="home-hero-dot">·</span>
+                      <span className="home-hero-genre">{heroGenre}</span>
+                    </>
+                  )}
+                </div>
+
+                <h1 className="home-hero-title">{heroTitle}</h1>
+                <p className="home-hero-desc">{heroDesc}</p>
+
+                <div className="home-hero-actions">
+                  <button
+                    type="button"
+                    className="home-hero-btn home-hero-btn-primary"
+                    onClick={openHeroContent}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                    Watch Now
+                  </button>
+                  <button
+                    type="button"
+                    className="home-hero-btn home-hero-btn-secondary"
+                    onClick={openHeroContent}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 16v-4M12 8h.01" />
+                    </svg>
+                    More Info
+                  </button>
+                </div>
               </div>
-              
-              
             </div>
-          </div>
-          
-          {/* Navigation Arrows */}
-          <button className="slideshow-nav prev" onClick={prevSlide}>
-            ‹
-          </button>
-          <button className="slideshow-nav next" onClick={nextSlide}>
-            ›
-          </button>
-          
-          {/* Slide Indicators */}
-          <div className="slide-indicators">
-            {slideshowImages.map((_, index) => (
+
+            {homeBanners.length > 1 && (
+              <div className="home-hero-indicators">
+                {homeBanners.map((banner, index) => (
+                  <button
+                    key={banner._id || index}
+                    type="button"
+                    className={index === currentSlide ? 'is-active' : ''}
+                    aria-label={`Go to slide ${index + 1}`}
+                    onClick={() => setCurrentSlide(index)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <div className="home-rows" id="browse-anchor">
+            <nav className="home-categories" aria-label="Browse categories">
               <button
-                key={index}
-                className={`indicator ${index === currentSlide ? 'active' : ''}`}
-                onClick={() => goToSlide(index)}
+                type="button"
+                className="home-category-chip is-active"
+                onClick={openComingSoonCategory}
+              >
+                Coming Soon
+              </button>
+              <button
+                type="button"
+                className="home-category-chip"
+                onClick={() => navigate('/?browse=1&sort=popular')}
+              >
+                Trending
+              </button>
+              <button
+                type="button"
+                className="home-category-chip"
+                onClick={() => navigate('/?browse=1&sort=rated')}
+              >
+                Top Rated
+              </button>
+              <button
+                type="button"
+                className="home-category-chip"
+                onClick={() => navigate('/?type=tvshows&sort=popular')}
+              >
+                TV Shows
+              </button>
+            </nav>
+
+            {(comingSoonLoading || comingSoonItems.length > 0) && (
+              <ContentRow
+                title="Coming Soon"
+                subtitle="Upcoming releases — nearest first"
+                onViewAll={openComingSoonCategory}
+              >
+                {comingSoonLoading && comingSoonItems.length === 0 ? (
+                  <div className="home-row-loading">Loading upcoming titles…</div>
+                ) : (
+                  comingSoonItems.map((item) => (
+                    <PosterCard
+                      key={`${item._kind}-${item._id}`}
+                      item={item}
+                      badge="Coming Soon"
+                      onClick={() =>
+                        navigate(
+                          item._kind === 'tvshow' ? `/tvshow/${item._id}` : `/movie/${item._id}`
+                        )
+                      }
+                    />
+                  ))
+                )}
+              </ContentRow>
+            )}
+
+            {loading && trendingNow.length === 0 && nowPlaying.length === 0 ? (
+              <div className="home-row-loading home-row-loading-block">
+                Loading live titles…
+              </div>
+            ) : (
+              <>
+                {trendingNow.length > 0 && (
+                  <ContentRow
+                    title="Trending Now"
+                    subtitle="Most popular this week"
+                    onViewAll={() => navigate('/?browse=1&sort=popular')}
+                  >
+                    {trendingNow.map((movie) => (
+                      <PosterCard
+                        key={movie._id}
+                        item={movie}
+                        onClick={() => navigate(`/movie/${movie._id}`)}
+                      />
+                    ))}
+                  </ContentRow>
+                )}
+
+                {nowPlaying.length > 0 && (
+                  <ContentRow
+                    title="Now Playing"
+                    subtitle="In theaters now"
+                    onViewAll={() => navigate('/?browse=1&sort=popular')}
+                  >
+                    {nowPlaying.map((movie) => (
+                      <PosterCard
+                        key={movie._id}
+                        item={movie}
+                        onClick={() => navigate(`/movie/${movie._id}`)}
+                      />
+                    ))}
+                  </ContentRow>
+                )}
+
+                {trendingTVShows.length > 0 && (
+                  <ContentRow
+                    title="Trending TV Shows"
+                    subtitle="Most watched series this week"
+                    onViewAll={() => navigate('/?type=tvshows&sort=popular')}
+                  >
+                    {trendingTVShows.map((show) => (
+                      <PosterCard
+                        key={show._id}
+                        item={show}
+                        kind="tvshow"
+                        onClick={() => navigate(`/tvshow/${show._id}`)}
+                      />
+                    ))}
+                  </ContentRow>
+                )}
+
+                {topRatedMovies.length > 0 && (
+                  <ContentRow
+                    title="Top Rated Movies"
+                    subtitle="Critically acclaimed all-time greats"
+                    onViewAll={() => navigate('/?browse=1&sort=rated')}
+                  >
+                    {topRatedMovies.map((movie) => (
+                      <PosterCard
+                        key={movie._id}
+                        item={movie}
+                        onClick={() => navigate(`/movie/${movie._id}`)}
+                      />
+                    ))}
+                  </ContentRow>
+                )}
+              </>
+            )}
+
+            {error && (
+              <div className="error-state" style={{ padding: '2rem' }}>
+                <p>{error}</p>
+              </div>
+            )}
+          </div>
+        </>
+    </div>
+  );
+
+  const renderBrowse = () => {
+    const filterCount = [selectedGenre, selectedYear, comingSoonOnly || null].filter(Boolean).length;
+
+    return (
+    <div className="browse-shelf">
+      <div className="browse-shelf-top">
+        <div>
+          <p className="browse-shelf-meta browse-shelf-meta-solo">
+            <strong>{loading ? '…' : catalogCount}</strong>
+            {contentType === 'tvshows' ? ' series' : ' titles'}
+            {!loading && catalogCount > 0 && (
+              <>
+                {' '}
+                · Page {currentPage} of {totalPages}
+              </>
+            )}
+            {comingSoonOnly ? ' · Coming Soon' : ''}
+            {selectedGenre ? ` · ${selectedGenre}` : ''}
+            {selectedYear ? ` · ${selectedYear}` : ''}
+            {searchTerm ? ` · “${searchTerm}”` : ''}
+          </p>
+        </div>
+
+        <div className="browse-shelf-actions">
+          <button
+            type="button"
+            className={`browse-filters-btn${filtersOpen ? ' is-open' : ''}${filterCount ? ' has-active' : ''}`}
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((open) => !open)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M4 6h16M7 12h10M10 18h4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
               />
-            ))}
-          </div>
-        </div>
-        )}
-        
-        {/* Browse Header with Filters */}
-        <div className="browse-header-with-filters">
-          <h2>{contentType === 'tvshows' ? 'Browse TV Shows' : 'Browse Movies'}</h2>
-          
-          {/* Genre and Year Filter Buttons */}
-          <div className="inline-filters-container">
-            {/* Genre Filter */}
-            <div className="filter-select-group">
-              <button
-                className={`filter-button ${selectedGenre ? 'active' : ''}`}
-                onClick={() => {
-                  setShowGenrePanel(!showGenrePanel);
-                  setShowYearPanel(false);
-                }}
-              >
-                <span className="filter-icon">🎭</span>
-                <span className="filter-text">
-                  {selectedGenre || 'All Genres'}
-                </span>
-                {selectedGenre && <span className="filter-indicator">●</span>}
-              </button>
-              
-              {showGenrePanel && (
-                <div className="filter-dropdown">
-                  <div className="filter-dropdown-header">
-                    <span>Select Genre</span>
-                    <button 
-                      className="filter-close-btn"
-                      onClick={() => setShowGenrePanel(false)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="filter-options">
-                    {filtersLoading ? (
-                      <div className="filter-loading">Loading...</div>
-                    ) : availableGenres.length > 0 ? (
-                      availableGenres.map((genre, index) => (
-                        <button
-                          key={index}
-                          className={`filter-option ${selectedGenre === genre ? 'selected' : ''}`}
-                          onClick={() => handleGenreSelect(genre)}
-                        >
-                          {genre}
-                        </button>
-                      ))
-                    ) : (
-                      <div className="filter-empty">No genres available</div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            </svg>
+            Filters
+            {filterCount > 0 && <span className="browse-filters-count">{filterCount}</span>}
+          </button>
 
-            {/* Year Filter */}
-            <div className="filter-select-group">
-              <button
-                className={`filter-button ${selectedYear ? 'active' : ''}`}
-                onClick={() => {
-                  setShowYearPanel(!showYearPanel);
-                  setShowGenrePanel(false);
-                }}
-              >
-                <span className="filter-icon">📅</span>
-                <span className="filter-text">
-                  {selectedYear || 'All Years'}
-                </span>
-                {selectedYear && <span className="filter-indicator">●</span>}
-              </button>
-              
-              {showYearPanel && (
-                <div className="filter-dropdown">
-                  <div className="filter-dropdown-header">
-                    <span>Select Year</span>
-                    <button 
-                      className="filter-close-btn"
-                      onClick={() => setShowYearPanel(false)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="filter-options year-options">
-                    {filtersLoading ? (
-                      <div className="filter-loading">Loading...</div>
-                    ) : availableYears.length > 0 ? (
-                      availableYears.map((year, index) => (
-                        <button
-                          key={index}
-                          className={`filter-option ${selectedYear === year.toString() ? 'selected' : ''}`}
-                          onClick={() => handleYearSelect(year)}
-                        >
-                          {year}
-                        </button>
-                      ))
-                    ) : (
-                      <div className="filter-empty">No years available</div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        {/* Filter Summary */}
-        {(searchTerm || selectedGenre || selectedYear) && (
-          <div className="filter-summary-display">
-            <div className="active-filters">
-              {searchTerm && (
-                <span className="filter-tag">
-                  🔍 Search: {searchTerm}
-                  <button 
-                    className="remove-filter-btn"
-                    onClick={() => {
-                      const params = new URLSearchParams(location.search);
-                      params.delete('search');
-                      const queryString = params.toString();
-                      navigate(queryString ? `/?${queryString}` : '/', { replace: true });
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              )}
-              {selectedGenre && (
-                <span className="filter-tag">
-                  🎭 Genre: {selectedGenre}
-                  <button 
-                    className="remove-filter-btn"
-                    onClick={() => {
-                      const params = new URLSearchParams(location.search);
-                      params.delete('genre');
-                      const queryString = params.toString();
-                      navigate(queryString ? `/?${queryString}` : '/', { replace: true });
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              )}
-              {selectedYear && (
-                <span className="filter-tag">
-                  📅 Year: {selectedYear}
-                  <button 
-                    className="remove-filter-btn"
-                    onClick={() => {
-                      const params = new URLSearchParams(location.search);
-                      params.delete('year');
-                      const queryString = params.toString();
-                      navigate(queryString ? `/?${queryString}` : '/', { replace: true });
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              )}
-            </div>
-            <button 
-              className="clear-all-filters-btn"
-              onClick={clearFilters}
-            >
-              ✕ Clear All
+          {(searchTerm || selectedGenre || selectedYear || comingSoonOnly) && (
+            <button type="button" className="browse-shelf-clear" onClick={clearFilters}>
+              Reset
             </button>
-          </div>
-        )}
-
-
-        {/* Content Display */}
-        <div id="movies-section">
-          {loading ? (
-            <div className="loading-state">
-              <div className="loading-spinner"></div>
-              <h3>Loading {contentType === 'tvshows' ? 'TV shows' : 'movies'}...</h3>
-              <p>Please wait while we fetch the latest {contentType === 'tvshows' ? 'TV shows' : 'movies'} from our collection.</p>
-            </div>
-          ) : error ? (
-            <div className="error-state">
-              <h3>Error loading {contentType === 'tvshows' ? 'TV shows' : 'movies'}</h3>
-              <p>{error}</p>
-              <button 
-                className="btn btn-primary"
-                onClick={contentType === 'tvshows' ? fetchTVShows : fetchMovies}
-              >
-                Refresh {contentType === 'tvshows' ? 'TV Shows' : 'Movies'}
-              </button>
-            </div>
-          ) : contentType === 'tvshows' ? (
-            <TVShowGrid 
-              tvShows={tvShows} 
-              searchTerm={searchTerm}
-              selectedGenre={selectedGenre}
-              selectedYear={selectedYear}
-            />
-          ) : (
-            <MovieGrid 
-              movies={movies}
-              onRateMovie={handleRateMovie}
-              userRatings={userRatings}
-              ratingLoading={ratingLoading}
-              isAuthenticated={isAuthenticated}
-              showNotification={showNotification}
-              searchTerm={searchTerm}
-              selectedGenre={selectedGenre}
-              selectedYear={selectedYear}
-            />
           )}
         </div>
       </div>
-      
-      {/* Contact Us Section */}
+
+      <div className="browse-type-tabs" role="tablist" aria-label="Catalog type">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={contentType === 'movies'}
+          className={`browse-type-tab${contentType === 'movies' ? ' is-active' : ''}`}
+          onClick={() => switchContentType('movies')}
+        >
+          Movies
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={contentType === 'tvshows'}
+          className={`browse-type-tab${contentType === 'tvshows' ? ' is-active' : ''}`}
+          onClick={() => switchContentType('tvshows')}
+        >
+          TV Shows
+        </button>
+      </div>
+
+      <div className="browse-sort-row" aria-label="Sort catalog">
+        <span className="browse-sort-label">Sort</span>
+        {[
+          { id: 'popular', label: 'Popular' },
+          { id: 'latest', label: 'Newest' },
+          { id: 'rated', label: 'Top rated' },
+          { id: 'az', label: 'A – Z' }
+        ].map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            className={`browse-sort-chip${sortBy === option.id ? ' is-active' : ''}`}
+            onClick={() => {
+              setSortBy(option.id);
+              setCurrentPage(1);
+            }}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      <div className={`browse-filters-panel${filtersOpen ? ' is-open' : ''}`}>
+        <div className="browse-filters-grid">
+          <div className="browse-filters-block">
+            <h3 className="browse-filters-heading">Categories</h3>
+            <div className="browse-filters-chips">
+              <button
+                type="button"
+                className={`browse-chip${comingSoonOnly ? ' is-active' : ''}`}
+                onClick={() => handleComingSoonSelect(true)}
+              >
+                Coming Soon
+              </button>
+            </div>
+          </div>
+
+          <div className="browse-filters-block">
+            <h3 className="browse-filters-heading">Genres</h3>
+            <div className="browse-filters-chips">
+              <button
+                type="button"
+                className={`browse-chip${!selectedGenre ? ' is-active' : ''}`}
+                onClick={() => handleGenreSelect('')}
+              >
+                All
+              </button>
+              {filtersLoading ? (
+                <span className="browse-chip">Loading…</span>
+              ) : (
+                availableGenres.map((genre) => (
+                  <button
+                    key={genre}
+                    type="button"
+                    className={`browse-chip${selectedGenre === genre ? ' is-active' : ''}`}
+                    onClick={() => handleGenreSelect(genre)}
+                  >
+                    {genre}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="browse-filters-block">
+            <h3 className="browse-filters-heading">Year</h3>
+            <div className="browse-filters-chips">
+              <button
+                type="button"
+                className={`browse-chip${!selectedYear ? ' is-active' : ''}`}
+                onClick={() => handleYearSelect(null)}
+              >
+                Any
+              </button>
+              {availableYears.map((year) => (
+                <button
+                  key={year}
+                  type="button"
+                  className={`browse-chip${selectedYear === year.toString() ? ' is-active' : ''}`}
+                  onClick={() => handleYearSelect(year)}
+                >
+                  {year}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {(searchTerm || selectedGenre || selectedYear || comingSoonOnly) && (
+        <div className="browse-active-note">
+          {searchTerm && <span>Search: {searchTerm}</span>}
+          {comingSoonOnly && <span>Category: Coming Soon</span>}
+          {selectedGenre && <span>Genre: {selectedGenre}</span>}
+          {selectedYear && <span>Year: {selectedYear}</span>}
+        </div>
+      )}
+
+      <div id="movies-section" className="browse-shelf-body">
+        {loading || catalogWaitingForBatch ? (
+          <div className="loading-state">
+            <div className="loading-spinner" />
+            <h3>Loading {contentType === 'tvshows' ? 'TV shows' : 'movies'}...</h3>
+          </div>
+        ) : error ? (
+          <div className="error-state">
+            <h3>Could not load the catalog</h3>
+            <p>{error}</p>
+            <button
+              className="btn btn-primary"
+              onClick={() =>
+                fetchCatalogBatch(batchIndexForPage(currentPage)).catch((err) => {
+                  setError(err.message || 'Failed to load catalog. Please try again.');
+                })
+              }
+            >
+              Try again
+            </button>
+          </div>
+        ) : contentType === 'tvshows' ? (
+          <TVShowGrid
+            tvShows={pagedItems}
+            searchTerm={searchTerm}
+            selectedGenre={selectedGenre}
+            selectedYear={selectedYear}
+          />
+        ) : (
+          <MovieGrid
+            movies={pagedItems}
+            searchTerm={searchTerm}
+            selectedGenre={selectedGenre}
+            selectedYear={selectedYear}
+          />
+        )}
+
+        {!loading && !error && catalogCount > PAGE_SIZE && (
+          <nav className="browse-pagination" aria-label="Catalog pages">
+            <button
+              type="button"
+              className="browse-page-btn"
+              disabled={currentPage <= 1}
+              onClick={() => goToPage(currentPage - 1)}
+            >
+              Prev
+            </button>
+
+            {pageNumbers[0] > 1 && (
+              <>
+                <button type="button" className="browse-page-btn" onClick={() => goToPage(1)}>
+                  1
+                </button>
+                {pageNumbers[0] > 2 && <span className="browse-page-ellipsis">…</span>}
+              </>
+            )}
+
+            {pageNumbers.map((page) => (
+              <button
+                key={page}
+                type="button"
+                className={`browse-page-btn${page === currentPage ? ' is-active' : ''}`}
+                aria-current={page === currentPage ? 'page' : undefined}
+                onClick={() => goToPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+
+            {pageNumbers[pageNumbers.length - 1] < totalPages && (
+              <>
+                {pageNumbers[pageNumbers.length - 1] < totalPages - 1 && (
+                  <span className="browse-page-ellipsis">…</span>
+                )}
+                <button
+                  type="button"
+                  className="browse-page-btn"
+                  onClick={() => goToPage(totalPages)}
+                >
+                  {totalPages}
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              className="browse-page-btn browse-page-next"
+              disabled={currentPage >= totalPages}
+              onClick={() => goToPage(currentPage + 1)}
+            >
+              Next
+            </button>
+          </nav>
+        )}
+      </div>
+    </div>
+    );
+  };
+
+  return (
+    <div>
+      {isDiscoveryMode ? renderDiscovery() : renderBrowse()}
       <ContactSection />
     </div>
   );
 };
 
-export default Home; 
+export default Home;

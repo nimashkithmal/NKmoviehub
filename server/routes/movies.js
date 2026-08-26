@@ -2,7 +2,19 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Movie = require('../models/Movie');
 const Rating = require('../models/Rating');
+const Notification = require('../models/Notification');
+const MovieQuestion = require('../models/MovieQuestion');
 const { protect, restrictToAdmin } = require('../middleware/auth');
+const {
+  extractTmdbId,
+  getTrendingTmdbIds,
+  orderDocsByTrending
+} = require('../utils/trendingPopular');
+const {
+  promoteReleasedComingSoon,
+  sortComingSoon,
+  filterUpcomingOnly
+} = require('../utils/comingSoon');
 const fetch = require('node-fetch');
 // Cloudinary is configured once in utils/cloudinaryUpload; every poster that
 // reaches the database is uploaded there first
@@ -10,17 +22,77 @@ const { cloudinary, uploadPoster, uploadPosters } = require('../utils/cloudinary
 
 const router = express.Router();
 
+const parseMoneyInput = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, value);
+  const raw = String(value).trim().replace(/[$,\s]/g, '');
+  if (!raw) return null;
+  const match = raw.match(/^([\d.]+)\s*([kmb])?$/i);
+  if (!match) {
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.max(0, n) : null;
+  }
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) return null;
+  const suffix = (match[2] || '').toLowerCase();
+  const mult = suffix === 'b' ? 1e9 : suffix === 'm' ? 1e6 : suffix === 'k' ? 1e3 : 1;
+  return Math.max(0, amount * mult);
+};
+
+const normalizeTrailerUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const id =
+    raw.match(/youtube\.com\/watch\?[^#]*v=([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    raw.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    raw.match(/youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    null;
+  if (id) return `https://www.youtube.com/embed/${id}`;
+  return raw.slice(0, 500);
+};
+
+const pickMetaFields = (body = {}) => {
+  const meta = {};
+  if (body.tagline !== undefined) meta.tagline = String(body.tagline || '').trim().slice(0, 300);
+  if (body.director !== undefined) meta.director = String(body.director || '').trim().slice(0, 200);
+  if (body.language !== undefined) meta.language = String(body.language || '').trim().slice(0, 80);
+  if (body.releaseStatus !== undefined) meta.releaseStatus = String(body.releaseStatus || '').trim().slice(0, 80);
+  if (body.releaseDate !== undefined) meta.releaseDate = String(body.releaseDate || '').trim().slice(0, 40);
+  if (body.trailerUrl !== undefined) meta.trailerUrl = normalizeTrailerUrl(body.trailerUrl);
+  if (body.runtime !== undefined && body.runtime !== null && body.runtime !== '') {
+    const runtime = parseInt(body.runtime, 10);
+    meta.runtime = Number.isFinite(runtime) && runtime >= 0 ? runtime : null;
+  }
+  if (body.budget !== undefined) meta.budget = parseMoneyInput(body.budget);
+  if (body.revenue !== undefined) meta.revenue = parseMoneyInput(body.revenue);
+  return meta;
+};
+
 // @route   GET /api/movies
 // @desc    Get all movies (public)
 // @access  Public
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 1000, search = '', genre = '', year = '', status = 'active' } = req.query;
+    const { page = 1, limit = 1000, search = '', genre = '', year = '', status = 'active', sort = 'latest' } = req.query;
     
-    // Build filter object
-    const filter = { status: 'active' };
+    // Public catalog: active by default; Coming Soon category uses status=coming_soon
+    // Search should also find Coming Soon titles (e.g. Avengers: Doomsday)
+    const hasSearch = Boolean(search && String(search).trim());
+    const comingSoonOnly = status === 'coming_soon';
+    if (comingSoonOnly) {
+      await promoteReleasedComingSoon(Movie);
+    }
+
+    const filter = {};
+    if (comingSoonOnly) {
+      filter.status = 'coming_soon';
+    } else if (hasSearch) {
+      filter.status = { $in: ['active', 'coming_soon'] };
+    } else {
+      filter.status = 'active';
+    }
     
-    if (search && search.trim()) {
+    if (hasSearch) {
       // Use regex search instead of $text for better compatibility
       filter.$or = [
         { title: { $regex: search, $options: 'i' } },
@@ -30,7 +102,11 @@ router.get('/', async (req, res) => {
     }
     
     if (genre) {
-      filter.genre = { $regex: genre, $options: 'i' };
+      const escaped = String(genre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.genre = {
+        $regex: `(^|[,|/]\\s*)${escaped}(?=\\s*[,|/]|$)`,
+        $options: 'i'
+      };
     }
     
     if (year) {
@@ -38,14 +114,72 @@ router.get('/', async (req, res) => {
     }
 
     // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(2000, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    // Coming Soon browse: only future releases, nearest first
+    if (comingSoonOnly) {
+      const candidates = await Movie.find(filter)
+        .populate('addedBy', 'name email')
+        .lean();
+      const upcoming = filterUpcomingOnly(candidates);
+      const total = upcoming.length;
+      const movies = upcoming.slice(skip, skip + limitNum);
+
+      return res.json({
+        success: true,
+        data: {
+          movies,
+          pagination: {
+            currentPage: pageNum,
+            totalPages: Math.max(1, Math.ceil(total / limitNum) || 1),
+            totalMovies: total,
+            moviesPerPage: limitNum
+          }
+        }
+      });
+    }
+
+    // Popular: order by 2embed trending (only titles we have in DB)
+    if (sort === 'popular') {
+      const trendingIds = await getTrendingTmdbIds('movie');
+      const candidates = await Movie.find(filter).select('_id movieUrl').lean();
+      const orderedIds = orderDocsByTrending(candidates, trendingIds, (doc) =>
+        extractTmdbId(doc.movieUrl)
+      ).map((doc) => doc._id);
+      const total = orderedIds.length;
+      const pageIds = orderedIds.slice(skip, skip + limitNum);
+      const found = await Movie.find({ _id: { $in: pageIds } })
+        .populate('addedBy', 'name email')
+        .lean();
+      const byId = new Map(found.map((m) => [String(m._id), m]));
+      const movies = pageIds.map((id) => byId.get(String(id))).filter(Boolean);
+
+      return res.json({
+        success: true,
+        data: {
+          movies,
+          pagination: {
+            currentPage: pageNum,
+            totalPages: Math.max(1, Math.ceil(total / limitNum) || 1),
+            totalMovies: total,
+            moviesPerPage: limitNum
+          }
+        }
+      });
+    }
+
+    let sortSpec = { year: -1, createdAt: -1 };
+    if (sort === 'rated') sortSpec = { imdbRating: -1, averageRating: -1, createdAt: -1 };
+    else if (sort === 'az') sortSpec = { title: 1 };
     
     // Get movies with pagination
     const movies = await Movie.find(filter)
       .populate('addedBy', 'name email')
-      .sort({ createdAt: -1 })
+      .sort(sortSpec)
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(limitNum);
     
     // Get total count for pagination
     const total = await Movie.countDocuments(filter);
@@ -55,10 +189,10 @@ router.get('/', async (req, res) => {
       data: {
         movies,
         pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / parseInt(limit)),
+          currentPage: pageNum,
+          totalPages: Math.max(1, Math.ceil(total / limitNum)),
           totalMovies: total,
-          moviesPerPage: parseInt(limit)
+          moviesPerPage: limitNum
         }
       }
     });
@@ -76,32 +210,45 @@ router.get('/', async (req, res) => {
 // @access  Private/Admin
 router.get('/admin', protect, restrictToAdmin, async (req, res) => {
   try {
-    const { page = 1, limit = 1000, search = '', genre = '', status = '' } = req.query;
+    const { page = 1, limit = 30, search = '', genre = '', status = '' } = req.query;
     
     // Build filter object
     const filter = {};
     
-    if (search) {
-      filter.$text = { $search: search };
+    if (search && String(search).trim()) {
+      const q = String(search).trim();
+      filter.$or = [
+        { title: { $regex: q, $options: 'i' } },
+        { description: { $regex: q, $options: 'i' } },
+        { genre: { $regex: q, $options: 'i' } }
+      ];
+      if (/^\d{4}$/.test(q)) {
+        filter.$or.push({ year: parseInt(q, 10) });
+      }
     }
     
     if (genre) {
-      filter.genre = { $regex: genre, $options: 'i' };
+      const escaped = String(genre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.genre = {
+        $regex: `(^|[,|/]\\s*)${escaped}(?=\\s*[,|/]|$)`,
+        $options: 'i'
+      };
     }
     
     if (status) {
       filter.status = status;
     }
 
-    // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 30));
+    const skip = (pageNum - 1) * limitNum;
     
     // Get movies with pagination
     const movies = await Movie.find(filter)
       .populate('addedBy', 'name email')
-      .sort({ createdAt: -1 })
+      .sort({ year: -1, createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(limitNum);
     
     // Get total count for pagination
     const total = await Movie.countDocuments(filter);
@@ -111,10 +258,10 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
       data: {
         movies,
         pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / parseInt(limit)),
+          currentPage: pageNum,
+          totalPages: Math.max(1, Math.ceil(total / limitNum)),
           totalMovies: total,
-          moviesPerPage: parseInt(limit)
+          moviesPerPage: limitNum
         }
       }
     });
@@ -132,8 +279,18 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
 // @access  Public
 router.get('/filters', async (req, res) => {
   try {
-    // Get unique genres
-    const genres = await Movie.distinct('genre', { status: 'active' });
+    // Split combined strings like "Action, Adventure, Comedy" into single genres
+    const rawGenres = await Movie.distinct('genre', { status: 'active' });
+    const genreSet = new Set();
+    for (const value of rawGenres) {
+      String(value || '')
+        .split(/[,|/]+/)
+        .forEach((g) => {
+          const cleaned = g.trim();
+          if (cleaned) genreSet.add(cleaned);
+        });
+    }
+    const genres = Array.from(genreSet).sort((a, b) => a.localeCompare(b));
     
     // Get unique years, sorted descending
     const years = await Movie.distinct('year', { status: 'active' });
@@ -142,7 +299,7 @@ router.get('/filters', async (req, res) => {
     res.json({
       success: true,
       data: {
-        genres: genres.sort(),
+        genres,
         years: sortedYears
       }
     });
@@ -151,6 +308,33 @@ router.get('/filters', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while fetching filters'
+    });
+  }
+});
+
+// @route   GET /api/movies/coming-soon
+// @desc    Titles marked Coming Soon for the home catalog row
+// @access  Public
+router.get('/coming-soon', async (req, res) => {
+  try {
+    await promoteReleasedComingSoon(Movie);
+
+    const movies = await Movie.find({ status: 'coming_soon' })
+      .select('-__v')
+      .lean();
+
+    // Only keep titles with a future release (nearest first)
+    const upcoming = filterUpcomingOnly(movies);
+
+    res.json({
+      success: true,
+      data: { movies: upcoming.slice(0, 40) }
+    });
+  } catch (error) {
+    console.error('Get coming soon movies error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching coming soon movies'
     });
   }
 });
@@ -384,17 +568,19 @@ router.post('/', protect, restrictToAdmin, [
       fullBody: JSON.stringify(req.body, null, 2)
     });
 
-    const { title, year, description, genre, movieUrl, imdbRating, imageFile, imageFiles } = req.body;
+    const { title, year, description, genre, movieUrl, imdbRating, imageFile, imageFiles, imageUrl: providedImageUrl } = req.body;
     
-    // Custom validation: at least one image must be provided (either imageFile or imageFiles)
-    if (!imageFile && (!imageFiles || !Array.isArray(imageFiles) || imageFiles.length === 0)) {
+    // Custom validation: poster file(s) OR a direct image URL (e.g. TMDB) — video never goes to Cloudinary
+    const hasImageFile = imageFile || (imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0);
+    const hasImageUrl = providedImageUrl && String(providedImageUrl).trim().startsWith('http');
+    if (!hasImageFile && !hasImageUrl) {
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
         errors: [{
           type: 'field',
           value: undefined,
-          msg: 'At least one image is required (imageFile or imageFiles)',
+          msg: 'At least one image is required (imageFile, imageFiles, or imageUrl)',
           path: 'imageFile',
           location: 'body'
         }]
@@ -441,9 +627,8 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
     
-    // Validate required fields - check for either imageFile or imageFiles
-    const hasImageFile = imageFile || (imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0);
-    if (!title || !year || !description || !genre || !movieUrl || imdbRating === undefined || !hasImageFile) {
+    // Validate required fields (poster file upload OR direct imageUrl — video stays as movieUrl only)
+    if (!title || !year || !description || !genre || !movieUrl || imdbRating === undefined || (!hasImageFile && !hasImageUrl)) {
       console.log('Missing required fields:', { 
         title: title || 'MISSING', 
         year: year || 'MISSING', 
@@ -451,8 +636,8 @@ router.post('/', protect, restrictToAdmin, [
         genre: genre || 'MISSING', 
         movieUrl: movieUrl || 'MISSING', 
         imdbRating: imdbRating !== undefined ? imdbRating : 'MISSING', 
-        hasImageFile: !!imageFile,
-        hasImageFiles: !!(imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0)
+        hasImageFile: !!hasImageFile,
+        hasImageUrl: !!hasImageUrl
       });
       
       const missingFields = [];
@@ -462,7 +647,7 @@ router.post('/', protect, restrictToAdmin, [
       if (!genre) missingFields.push('genre');
       if (!movieUrl) missingFields.push('movieUrl');
       if (imdbRating === undefined) missingFields.push('imdbRating');
-      if (!hasImageFile) missingFields.push('imageFile or imageFiles');
+      if (!hasImageFile && !hasImageUrl) missingFields.push('imageFile, imageFiles, or imageUrl');
       
       return res.status(400).json({
         success: false,
@@ -470,48 +655,50 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
 
-    // Upload images to Cloudinary
+    // Poster: use direct URL when given (no Cloudinary). Upload files only when provided.
+    // movieUrl is never uploaded to Cloudinary — embed/stream links stay as-is.
     let imageUrl;
     let images = [];
-    
-    // Support both single imageFile and array of imageFiles
-    const imagesToUpload = imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0 
-      ? imageFiles 
-      : (imageFile ? [imageFile] : []);
-    
-    if (imagesToUpload.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'At least one image is required'
-      });
-    }
-    
-    try {
-      console.log('Starting Cloudinary upload for', imagesToUpload.length, 'image(s)...');
-      
-      // Upload every image to Cloudinary; anything unusable is skipped
-      images = await uploadPosters(imagesToUpload, { type: 'movie' });
 
-      // First image doubles as imageUrl (for backward compatibility)
-      imageUrl = images[0];
-      
-      if (images.length === 0) {
+    if (hasImageUrl && !hasImageFile) {
+      imageUrl = String(providedImageUrl).trim();
+      images = [imageUrl];
+    } else {
+      const imagesToUpload = imageFiles && Array.isArray(imageFiles) && imageFiles.length > 0
+        ? imageFiles
+        : (imageFile ? [imageFile] : []);
+
+      if (imagesToUpload.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'Failed to upload any valid images'
+          message: 'At least one image is required'
         });
       }
-      
-      console.log(`Successfully uploaded ${images.length} image(s)`);
-    } catch (uploadError) {
-      console.error('Cloudinary upload error:', uploadError);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to upload images: ' + uploadError.message
-      });
+
+      try {
+        console.log('Starting Cloudinary upload for', imagesToUpload.length, 'image(s)...');
+        images = await uploadPosters(imagesToUpload, { type: 'movie' });
+        imageUrl = images[0];
+
+        if (images.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Failed to upload any valid images'
+          });
+        }
+
+        console.log(`Successfully uploaded ${images.length} image(s)`);
+      } catch (uploadError) {
+        console.error('Cloudinary upload error:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload images: ' + uploadError.message
+        });
+      }
     }
 
     // Create new movie
+    const meta = pickMetaFields(req.body);
     const movie = new Movie({
       title,
       year: parseInt(year),
@@ -521,6 +708,7 @@ router.post('/', protect, restrictToAdmin, [
       imdbRating: parseFloat(imdbRating),
       imageUrl,
       images: images, // Store array of images
+      ...meta,
       addedBy: req.user.id
     });
 
@@ -577,7 +765,7 @@ router.put('/:id', protect, restrictToAdmin, [
       });
     }
 
-    const { title, year, description, genre, movieUrl, imdbRating, imageFile, imageFiles, images } = req.body;
+    const { title, year, description, genre, movieUrl, imdbRating, imageFile, imageFiles, images, bannerFile, bannerUrl, clearBanner } = req.body;
     
     console.log('Received update request body:', {
       title,
@@ -598,6 +786,7 @@ router.put('/:id', protect, restrictToAdmin, [
     if (description) updateData.description = description;
     if (genre) updateData.genre = genre;
     if (movieUrl) updateData.movieUrl = movieUrl;
+    Object.assign(updateData, pickMetaFields(req.body));
     
     // Always update imdbRating if provided (including 0)
     // The frontend always sends imdbRating, so we should process it
@@ -696,6 +885,28 @@ router.put('/:id', protect, restrictToAdmin, [
       // Explicitly set empty if all images were removed
       updateData.imageUrl = null;
       updateData.images = [];
+    }
+
+    // Detail-page banner (separate from poster gallery — never stored in images[])
+    if (clearBanner === true || clearBanner === 'true') {
+      updateData.bannerUrl = null;
+    } else if (bannerFile && typeof bannerFile === 'string') {
+      try {
+        updateData.bannerUrl = await uploadPoster(bannerFile, { type: 'banner' });
+      } catch (uploadError) {
+        console.error('Banner upload error:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload detail banner: ' + uploadError.message
+        });
+      }
+    } else if (bannerUrl && typeof bannerUrl === 'string' && bannerUrl.trim().startsWith('http')) {
+      try {
+        updateData.bannerUrl = await uploadPoster(bannerUrl.trim(), { type: 'banner' });
+      } catch (uploadError) {
+        // Fall back to storing the remote URL directly if Cloudinary rejects it
+        updateData.bannerUrl = bannerUrl.trim();
+      }
     }
 
     console.log('Final updateData before database update:', JSON.stringify(updateData, null, 2));
@@ -930,6 +1141,153 @@ router.delete('/:id', protect, restrictToAdmin, async (req, res) => {
   }
 });
 
+// @route   GET /api/movies/:id/questions
+// @desc    Public Q&A thread for a movie
+// @access  Public
+router.get('/:id/questions', async (req, res) => {
+  try {
+    const movie = await Movie.findById(req.params.id).select('_id');
+    if (!movie) {
+      return res.status(404).json({
+        success: false,
+        message: 'Movie not found'
+      });
+    }
+
+    const questions = await MovieQuestion.find({ movie: movie._id })
+      .sort({ createdAt: 1 })
+      .select('question answer answeredAt createdAt')
+      .lean();
+
+    res.json({
+      success: true,
+      data: { questions }
+    });
+  } catch (error) {
+    console.error('Get movie questions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching questions'
+    });
+  }
+});
+
+// @route   POST /api/movies/:id/ask
+// @desc    Ask about this movie (public Q&A + admin notification)
+// @access  Public
+router.post('/:id/ask', async (req, res) => {
+  try {
+    const movie = await Movie.findById(req.params.id).select('title year status');
+    if (!movie) {
+      return res.status(404).json({
+        success: false,
+        message: 'Movie not found'
+      });
+    }
+
+    const message = String(req.body?.message || req.body?.question || '').trim().slice(0, 2000);
+
+    if (!message) {
+      return res.status(400).json({
+        success: false,
+        message: 'Question is required'
+      });
+    }
+
+    const question = await MovieQuestion.create({
+      movie: movie._id,
+      question: message
+    });
+
+    await Notification.create({
+      type: 'movie_ask',
+      title: `Ask about: ${movie.title}`,
+      message,
+      movie: movie._id,
+      movieTitle: movie.title,
+      question: question._id,
+      fromName: 'Guest'
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Question posted. An admin will be notified.',
+      data: {
+        question: {
+          _id: question._id,
+          question: question.question,
+          answer: question.answer || '',
+          answeredAt: question.answeredAt,
+          createdAt: question.createdAt
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Ask about movie error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while sending your question'
+    });
+  }
+});
+
+// @route   POST /api/movies/:id/questions/:qid/reply
+// @desc    Admin reply to a movie question
+// @access  Private/Admin
+router.post('/:id/questions/:qid/reply', protect, restrictToAdmin, async (req, res) => {
+  try {
+    const answer = String(req.body?.answer || '').trim().slice(0, 4000);
+    if (!answer) {
+      return res.status(400).json({
+        success: false,
+        message: 'Answer is required'
+      });
+    }
+
+    const question = await MovieQuestion.findOne({
+      _id: req.params.qid,
+      movie: req.params.id
+    });
+
+    if (!question) {
+      return res.status(404).json({
+        success: false,
+        message: 'Question not found'
+      });
+    }
+
+    question.answer = answer;
+    question.answeredBy = req.user.id;
+    question.answeredAt = new Date();
+    await question.save();
+
+    await Notification.updateMany(
+      { question: question._id },
+      { $set: { read: true, replied: true } }
+    );
+
+    res.json({
+      success: true,
+      message: 'Reply posted',
+      data: {
+        question: {
+          _id: question._id,
+          question: question.question,
+          answer: question.answer,
+          answeredAt: question.answeredAt,
+          createdAt: question.createdAt
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Reply to movie question error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while posting reply'
+    });
+  }
+});
+
 // @route   PATCH /api/movies/:id/status
 // @desc    Toggle movie status (admin only)
 // @access  Private/Admin
@@ -944,7 +1302,11 @@ router.patch('/:id/status', protect, restrictToAdmin, async (req, res) => {
       });
     }
 
-    const newStatus = movie.status === 'active' ? 'inactive' : 'active';
+    const allowed = ['active', 'inactive', 'coming_soon'];
+    const requested = req.body?.status;
+    const newStatus = allowed.includes(requested)
+      ? requested
+      : (movie.status === 'active' ? 'inactive' : 'active');
     movie.status = newStatus;
     await movie.save();
 

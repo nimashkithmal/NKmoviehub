@@ -254,7 +254,7 @@ code {
   border-radius: var(--radius-2xl);
   padding: var(--space-2xl);
   box-shadow: var(--shadow-lg);
-  border: 1px solid var(--gray-200);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   transition: all var(--transition-normal);
   position: relative;
   overflow: hidden;
@@ -262,19 +262,29 @@ code {
   max-width: 100%;
 }
 
+/* Cinematic top edge — thin red fade, not a purple bar */
 .card::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
-  background: var(--gradient-primary);
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(229, 9, 20, 0.55) 18%,
+    rgba(255, 255, 255, 0.35) 50%,
+    rgba(229, 9, 20, 0.55) 82%,
+    transparent 100%
+  );
+  box-shadow: 0 0 12px rgba(229, 9, 20, 0.25);
 }
 
 .card:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-2xl);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 /* Navbar Styles - Dark Theme */
@@ -916,22 +926,21 @@ h3 {
   100% { transform: rotate(360deg); }
 }
 
-/* Custom Scrollbar - Dark Theme */
-::-webkit-scrollbar {
-  width: 8px;
+/* Hide scrollbars, keep scrolling */
+html {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-::-webkit-scrollbar-track {
-  background: var(--gray-50);
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-::-webkit-scrollbar-thumb {
-  background: var(--gray-400);
-  border-radius: var(--radius-sm);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--gray-500);
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 /* Selection */
