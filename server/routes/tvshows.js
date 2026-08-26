@@ -9,15 +9,62 @@ const { cloudinary, uploadPoster, uploadPosters } = require('../utils/cloudinary
 
 const router = express.Router();
 
+const parseMoneyInput = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, value);
+  const raw = String(value).trim().replace(/[$,\s]/g, '');
+  if (!raw) return null;
+  const match = raw.match(/^([\d.]+)\s*([kmb])?$/i);
+  if (!match) {
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.max(0, n) : null;
+  }
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) return null;
+  const suffix = (match[2] || '').toLowerCase();
+  const mult = suffix === 'b' ? 1e9 : suffix === 'm' ? 1e6 : suffix === 'k' ? 1e3 : 1;
+  return Math.max(0, amount * mult);
+};
+
+const normalizeTrailerUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const id =
+    raw.match(/youtube\.com\/watch\?[^#]*v=([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    raw.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    raw.match(/youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    null;
+  if (id) return `https://www.youtube.com/embed/${id}`;
+  return raw.slice(0, 500);
+};
+
+const pickMetaFields = (body = {}) => {
+  const meta = {};
+  if (body.tagline !== undefined) meta.tagline = String(body.tagline || '').trim().slice(0, 300);
+  if (body.director !== undefined) meta.director = String(body.director || '').trim().slice(0, 200);
+  if (body.language !== undefined) meta.language = String(body.language || '').trim().slice(0, 80);
+  if (body.releaseStatus !== undefined) meta.releaseStatus = String(body.releaseStatus || '').trim().slice(0, 80);
+  if (body.releaseDate !== undefined) meta.releaseDate = String(body.releaseDate || '').trim().slice(0, 40);
+  if (body.trailerUrl !== undefined) meta.trailerUrl = normalizeTrailerUrl(body.trailerUrl);
+  if (body.runtime !== undefined && body.runtime !== null && body.runtime !== '') {
+    const runtime = parseInt(body.runtime, 10);
+    meta.runtime = Number.isFinite(runtime) && runtime >= 0 ? runtime : null;
+  }
+  if (body.budget !== undefined) meta.budget = parseMoneyInput(body.budget);
+  if (body.revenue !== undefined) meta.revenue = parseMoneyInput(body.revenue);
+  return meta;
+};
+
 // @route   GET /api/tvshows
 // @desc    Get all TV shows (public)
 // @access  Public
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 1000, search = '', genre = '', year = '', status = 'active' } = req.query;
+    const { page = 1, limit = 1000, search = '', genre = '', year = '', status = 'active', sort = 'latest' } = req.query;
     
-    // Build filter object
-    const filter = { status: 'active' };
+    // Public catalog: active by default; Coming Soon category uses status=coming_soon
+    const allowedStatus = status === 'coming_soon' ? 'coming_soon' : 'active';
+    const filter = { status: allowedStatus };
     
     if (search && search.trim()) {
       filter.$or = [
@@ -28,7 +75,11 @@ router.get('/', async (req, res) => {
     }
     
     if (genre) {
-      filter.genre = { $regex: genre, $options: 'i' };
+      const escaped = String(genre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.genre = {
+        $regex: `(^|[,|/]\\s*)${escaped}(?=\\s*[,|/]|$)`,
+        $options: 'i'
+      };
     }
     
     if (year) {
@@ -36,14 +87,20 @@ router.get('/', async (req, res) => {
     }
 
     // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(2000, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    let sortSpec = { year: -1, createdAt: -1 };
+    if (sort === 'rated') sortSpec = { imdbRating: -1, averageRating: -1, createdAt: -1 };
+    else if (sort === 'az') sortSpec = { title: 1 };
     
     // Get TV shows with pagination
     const tvShows = await TVShow.find(filter)
       .populate('addedBy', 'name email')
-      .sort({ createdAt: -1 })
+      .sort(sortSpec)
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(limitNum);
     
     // Get total count for pagination
     const total = await TVShow.countDocuments(filter);
@@ -53,10 +110,10 @@ router.get('/', async (req, res) => {
       data: {
         tvShows,
         pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / parseInt(limit)),
+          currentPage: pageNum,
+          totalPages: Math.max(1, Math.ceil(total / limitNum)),
           totalTVShows: total,
-          tvShowsPerPage: parseInt(limit)
+          tvShowsPerPage: limitNum
         }
       }
     });
@@ -89,7 +146,11 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
     }
     
     if (genre) {
-      filter.genre = { $regex: genre, $options: 'i' };
+      const escaped = String(genre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.genre = {
+        $regex: `(^|[,|/]\\s*)${escaped}(?=\\s*[,|/]|$)`,
+        $options: 'i'
+      };
     }
     
     if (status) {
@@ -135,8 +196,18 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
 // @access  Public
 router.get('/filters', async (req, res) => {
   try {
-    // Get unique genres
-    const genres = await TVShow.distinct('genre', { status: 'active' });
+    // Split combined strings like "Action, Adventure, Comedy" into single genres
+    const rawGenres = await TVShow.distinct('genre', { status: 'active' });
+    const genreSet = new Set();
+    for (const value of rawGenres) {
+      String(value || '')
+        .split(/[,|/]+/)
+        .forEach((g) => {
+          const cleaned = g.trim();
+          if (cleaned) genreSet.add(cleaned);
+        });
+    }
+    const genres = Array.from(genreSet).sort((a, b) => a.localeCompare(b));
     
     // Get unique years, sorted descending
     const years = await TVShow.distinct('year', { status: 'active' });
@@ -145,7 +216,7 @@ router.get('/filters', async (req, res) => {
     res.json({
       success: true,
       data: {
-        genres: genres.sort(),
+        genres,
         years: sortedYears
       }
     });
@@ -380,6 +451,7 @@ router.post('/', protect, restrictToAdmin, [
     }
 
     // Create new TV show
+    const meta = pickMetaFields(req.body);
     const tvShowData = {
       title,
       year: parseInt(year),
@@ -392,6 +464,7 @@ router.post('/', protect, restrictToAdmin, [
       imdbRating: parseFloat(imdbRating),
       imageUrl,
       images: images, // Store array of images
+      ...meta,
       addedBy: req.user.id
     };
     
@@ -515,6 +588,7 @@ router.put('/:id', protect, restrictToAdmin, [
     if (showUrl !== undefined && showUrl !== null && showUrl !== '') updateData.showUrl = showUrl;
     if (imdbRating !== undefined && imdbRating !== null && imdbRating !== '') updateData.imdbRating = parseFloat(imdbRating);
     if (numberOfSeasons !== undefined && numberOfSeasons !== null && numberOfSeasons !== '') updateData.numberOfSeasons = parseInt(numberOfSeasons);
+    Object.assign(updateData, pickMetaFields(req.body));
     
     // Handle episodes if provided
     if (episodes && Array.isArray(episodes)) {

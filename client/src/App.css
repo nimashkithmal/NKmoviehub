@@ -14,6 +14,16 @@ main {
   max-width: 100%;
 }
 
+.App.is-detail-page main,
+main.container-detail {
+  padding: 0;
+  overflow: visible;
+}
+
+.App.is-detail-page {
+  overflow: visible;
+}
+
 /* Auth Container Styles */
 .auth-container {
   max-width: 450px;

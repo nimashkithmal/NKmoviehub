@@ -427,6 +427,22 @@
   background: #111;
 }
 
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ad-line);
+}
+
+.admin-page-meta {
+  color: var(--ad-muted);
+  font-size: 0.9rem;
+  align-self: center;
+}
+
 @media (max-width: 768px) {
   .admin-dashboard {
     padding: calc(72px + 1rem) 1rem 2rem;

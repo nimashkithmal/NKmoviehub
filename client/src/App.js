@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './components/Home';
@@ -30,6 +30,55 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
   return children;
 };
 
+const AppShell = () => {
+  const location = useLocation();
+  const isDetailPage =
+    location.pathname.startsWith('/movie/') || location.pathname.startsWith('/tvshow/');
+
+  return (
+    <div className={`App${isDetailPage ? ' is-detail-page' : ''}`}>
+      {!isDetailPage && <Navbar />}
+      <main className={`container${isDetailPage ? ' container-detail' : ''}`}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/collections" element={<Collections />} />
+          <Route path="/movie/:id" element={<MovieDetail />} />
+          <Route path="/tvshow/:id" element={<TVShowDetail />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/add-movie"
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <AddMovie />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/add-tvshow"
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <AddTVShow />
+              </ProtectedRoute>
+            }
+          />
+          {/* Anything else, /register included, belongs on the public site */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+      {!isDetailPage && <Footer />}
+    </div>
+  );
+};
+
 function App() {
   return (
     <ErrorBoundary>
@@ -40,46 +89,7 @@ function App() {
             v7_relativeSplatPath: true
           }}
         >
-          <div className="App">
-            <Navbar />
-            <main className="container">
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/collections" element={<Collections />} />
-                <Route path="/movie/:id" element={<MovieDetail />} />
-                <Route path="/tvshow/:id" element={<TVShowDetail />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route 
-                  path="/admin" 
-                  element={
-                    <ProtectedRoute adminOnly={true}>
-                      <AdminDashboard />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/add-movie" 
-                  element={
-                    <ProtectedRoute adminOnly={true}>
-                      <AddMovie />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/add-tvshow" 
-                  element={
-                    <ProtectedRoute adminOnly={true}>
-                      <AddTVShow />
-                    </ProtectedRoute>
-                  } 
-                />
-                {/* Anything else, /register included, belongs on the public site */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </main>
-            <Footer />
-          </div>
+          <AppShell />
         </Router>
       </AuthProvider>
     </ErrorBoundary>

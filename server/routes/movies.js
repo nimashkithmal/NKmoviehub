@@ -2,6 +2,8 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Movie = require('../models/Movie');
 const Rating = require('../models/Rating');
+const Notification = require('../models/Notification');
+const MovieQuestion = require('../models/MovieQuestion');
 const { protect, restrictToAdmin } = require('../middleware/auth');
 const fetch = require('node-fetch');
 // Cloudinary is configured once in utils/cloudinaryUpload; every poster that
@@ -10,15 +12,62 @@ const { cloudinary, uploadPoster, uploadPosters } = require('../utils/cloudinary
 
 const router = express.Router();
 
+const parseMoneyInput = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, value);
+  const raw = String(value).trim().replace(/[$,\s]/g, '');
+  if (!raw) return null;
+  const match = raw.match(/^([\d.]+)\s*([kmb])?$/i);
+  if (!match) {
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.max(0, n) : null;
+  }
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) return null;
+  const suffix = (match[2] || '').toLowerCase();
+  const mult = suffix === 'b' ? 1e9 : suffix === 'm' ? 1e6 : suffix === 'k' ? 1e3 : 1;
+  return Math.max(0, amount * mult);
+};
+
+const normalizeTrailerUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const id =
+    raw.match(/youtube\.com\/watch\?[^#]*v=([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    raw.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    raw.match(/youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    null;
+  if (id) return `https://www.youtube.com/embed/${id}`;
+  return raw.slice(0, 500);
+};
+
+const pickMetaFields = (body = {}) => {
+  const meta = {};
+  if (body.tagline !== undefined) meta.tagline = String(body.tagline || '').trim().slice(0, 300);
+  if (body.director !== undefined) meta.director = String(body.director || '').trim().slice(0, 200);
+  if (body.language !== undefined) meta.language = String(body.language || '').trim().slice(0, 80);
+  if (body.releaseStatus !== undefined) meta.releaseStatus = String(body.releaseStatus || '').trim().slice(0, 80);
+  if (body.releaseDate !== undefined) meta.releaseDate = String(body.releaseDate || '').trim().slice(0, 40);
+  if (body.trailerUrl !== undefined) meta.trailerUrl = normalizeTrailerUrl(body.trailerUrl);
+  if (body.runtime !== undefined && body.runtime !== null && body.runtime !== '') {
+    const runtime = parseInt(body.runtime, 10);
+    meta.runtime = Number.isFinite(runtime) && runtime >= 0 ? runtime : null;
+  }
+  if (body.budget !== undefined) meta.budget = parseMoneyInput(body.budget);
+  if (body.revenue !== undefined) meta.revenue = parseMoneyInput(body.revenue);
+  return meta;
+};
+
 // @route   GET /api/movies
 // @desc    Get all movies (public)
 // @access  Public
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 1000, search = '', genre = '', year = '', status = 'active' } = req.query;
+    const { page = 1, limit = 1000, search = '', genre = '', year = '', status = 'active', sort = 'latest' } = req.query;
     
-    // Build filter object
-    const filter = { status: 'active' };
+    // Public catalog: active by default; Coming Soon category uses status=coming_soon
+    const allowedStatus = status === 'coming_soon' ? 'coming_soon' : 'active';
+    const filter = { status: allowedStatus };
     
     if (search && search.trim()) {
       // Use regex search instead of $text for better compatibility
@@ -30,7 +79,11 @@ router.get('/', async (req, res) => {
     }
     
     if (genre) {
-      filter.genre = { $regex: genre, $options: 'i' };
+      const escaped = String(genre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.genre = {
+        $regex: `(^|[,|/]\\s*)${escaped}(?=\\s*[,|/]|$)`,
+        $options: 'i'
+      };
     }
     
     if (year) {
@@ -38,14 +91,20 @@ router.get('/', async (req, res) => {
     }
 
     // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(2000, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    let sortSpec = { year: -1, createdAt: -1 };
+    if (sort === 'rated') sortSpec = { imdbRating: -1, averageRating: -1, createdAt: -1 };
+    else if (sort === 'az') sortSpec = { title: 1 };
     
     // Get movies with pagination
     const movies = await Movie.find(filter)
       .populate('addedBy', 'name email')
-      .sort({ createdAt: -1 })
+      .sort(sortSpec)
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(limitNum);
     
     // Get total count for pagination
     const total = await Movie.countDocuments(filter);
@@ -55,10 +114,10 @@ router.get('/', async (req, res) => {
       data: {
         movies,
         pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / parseInt(limit)),
+          currentPage: pageNum,
+          totalPages: Math.max(1, Math.ceil(total / limitNum)),
           totalMovies: total,
-          moviesPerPage: parseInt(limit)
+          moviesPerPage: limitNum
         }
       }
     });
@@ -76,32 +135,45 @@ router.get('/', async (req, res) => {
 // @access  Private/Admin
 router.get('/admin', protect, restrictToAdmin, async (req, res) => {
   try {
-    const { page = 1, limit = 1000, search = '', genre = '', status = '' } = req.query;
+    const { page = 1, limit = 30, search = '', genre = '', status = '' } = req.query;
     
     // Build filter object
     const filter = {};
     
-    if (search) {
-      filter.$text = { $search: search };
+    if (search && String(search).trim()) {
+      const q = String(search).trim();
+      filter.$or = [
+        { title: { $regex: q, $options: 'i' } },
+        { description: { $regex: q, $options: 'i' } },
+        { genre: { $regex: q, $options: 'i' } }
+      ];
+      if (/^\d{4}$/.test(q)) {
+        filter.$or.push({ year: parseInt(q, 10) });
+      }
     }
     
     if (genre) {
-      filter.genre = { $regex: genre, $options: 'i' };
+      const escaped = String(genre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.genre = {
+        $regex: `(^|[,|/]\\s*)${escaped}(?=\\s*[,|/]|$)`,
+        $options: 'i'
+      };
     }
     
     if (status) {
       filter.status = status;
     }
 
-    // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 30));
+    const skip = (pageNum - 1) * limitNum;
     
     // Get movies with pagination
     const movies = await Movie.find(filter)
       .populate('addedBy', 'name email')
-      .sort({ createdAt: -1 })
+      .sort({ year: -1, createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(limitNum);
     
     // Get total count for pagination
     const total = await Movie.countDocuments(filter);
@@ -111,10 +183,10 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
       data: {
         movies,
         pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / parseInt(limit)),
+          currentPage: pageNum,
+          totalPages: Math.max(1, Math.ceil(total / limitNum)),
           totalMovies: total,
-          moviesPerPage: parseInt(limit)
+          moviesPerPage: limitNum
         }
       }
     });
@@ -132,8 +204,18 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
 // @access  Public
 router.get('/filters', async (req, res) => {
   try {
-    // Get unique genres
-    const genres = await Movie.distinct('genre', { status: 'active' });
+    // Split combined strings like "Action, Adventure, Comedy" into single genres
+    const rawGenres = await Movie.distinct('genre', { status: 'active' });
+    const genreSet = new Set();
+    for (const value of rawGenres) {
+      String(value || '')
+        .split(/[,|/]+/)
+        .forEach((g) => {
+          const cleaned = g.trim();
+          if (cleaned) genreSet.add(cleaned);
+        });
+    }
+    const genres = Array.from(genreSet).sort((a, b) => a.localeCompare(b));
     
     // Get unique years, sorted descending
     const years = await Movie.distinct('year', { status: 'active' });
@@ -142,7 +224,7 @@ router.get('/filters', async (req, res) => {
     res.json({
       success: true,
       data: {
-        genres: genres.sort(),
+        genres,
         years: sortedYears
       }
     });
@@ -537,6 +619,7 @@ router.post('/', protect, restrictToAdmin, [
     }
 
     // Create new movie
+    const meta = pickMetaFields(req.body);
     const movie = new Movie({
       title,
       year: parseInt(year),
@@ -546,6 +629,7 @@ router.post('/', protect, restrictToAdmin, [
       imdbRating: parseFloat(imdbRating),
       imageUrl,
       images: images, // Store array of images
+      ...meta,
       addedBy: req.user.id
     });
 
@@ -623,6 +707,7 @@ router.put('/:id', protect, restrictToAdmin, [
     if (description) updateData.description = description;
     if (genre) updateData.genre = genre;
     if (movieUrl) updateData.movieUrl = movieUrl;
+    Object.assign(updateData, pickMetaFields(req.body));
     
     // Always update imdbRating if provided (including 0)
     // The frontend always sends imdbRating, so we should process it
@@ -973,6 +1058,153 @@ router.delete('/:id', protect, restrictToAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while deleting movie'
+    });
+  }
+});
+
+// @route   GET /api/movies/:id/questions
+// @desc    Public Q&A thread for a movie
+// @access  Public
+router.get('/:id/questions', async (req, res) => {
+  try {
+    const movie = await Movie.findById(req.params.id).select('_id');
+    if (!movie) {
+      return res.status(404).json({
+        success: false,
+        message: 'Movie not found'
+      });
+    }
+
+    const questions = await MovieQuestion.find({ movie: movie._id })
+      .sort({ createdAt: 1 })
+      .select('question answer answeredAt createdAt')
+      .lean();
+
+    res.json({
+      success: true,
+      data: { questions }
+    });
+  } catch (error) {
+    console.error('Get movie questions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching questions'
+    });
+  }
+});
+
+// @route   POST /api/movies/:id/ask
+// @desc    Ask about this movie (public Q&A + admin notification)
+// @access  Public
+router.post('/:id/ask', async (req, res) => {
+  try {
+    const movie = await Movie.findById(req.params.id).select('title year status');
+    if (!movie) {
+      return res.status(404).json({
+        success: false,
+        message: 'Movie not found'
+      });
+    }
+
+    const message = String(req.body?.message || req.body?.question || '').trim().slice(0, 2000);
+
+    if (!message) {
+      return res.status(400).json({
+        success: false,
+        message: 'Question is required'
+      });
+    }
+
+    const question = await MovieQuestion.create({
+      movie: movie._id,
+      question: message
+    });
+
+    await Notification.create({
+      type: 'movie_ask',
+      title: `Ask about: ${movie.title}`,
+      message,
+      movie: movie._id,
+      movieTitle: movie.title,
+      question: question._id,
+      fromName: 'Guest'
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Question posted. An admin will be notified.',
+      data: {
+        question: {
+          _id: question._id,
+          question: question.question,
+          answer: question.answer || '',
+          answeredAt: question.answeredAt,
+          createdAt: question.createdAt
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Ask about movie error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while sending your question'
+    });
+  }
+});
+
+// @route   POST /api/movies/:id/questions/:qid/reply
+// @desc    Admin reply to a movie question
+// @access  Private/Admin
+router.post('/:id/questions/:qid/reply', protect, restrictToAdmin, async (req, res) => {
+  try {
+    const answer = String(req.body?.answer || '').trim().slice(0, 4000);
+    if (!answer) {
+      return res.status(400).json({
+        success: false,
+        message: 'Answer is required'
+      });
+    }
+
+    const question = await MovieQuestion.findOne({
+      _id: req.params.qid,
+      movie: req.params.id
+    });
+
+    if (!question) {
+      return res.status(404).json({
+        success: false,
+        message: 'Question not found'
+      });
+    }
+
+    question.answer = answer;
+    question.answeredBy = req.user.id;
+    question.answeredAt = new Date();
+    await question.save();
+
+    await Notification.updateMany(
+      { question: question._id },
+      { $set: { read: true, replied: true } }
+    );
+
+    res.json({
+      success: true,
+      message: 'Reply posted',
+      data: {
+        question: {
+          _id: question._id,
+          question: question.question,
+          answer: question.answer,
+          answeredAt: question.answeredAt,
+          createdAt: question.createdAt
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Reply to movie question error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while posting reply'
     });
   }
 });

@@ -43,7 +43,7 @@ const CollectionManagement = ({ token, showNotification }) => {
 
   const fetchMovies = useCallback(async () => {
     try {
-      const response = await fetch('/api/movies?limit=1000', { headers: authHeaders() });
+      const response = await fetch('/api/movies?limit=20000', { headers: authHeaders() });
       const result = await response.json();
       if (result.success) setMovies(result.data.movies || []);
     } catch (err) {

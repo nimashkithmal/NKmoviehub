@@ -13,6 +13,7 @@ const TVShowDetail = () => {
   const [error, setError] = useState(null);
   const [selectedEpisode, setSelectedEpisode] = useState(null);
   const [showPlayer, setShowPlayer] = useState(false);
+  const [showTrailer, setShowTrailer] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [activeSeason, setActiveSeason] = useState(1);
 
@@ -144,8 +145,11 @@ const TVShowDetail = () => {
       const episode = sortedEpisodes[i];
       const url = episode.episodeUrl || '';
       
-      // Try to extract season number from URL (e.g., s01e01, /s01/e01, season01, etc.)
-      const seasonMatch = url.match(/[sS](\d{1,2})[eE]/) || 
+      // Try to extract season number from URL
+      // Supports: s01e01, &s=2&e=1, /s01/, season01, embedtv/ID&s=2
+      const seasonMatch = url.match(/[?&]s=(\d{1,2})(?:&|$)/i) ||
+                          url.match(/embedtv\/\d+&s=(\d{1,2})/i) ||
+                          url.match(/[sS](\d{1,2})[eE]/) || 
                           url.match(/season[_\s-]?(\d{1,2})/i) ||
                           url.match(/\/s(\d{1,2})\//);
       
@@ -200,6 +204,7 @@ const TVShowDetail = () => {
   // Falling back to the first season keeps the list valid when a show has
   // fewer seasons than the one last selected
   const currentSeason = seasons.find((s) => s.seasonNumber === activeSeason) || seasons[0];
+  const trailerUrl = tvShow?.trailerUrl || '';
 
   return (
     <>
@@ -211,6 +216,27 @@ const TVShowDetail = () => {
             setSelectedEpisode(null);
           }} 
         />
+      )}
+
+      {showTrailer && trailerUrl && (
+        <div className="md-trailer-overlay" onClick={() => setShowTrailer(false)}>
+          <div className="md-trailer-modal" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="md-trailer-close"
+              onClick={() => setShowTrailer(false)}
+              aria-label="Close trailer"
+            >
+              ×
+            </button>
+            <iframe
+              title={`${tvShow.title} trailer`}
+              src={`${trailerUrl}${trailerUrl.includes('?') ? '&' : '?'}autoplay=1`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        </div>
       )}
       
       <div className="movie-detail-container">
@@ -322,6 +348,46 @@ const TVShowDetail = () => {
               </div>
             )}
 
+            {(() => {
+              const formatMoney = (value) => {
+                const n = Number(value) || 0;
+                if (n <= 0) return null;
+                if (n >= 1e6) return `$${Math.round(n / 1e6)}M`;
+                if (n >= 1e3) return `$${Math.round(n / 1e3)}K`;
+                return `$${n}`;
+              };
+              const statusLabel =
+                tvShow.status === 'coming_soon'
+                  ? 'Coming Soon'
+                  : tvShow.releaseStatus ||
+                    (tvShow.status === 'active' ? 'Released' : tvShow.status);
+              const detailItems = [
+                tvShow.director ? { label: 'Director', value: tvShow.director } : null,
+                tvShow.director ? { label: '', value: '', spacer: true } : null,
+                statusLabel ? { label: 'Status', value: statusLabel } : null,
+                tvShow.language ? { label: 'Language', value: tvShow.language } : null,
+                formatMoney(tvShow.budget) ? { label: 'Budget', value: formatMoney(tvShow.budget) } : null,
+                formatMoney(tvShow.revenue) ? { label: 'Revenue', value: formatMoney(tvShow.revenue) } : null
+              ].filter((item) => item && (item.spacer || item.value));
+
+              if (detailItems.length === 0) return null;
+
+              return (
+                <div className="md-facts" style={{ marginTop: '1.5rem', maxWidth: '100%' }}>
+                  {detailItems.map((item, index) =>
+                    item.spacer ? (
+                      <div key={`spacer-${index}`} className="md-fact md-fact-spacer" aria-hidden="true" />
+                    ) : (
+                      <div key={item.label} className="md-fact">
+                        <span className="md-fact-label">{item.label}</span>
+                        <span className="md-fact-value">{item.value}</span>
+                      </div>
+                    )
+                  )}
+                </div>
+              );
+            })()}
+
             <div className="movie-detail-ratings">
               <div className="rating-item">
                 <span className="rating-label">📺 IMDB Rating:</span>
@@ -330,6 +396,18 @@ const TVShowDetail = () => {
                 </span>
               </div>
             </div>
+
+            {trailerUrl && (
+              <div className="movie-detail-actions" style={{ marginTop: '1rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-large"
+                  onClick={() => setShowTrailer(true)}
+                >
+                  Watch Trailer
+                </button>
+              </div>
+            )}
 
           </div>
 

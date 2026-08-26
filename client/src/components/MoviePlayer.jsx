@@ -57,11 +57,81 @@ const getEmbedPlayableUrl = (url) => {
   // https://www.2embed.skin/movie/969681  →  https://www.2embed.cc/embed/969681
   const movieMatch = url.match(/2embed\.[^/]+\/movie\/(\d+)/i);
   if (movieMatch) return `https://www.2embed.cc/embed/${movieMatch[1]}`;
+
+  // https://www.2embed.cc/embedtv/60735&s=2&e=1  →  .../embedtv/60735?s=2&e=1
+  const tvEmbedMatch = url.match(
+    /2embed\.[^/]+\/embedtv\/(\d+)(?:[?&]s=(\d+)(?:[?&]e=(\d+))?)?/i
+  );
+  if (tvEmbedMatch) {
+    const id = tvEmbedMatch[1];
+    const s = tvEmbedMatch[2];
+    const e = tvEmbedMatch[3];
+    if (s && e) return `https://www.2embed.cc/embedtv/${id}?s=${s}&e=${e}`;
+    if (s) return `https://www.2embed.cc/embedtv/${id}?s=${s}`;
+    return `https://www.2embed.cc/embedtv/${id}`;
+  }
+
   const tvMatch = url.match(/2embed\.[^/]+\/tv\/(\d+)/i);
   if (tvMatch) return `https://www.2embed.cc/embedtv/${tvMatch[1]}`;
-  // Already an embed URL
+
+  // Already an embed URL — normalize odd &s= form
+  if (url.includes('/embedtv/') && url.includes('&s=') && !url.includes('?')) {
+    return url.replace(/\/embedtv\/(\d+)&/, '/embedtv/$1?');
+  }
   if (url.includes('/embed/') || url.includes('/embedtv/')) return url;
   return url;
+};
+
+/** Build alternate iframe sources when 2embed has no stream for a title */
+const buildEmbedSources = (url) => {
+  const primary = getEmbedPlayableUrl(url);
+  if (!primary) return [];
+
+  const sources = [{ id: '2embed', label: 'Server 1', url: primary }];
+
+  const tmdbMovie = primary.match(/2embed\.[^/]+\/embed\/(\d+)/i);
+  const imdbMovie = primary.match(/2embed\.[^/]+\/embed\/(tt\d+)/i);
+  const tvMatch = primary.match(
+    /2embed\.[^/]+\/embedtv\/(\d+)(?:\?s=(\d+)(?:&e=(\d+))?)?/i
+  );
+
+  if (tmdbMovie) {
+    const id = tmdbMovie[1];
+    sources.push({
+      id: 'vidsrc',
+      label: 'Server 2',
+      url: `https://vidsrc.to/embed/movie/${id}`
+    });
+    sources.push({
+      id: 'vidsrcme',
+      label: 'Server 3',
+      url: `https://vidsrc.me/embed/movie/${id}`
+    });
+  } else if (imdbMovie) {
+    const id = imdbMovie[1];
+    sources.push({
+      id: 'vidsrc-imdb',
+      label: 'Server 2',
+      url: `https://vidsrc.to/embed/movie?imdb=${id}`
+    });
+  } else if (tvMatch) {
+    const id = tvMatch[1];
+    const s = tvMatch[2] || '1';
+    const e = tvMatch[3] || '1';
+    sources.push({
+      id: 'vidsrc-tv',
+      label: 'Server 2',
+      url: `https://vidsrc.to/embed/tv/${id}/${s}/${e}`
+    });
+  }
+
+  // De-dupe by URL
+  const seen = new Set();
+  return sources.filter((s) => {
+    if (seen.has(s.url)) return false;
+    seen.add(s.url);
+    return true;
+  });
 };
 
 // Helper function to extract Google Drive file ID and convert to playable URL
@@ -136,6 +206,8 @@ const MoviePlayer = ({ movie, onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [videoType, setVideoType] = useState('unknown');
   const [embedUrl, setEmbedUrl] = useState('');
+  const [embedSources, setEmbedSources] = useState([]);
+  const [activeSourceId, setActiveSourceId] = useState('');
   const [googleDriveUrls, setGoogleDriveUrls] = useState(null);
 
   // Determine video type and prepare embed URL
@@ -144,8 +216,12 @@ const MoviePlayer = ({ movie, onClose }) => {
     
     const type = getVideoType(movie.movieUrl);
     setVideoType(type);
+    setHasError(false);
+    setErrorMessage('');
     
     if (type === 'googledrive') {
+      setEmbedSources([]);
+      setActiveSourceId('');
       const driveUrls = getGoogleDrivePlayableUrl(movie.movieUrl);
       if (driveUrls) {
         // Google Drive videos should use iframe embed viewer
@@ -158,17 +234,23 @@ const MoviePlayer = ({ movie, onClose }) => {
         setIsLoading(false);
       }
     } else if (type === 'embed') {
-      const playable = getEmbedPlayableUrl(movie.movieUrl);
-      if (playable) {
-        setEmbedUrl(playable);
+      const sources = buildEmbedSources(movie.movieUrl);
+      if (sources.length) {
+        setEmbedSources(sources);
+        setActiveSourceId(sources[0].id);
+        setEmbedUrl(sources[0].url);
         setIsLoading(false);
         setIsPlaying(true);
       } else {
+        setEmbedSources([]);
+        setActiveSourceId('');
         setHasError(true);
         setErrorMessage('Invalid embed URL');
         setIsLoading(false);
       }
     } else if (type === 'youtube') {
+      setEmbedSources([]);
+      setActiveSourceId('');
       const videoId = getYouTubeId(movie.movieUrl);
       if (videoId) {
         setEmbedUrl(`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`);
@@ -180,6 +262,8 @@ const MoviePlayer = ({ movie, onClose }) => {
         setIsLoading(false);
       }
     } else if (type === 'vimeo') {
+      setEmbedSources([]);
+      setActiveSourceId('');
       const videoId = getVimeoId(movie.movieUrl);
       if (videoId) {
         setEmbedUrl(`https://player.vimeo.com/video/${videoId}?autoplay=1`);
@@ -191,14 +275,67 @@ const MoviePlayer = ({ movie, onClose }) => {
         setIsLoading(false);
       }
     } else if (type === 'direct') {
+      setEmbedSources([]);
+      setActiveSourceId('');
       // Will be handled by video element
       setIsLoading(true);
     } else {
+      setEmbedSources([]);
+      setActiveSourceId('');
       setHasError(true);
       setErrorMessage('Unsupported video URL format');
       setIsLoading(false);
     }
   }, [movie?.movieUrl]);
+
+  const switchEmbedSource = (source) => {
+    if (!source || source.id === activeSourceId) return;
+    setActiveSourceId(source.id);
+    setEmbedUrl(source.url);
+    setHasError(false);
+    setErrorMessage('');
+    setIsLoading(true);
+    setIsPlaying(true);
+  };
+
+  // Block embed ad popups / redirects while the player is open
+  useEffect(() => {
+    const previousOpen = window.open;
+    window.open = () => null;
+
+    const previousBlur = window.onblur;
+    let blurArmed = false;
+    const onBlur = () => {
+      // Pop-under pattern: blur then try to open — keep focus if possible
+      blurArmed = true;
+      window.focus();
+    };
+    window.addEventListener('blur', onBlur);
+
+    const onVisibility = () => {
+      if (document.hidden && blurArmed) {
+        window.focus();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Stop auxiliary clicks that spawn tabs from our UI chrome
+    const blockAux = (event) => {
+      if (event.button === 1) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    document.addEventListener('auxclick', blockAux, true);
+
+    return () => {
+      window.open = previousOpen;
+      window.onblur = previousBlur;
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVisibility);
+      document.removeEventListener('auxclick', blockAux, true);
+    };
+  }, []);
 
   useEffect(() => {
     // Only handle direct video files (Google Drive uses iframe)
@@ -352,6 +489,22 @@ const MoviePlayer = ({ movie, onClose }) => {
       <div className="movie-player-container" onClick={(e) => e.stopPropagation()}>
         <div className="movie-player-header">
           <h2 className="movie-player-title">{movie.title}</h2>
+          {embedSources.length > 1 && (
+            <div className="movie-player-servers" role="group" aria-label="Streaming servers">
+              {embedSources.map((source) => (
+                <button
+                  key={source.id}
+                  type="button"
+                  className={`movie-player-server-btn${
+                    activeSourceId === source.id ? ' is-active' : ''
+                  }`}
+                  onClick={() => switchEmbedSource(source)}
+                >
+                  {source.label}
+                </button>
+              ))}
+            </div>
+          )}
           <button className="movie-player-close" onClick={onClose}>
             ×
           </button>
@@ -431,12 +584,15 @@ const MoviePlayer = ({ movie, onClose }) => {
           ) : videoType === 'youtube' || videoType === 'vimeo' || videoType === 'googledrive' || videoType === 'embed' ? (
             <>
               <iframe
+                key={embedUrl}
                 ref={iframeRef}
                 className="movie-player-video"
                 src={embedUrl}
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
+                referrerPolicy="no-referrer"
+                loading="eager"
                 title={movie.title}
                 onLoad={() => {
                   setIsLoading(false);

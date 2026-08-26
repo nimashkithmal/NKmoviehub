@@ -40,6 +40,11 @@ const tvShowSchema = new mongoose.Schema({
     required: false,
     trim: true
   },
+  trailerUrl: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   episodeCount: {
     type: Number,
     default: 0,
@@ -94,6 +99,50 @@ const tvShowSchema = new mongoose.Schema({
     enum: ['active', 'inactive', 'coming_soon'],
     default: 'active'
   },
+  tagline: {
+    type: String,
+    trim: true,
+    maxlength: [300, 'Tagline cannot exceed 300 characters'],
+    default: ''
+  },
+  director: {
+    type: String,
+    trim: true,
+    maxlength: [200, 'Director cannot exceed 200 characters'],
+    default: ''
+  },
+  language: {
+    type: String,
+    trim: true,
+    maxlength: [80, 'Language cannot exceed 80 characters'],
+    default: ''
+  },
+  releaseStatus: {
+    type: String,
+    trim: true,
+    maxlength: [80, 'Release status cannot exceed 80 characters'],
+    default: ''
+  },
+  runtime: {
+    type: Number,
+    min: [0, 'Runtime cannot be negative'],
+    default: null
+  },
+  releaseDate: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  budget: {
+    type: Number,
+    min: [0, 'Budget cannot be negative'],
+    default: null
+  },
+  revenue: {
+    type: Number,
+    min: [0, 'Revenue cannot be negative'],
+    default: null
+  },
   addedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -104,7 +153,11 @@ const tvShowSchema = new mongoose.Schema({
 });
 
 // Index for better search performance
-tvShowSchema.index({ title: 'text', description: 'text', genre: 'text' });
+// language_override must NOT be "language" — that field stores spoken language meta
+tvShowSchema.index(
+  { title: 'text', description: 'text', genre: 'text' },
+  { default_language: 'none', language_override: 'unused_lang_field' }
+);
 
 // Static method to get TV show statistics
 tvShowSchema.statics.getStats = async function() {

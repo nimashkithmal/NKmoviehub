@@ -48,8 +48,8 @@ const BannerManagement = ({ token, showNotification }) => {
   const fetchCatalog = useCallback(async () => {
     try {
       const [moviesRes, tvRes] = await Promise.all([
-        fetch('/api/movies?limit=1000', { headers: authHeaders() }),
-        fetch('/api/tvshows?limit=1000', { headers: authHeaders() })
+        fetch('/api/movies?limit=20000', { headers: authHeaders() }),
+        fetch('/api/tvshows?limit=20000', { headers: authHeaders() })
       ]);
       const moviesJson = await moviesRes.json();
       const tvJson = await tvRes.json();

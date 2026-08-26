@@ -17,7 +17,15 @@ const AdminDashboard = () => {
   const [moviesError, setMoviesError] = useState(null);
   const [tvShowsError, setTVShowsError] = useState(null);
   const [movieSearchTerm, setMovieSearchTerm] = useState('');
+  const [moviesPage, setMoviesPage] = useState(1);
+  const [moviesPagination, setMoviesPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalMovies: 0,
+    moviesPerPage: 30
+  });
   const [tvShowSearchTerm, setTVShowSearchTerm] = useState('');
+  const MOVIES_PAGE_SIZE = 30;
   const [editingMovie, setEditingMovie] = useState(null);
   const [editingTVShow, setEditingTVShow] = useState(null);
   const [movieFormData, setMovieFormData] = useState({
@@ -26,7 +34,15 @@ const AdminDashboard = () => {
     description: '',
     genre: '',
     movieUrl: '',
-    imdbRating: 0
+    imdbRating: 0,
+    director: '',
+    language: '',
+    budget: '',
+    revenue: '',
+    runtime: '',
+    releaseDate: '',
+    tagline: '',
+    trailerUrl: ''
   });
   const [movieImageFiles, setMovieImageFiles] = useState([]);
   const [movieImagePreviews, setMovieImagePreviews] = useState([]);
@@ -41,7 +57,15 @@ const AdminDashboard = () => {
     showUrl: '',
     imdbRating: 0,
     episodeCount: 0,
-    numberOfSeasons: 0
+    numberOfSeasons: 0,
+    director: '',
+    language: '',
+    budget: '',
+    revenue: '',
+    runtime: '',
+    releaseDate: '',
+    tagline: '',
+    trailerUrl: ''
   });
   const [tvShowImageFiles, setTVShowImageFiles] = useState([]);
   const [tvShowImagePreviews, setTVShowImagePreviews] = useState([]);
@@ -95,13 +119,19 @@ const AdminDashboard = () => {
     });
   };
 
-  // Fetch movies from backend
-  const fetchMovies = useCallback(async () => {
+  // Fetch movies from backend (30 per page)
+  const fetchMovies = useCallback(async (page = 1, search = '') => {
     try {
       setMoviesLoading(true);
       setMoviesError(null);
+
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(MOVIES_PAGE_SIZE)
+      });
+      if (search && search.trim()) params.set('search', search.trim());
       
-      const response = await fetch('/api/movies/admin?limit=1000', {
+      const response = await fetch(`/api/movies/admin?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -116,22 +146,12 @@ const AdminDashboard = () => {
       
       if (result.success) {
         setMovies(result.data.movies);
-        
-        // Calculate movie stats
-        const totalMovies = result.data.movies.length;
-        const activeMovies = result.data.movies.filter(m => m.status === 'active').length;
-        const averageImdbRating = result.data.movies.reduce((sum, m) => sum + m.imdbRating, 0) / totalMovies || 0;
-        const newMoviesThisMonth = result.data.movies.filter(m => {
-          const movieDate = new Date(m.createdAt);
-          const now = new Date();
-          return movieDate.getMonth() === now.getMonth() && movieDate.getFullYear() === now.getFullYear();
-        }).length;
-
-        setMovieStats({
-          totalMovies,
-          activeMovies,
-          averageRating: Math.round(averageImdbRating * 10) / 10,
-          newMoviesThisMonth
+        const pagination = result.data.pagination || {};
+        setMoviesPagination({
+          currentPage: pagination.currentPage || page,
+          totalPages: Math.max(1, pagination.totalPages || 1),
+          totalMovies: pagination.totalMovies || 0,
+          moviesPerPage: pagination.moviesPerPage || MOVIES_PAGE_SIZE
         });
       } else {
         throw new Error(result.message || 'Failed to fetch movies');
@@ -144,13 +164,36 @@ const AdminDashboard = () => {
     }
   }, [token]);
 
+  const fetchMovieStats = useCallback(async () => {
+    try {
+      const response = await fetch('/api/movies/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!response.ok) return;
+      const result = await response.json();
+      if (!result.success) return;
+      const data = result.data || {};
+      setMovieStats({
+        totalMovies: data.totalMovies || 0,
+        activeMovies: data.activeMovies || 0,
+        averageRating: Math.round((data.averageRating || 0) * 10) / 10,
+        newMoviesThisMonth: data.newMoviesThisMonth || 0
+      });
+    } catch (err) {
+      console.error('Error fetching movie stats:', err);
+    }
+  }, [token]);
+
   // Fetch TV shows from backend
   const fetchTVShows = useCallback(async () => {
     try {
       setTVShowsLoading(true);
       setTVShowsError(null);
       
-      const response = await fetch('/api/tvshows/admin?limit=1000', {
+      const response = await fetch('/api/tvshows/admin?limit=20000', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -193,13 +236,23 @@ const AdminDashboard = () => {
     }
   }, [token]);
 
-  // Fetch data on component mount
+  // Fetch movies page when page / search changes
+  useEffect(() => {
+    if (!token) return undefined;
+    const delay = movieSearchTerm ? 300 : 0;
+    const timer = setTimeout(() => {
+      fetchMovies(moviesPage, movieSearchTerm);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [token, moviesPage, movieSearchTerm, fetchMovies]);
+
+  // Fetch stats + TV shows on mount
   useEffect(() => {
     if (token) {
-      fetchMovies();
+      fetchMovieStats();
       fetchTVShows();
     }
-  }, [token, fetchMovies, fetchTVShows]);
+  }, [token, fetchMovieStats, fetchTVShows]);
 
   // Movie management functions
 
@@ -211,7 +264,15 @@ const AdminDashboard = () => {
       description: movie.description || '',
       genre: movie.genre || '',
       movieUrl: movie.movieUrl || '',
-      imdbRating: movie.imdbRating || 0
+      imdbRating: movie.imdbRating || 0,
+      director: movie.director || '',
+      language: movie.language || '',
+      budget: movie.budget != null ? String(movie.budget) : '',
+      revenue: movie.revenue != null ? String(movie.revenue) : '',
+      runtime: movie.runtime != null ? String(movie.runtime) : '',
+      releaseDate: movie.releaseDate || '',
+      tagline: movie.tagline || '',
+      trailerUrl: movie.trailerUrl || ''
     });
     // Gallery posters only — never include the detail banner
     const gallery = (movie.images && movie.images.length > 0)
@@ -236,7 +297,15 @@ const AdminDashboard = () => {
         year: movieFormData.year,
         description: movieFormData.description,
         genre: movieFormData.genre,
-        movieUrl: movieFormData.movieUrl
+        movieUrl: movieFormData.movieUrl,
+        director: movieFormData.director,
+        language: movieFormData.language,
+        budget: movieFormData.budget,
+        revenue: movieFormData.revenue,
+        runtime: movieFormData.runtime,
+        releaseDate: movieFormData.releaseDate,
+        tagline: movieFormData.tagline,
+        trailerUrl: movieFormData.trailerUrl
       };
       
       // Always include imdbRating in the update
@@ -323,7 +392,7 @@ const AdminDashboard = () => {
       const result = await response.json();
       
       if (result.success) {
-        await fetchMovies();
+        await fetchMovies(moviesPage, movieSearchTerm);
         setEditingMovie(null);
         setMovieFormData({
           title: '',
@@ -331,7 +400,15 @@ const AdminDashboard = () => {
           description: '',
           genre: '',
           movieUrl: '',
-          imdbRating: 0
+          imdbRating: 0,
+          director: '',
+          language: '',
+          budget: '',
+          revenue: '',
+          runtime: '',
+          releaseDate: '',
+          tagline: '',
+          trailerUrl: ''
         });
         setMovieImageFiles([]);
         setMovieImagePreviews([]);
@@ -439,7 +516,7 @@ const AdminDashboard = () => {
         const result = await response.json();
         
         if (result.success) {
-          await fetchMovies();
+          await fetchMovies(moviesPage, movieSearchTerm);
           showNotification('Movie deleted successfully!', 'success');
         }
       } catch (err) {
@@ -468,7 +545,7 @@ const AdminDashboard = () => {
       const result = await response.json();
       
       if (result.success) {
-        await fetchMovies();
+        await fetchMovies(moviesPage, movieSearchTerm);
         showNotification(`Movie status updated successfully!`, 'success');
       }
     } catch (err) {
@@ -519,7 +596,7 @@ const AdminDashboard = () => {
       if (result.success) {
         // Only refresh movies list for non-image updates to avoid double refresh
         if (!imageFile && (!imageFiles || imageFiles.length === 0)) {
-          await fetchMovies();
+          await fetchMovies(moviesPage, movieSearchTerm);
         }
         showNotification('Movie updated successfully!', 'success');
       }
@@ -585,7 +662,7 @@ const AdminDashboard = () => {
         if (result && result.success) {
           // Refresh the movies list to show the updated images
           console.log('Image update successful, refreshing movies list...');
-          await fetchMovies();
+          await fetchMovies(moviesPage, movieSearchTerm);
           showNotification(`${validFiles.length} image(s) updated successfully!`, 'success');
         } else {
           const errorMsg = result?.message || 'Failed to update images. Please try again.';
@@ -617,11 +694,7 @@ const AdminDashboard = () => {
     });
   };
 
-  const filteredMovies = movies.filter(movie =>
-    movie.title.toLowerCase().includes(movieSearchTerm.toLowerCase()) ||
-    movie.year.toString().includes(movieSearchTerm) ||
-    movie.genre.toLowerCase().includes(movieSearchTerm.toLowerCase())
-  );
+  const filteredMovies = movies;
 
   const filteredTVShows = tvShows.filter(tvShow =>
     tvShow.title.toLowerCase().includes(tvShowSearchTerm.toLowerCase()) ||
@@ -629,33 +702,90 @@ const AdminDashboard = () => {
     tvShow.genre.toLowerCase().includes(tvShowSearchTerm.toLowerCase())
   );
 
+  const goToMoviesPage = (page) => {
+    const next = Math.min(Math.max(1, page), moviesPagination.totalPages || 1);
+    setMoviesPage(next);
+  };
+
+  const refreshMovies = () => {
+    fetchMovies(moviesPage, movieSearchTerm);
+    fetchMovieStats();
+  };
+
   // TV Show management functions
-  // Helper function to group episodes into seasons
+  // Helper function to group episodes into seasons (prefer URL season markers)
   const groupEpisodesBySeasons = (episodes, numberOfSeasons) => {
     if (!episodes || episodes.length === 0 || !numberOfSeasons || numberOfSeasons === 0) {
       return [];
     }
 
     const sortedEpisodes = [...episodes].sort((a, b) => a.episodeNumber - b.episodeNumber);
-    const episodesPerSeason = Math.ceil(sortedEpisodes.length / numberOfSeasons);
-    const seasons = [];
+    const episodesBySeason = {};
+    let detectedFromUrl = 0;
 
-    for (let seasonNum = 1; seasonNum <= numberOfSeasons; seasonNum++) {
-      const startIdx = (seasonNum - 1) * episodesPerSeason;
-      const endIdx = Math.min(startIdx + episodesPerSeason, sortedEpisodes.length);
-      const seasonEpisodes = sortedEpisodes.slice(startIdx, endIdx);
+    sortedEpisodes.forEach((ep, i) => {
+      const url = ep.episodeUrl || '';
+      const seasonMatch =
+        url.match(/[?&]s=(\d{1,2})(?:&|$)/i) ||
+        url.match(/embedtv\/\d+[&?]s=(\d{1,2})/i) ||
+        url.match(/[sS](\d{1,2})[eE]/) ||
+        url.match(/season[_\s-]?(\d{1,2})/i) ||
+        url.match(/\/s(\d{1,2})\//);
 
-      seasons.push({
-        seasonNumber: seasonNum,
-        episodeCount: seasonEpisodes.length,
-        episodes: seasonEpisodes.map(ep => ({
-          episodeNumber: ep.episodeNumber,
-          episodeUrl: ep.episodeUrl || '',
-          episodeTitle: ep.episodeTitle || ''
-        }))
+      let seasonNum = null;
+      if (seasonMatch) {
+        const n = parseInt(seasonMatch[1], 10);
+        if (n >= 1 && n <= numberOfSeasons) {
+          seasonNum = n;
+          detectedFromUrl += 1;
+        }
+      }
+
+      if (!seasonNum) {
+        const episodesPerSeason = Math.ceil(sortedEpisodes.length / numberOfSeasons);
+        seasonNum = Math.min(numberOfSeasons, Math.floor(i / episodesPerSeason) + 1);
+      }
+
+      if (!episodesBySeason[seasonNum]) episodesBySeason[seasonNum] = [];
+      episodesBySeason[seasonNum].push({
+        episodeNumber: ep.episodeNumber,
+        episodeUrl: ep.episodeUrl || '',
+        episodeTitle: ep.episodeTitle || ''
       });
+    });
+
+    // If almost nothing came from URLs, fall back to even chunks
+    if (detectedFromUrl < Math.max(1, Math.floor(sortedEpisodes.length * 0.5))) {
+      const episodesPerSeason = Math.ceil(sortedEpisodes.length / numberOfSeasons);
+      const seasons = [];
+      for (let seasonNum = 1; seasonNum <= numberOfSeasons; seasonNum++) {
+        const startIdx = (seasonNum - 1) * episodesPerSeason;
+        const endIdx = Math.min(startIdx + episodesPerSeason, sortedEpisodes.length);
+        const seasonEpisodes = sortedEpisodes.slice(startIdx, endIdx);
+        seasons.push({
+          seasonNumber: seasonNum,
+          episodeCount: seasonEpisodes.length,
+          episodes: seasonEpisodes.map((ep) => ({
+            episodeNumber: ep.episodeNumber,
+            episodeUrl: ep.episodeUrl || '',
+            episodeTitle: ep.episodeTitle || ''
+          }))
+        });
+      }
+      return seasons;
     }
 
+    const seasons = [];
+    for (let seasonNum = 1; seasonNum <= numberOfSeasons; seasonNum++) {
+      const seasonEpisodes = episodesBySeason[seasonNum] || [];
+      if (seasonEpisodes.length > 0) {
+        seasons.push({
+          seasonNumber: seasonNum,
+          episodeCount: seasonEpisodes.length,
+          episodes: seasonEpisodes
+        });
+      }
+    }
     return seasons;
   };
 
@@ -672,7 +802,15 @@ const AdminDashboard = () => {
       showUrl: tvShow.showUrl || '',
       imdbRating: tvShow.imdbRating || 0,
       episodeCount: episodeCount,
-      numberOfSeasons: numberOfSeasons
+      numberOfSeasons: numberOfSeasons,
+      director: tvShow.director || '',
+      language: tvShow.language || '',
+      budget: tvShow.budget != null ? String(tvShow.budget) : '',
+      revenue: tvShow.revenue != null ? String(tvShow.revenue) : '',
+      runtime: tvShow.runtime != null ? String(tvShow.runtime) : '',
+      releaseDate: tvShow.releaseDate || '',
+      tagline: tvShow.tagline || '',
+      trailerUrl: tvShow.trailerUrl || ''
     });
     
     // Gallery posters only — never include the detail banner
@@ -854,7 +992,15 @@ const AdminDashboard = () => {
           showUrl: '',
           imdbRating: 0,
           episodeCount: 0,
-          numberOfSeasons: 0
+          numberOfSeasons: 0,
+          director: '',
+          language: '',
+          budget: '',
+          revenue: '',
+          runtime: '',
+          releaseDate: '',
+          tagline: '',
+          trailerUrl: ''
         });
         setTVShowEpisodes([]);
         setTVShowSeasons([]);
@@ -1066,23 +1212,32 @@ const AdminDashboard = () => {
               type="text"
               placeholder="Search movies by title, year, or genre..."
               value={movieSearchTerm}
-              onChange={(e) => setMovieSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setMovieSearchTerm(e.target.value);
+                setMoviesPage(1);
+              }}
             />
           </div>
 
           <div className="user-actions">
             <button 
               className="btn btn-secondary"
-              onClick={() => setMovieSearchTerm('')}
+              onClick={() => {
+                setMovieSearchTerm('');
+                setMoviesPage(1);
+              }}
             >
               Clear Search
             </button>
             <button 
               className="btn btn-secondary"
-              onClick={fetchMovies}
+              onClick={refreshMovies}
             >
               Refresh
             </button>
+            <span className="admin-page-meta">
+              {moviesPagination.totalMovies} movies · Page {moviesPagination.currentPage} of {moviesPagination.totalPages}
+            </span>
           </div>
 
           {moviesLoading ? (
@@ -1096,7 +1251,7 @@ const AdminDashboard = () => {
               <p>{moviesError}</p>
               <button 
                 className="btn btn-primary"
-                onClick={fetchMovies}
+                onClick={refreshMovies}
               >
                 Try Again
               </button>
@@ -1107,6 +1262,7 @@ const AdminDashboard = () => {
               <p>{movieSearchTerm ? 'Try adjusting your search terms.' : 'No movies have been added yet.'}</p>
             </div>
           ) : (
+            <>
             <table className="table">
               <thead>
                 <tr>
@@ -1250,6 +1406,30 @@ const AdminDashboard = () => {
                 ))}
               </tbody>
             </table>
+            {moviesPagination.totalPages > 1 && (
+              <nav className="admin-pagination" aria-label="Movies pages">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={moviesPage <= 1 || moviesLoading}
+                  onClick={() => goToMoviesPage(moviesPage - 1)}
+                >
+                  Previous
+                </button>
+                <span className="admin-page-meta">
+                  Page {moviesPagination.currentPage} / {moviesPagination.totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={moviesPage >= moviesPagination.totalPages || moviesLoading}
+                  onClick={() => goToMoviesPage(moviesPage + 1)}
+                >
+                  Next
+                </button>
+              </nav>
+            )}
+            </>
           )}
         </div>
       )}
@@ -1569,6 +1749,80 @@ const AdminDashboard = () => {
               />
             </div>
             <div className="form-group">
+              <label>Director</label>
+              <input
+                type="text"
+                value={movieFormData.director || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, director: e.target.value})}
+                placeholder="e.g. Joe Russo"
+              />
+            </div>
+            <div className="form-group">
+              <label>Language</label>
+              <input
+                type="text"
+                value={movieFormData.language || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, language: e.target.value})}
+                placeholder="e.g. English"
+              />
+            </div>
+            <div className="form-group">
+              <label>Budget</label>
+              <input
+                type="text"
+                value={movieFormData.budget || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, budget: e.target.value})}
+                placeholder="e.g. 356M or 356000000"
+              />
+            </div>
+            <div className="form-group">
+              <label>Revenue</label>
+              <input
+                type="text"
+                value={movieFormData.revenue || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, revenue: e.target.value})}
+                placeholder="e.g. 2799M or 2799000000"
+              />
+            </div>
+            <div className="form-group">
+              <label>Runtime (minutes)</label>
+              <input
+                type="number"
+                value={movieFormData.runtime || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, runtime: e.target.value})}
+                min="0"
+                placeholder="e.g. 181"
+              />
+            </div>
+            <div className="form-group">
+              <label>Release Date</label>
+              <input
+                type="text"
+                value={movieFormData.releaseDate || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, releaseDate: e.target.value})}
+                placeholder="e.g. 2019-04-26"
+              />
+            </div>
+            <div className="form-group">
+              <label>Tagline</label>
+              <input
+                type="text"
+                value={movieFormData.tagline || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, tagline: e.target.value})}
+                placeholder="Optional short tagline"
+              />
+            </div>
+            <div className="form-group">
+              <label>Trailer URL (Watch Trailer)</label>
+              <input
+                type="url"
+                value={movieFormData.trailerUrl || ''}
+                onChange={(e) => setMovieFormData({...movieFormData, trailerUrl: e.target.value})}
+                placeholder="https://www.youtube.com/watch?v=..."
+              />
+              <small>YouTube watch/share/embed URL for the Watch Trailer button.</small>
+            </div>
+            <div className="form-group">
               <label>Detail Page Banner (wide image)</label>
               <input
                 type="file"
@@ -1879,6 +2133,80 @@ const AdminDashboard = () => {
                 placeholder="Enter TV show description..."
                 rows="4"
               />
+            </div>
+            <div className="form-group">
+              <label>Director / Creator</label>
+              <input
+                type="text"
+                value={tvShowFormData.director || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, director: e.target.value})}
+                placeholder="e.g. Joe Russo"
+              />
+            </div>
+            <div className="form-group">
+              <label>Language</label>
+              <input
+                type="text"
+                value={tvShowFormData.language || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, language: e.target.value})}
+                placeholder="e.g. English"
+              />
+            </div>
+            <div className="form-group">
+              <label>Budget</label>
+              <input
+                type="text"
+                value={tvShowFormData.budget || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, budget: e.target.value})}
+                placeholder="e.g. 356M or 356000000"
+              />
+            </div>
+            <div className="form-group">
+              <label>Revenue</label>
+              <input
+                type="text"
+                value={tvShowFormData.revenue || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, revenue: e.target.value})}
+                placeholder="e.g. 2799M or 2799000000"
+              />
+            </div>
+            <div className="form-group">
+              <label>Runtime (minutes)</label>
+              <input
+                type="number"
+                value={tvShowFormData.runtime || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, runtime: e.target.value})}
+                min="0"
+                placeholder="e.g. 45"
+              />
+            </div>
+            <div className="form-group">
+              <label>Release Date</label>
+              <input
+                type="text"
+                value={tvShowFormData.releaseDate || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, releaseDate: e.target.value})}
+                placeholder="e.g. 2019-04-26"
+              />
+            </div>
+            <div className="form-group">
+              <label>Tagline</label>
+              <input
+                type="text"
+                value={tvShowFormData.tagline || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, tagline: e.target.value})}
+                placeholder="Optional short tagline"
+              />
+            </div>
+            <div className="form-group">
+              <label>Trailer URL (Watch Trailer)</label>
+              <input
+                type="url"
+                value={tvShowFormData.trailerUrl || ''}
+                onChange={(e) => setTVShowFormData({...tvShowFormData, trailerUrl: e.target.value})}
+                placeholder="https://www.youtube.com/watch?v=..."
+              />
+              <small>YouTube watch/share/embed URL for the Watch Trailer button.</small>
             </div>
             <div className="form-group">
               <label>Detail Page Banner (wide image)</label>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import MovieGrid from './MovieGrid';
@@ -7,15 +7,23 @@ import ContactSection from './ContactSection';
 import ContentRow from './ContentRow';
 import PosterCard from './PosterCard';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
+import { buildMoviesUrl, buildTVShowsUrl } from '../utils/fetchAllPaged';
 import './MovieGrid.css';
 import './HomeDiscovery.css';
 import './BrowseShelf.css';
+
+const PAGE_SIZE = 20;
+/** Server batch size — UI still shows PAGE_SIZE; next batch loads when you leave this window. */
+const BATCH_SIZE = 500;
 
 const getItemImage = (item) => {
   if (item?.images?.length) return item.images[0];
   if (item?.imageUrl) return item.imageUrl;
   return null;
 };
+
+const batchIndexForPage = (page) =>
+  Math.floor(((Math.max(1, page) - 1) * PAGE_SIZE) / BATCH_SIZE);
 
 const Home = () => {
   const { isAuthenticated, token } = useAuth();
@@ -28,6 +36,7 @@ const Home = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
+  const [comingSoonOnly, setComingSoonOnly] = useState(false);
   const [userRatings, setUserRatings] = useState({});
   const [ratingLoading, setRatingLoading] = useState({});
   const [contentType, setContentType] = useState('movies');
@@ -36,15 +45,21 @@ const Home = () => {
   const [filtersLoading, setFiltersLoading] = useState(false);
   const [homeBanners, setHomeBanners] = useState([]);
   const [comingSoonItems, setComingSoonItems] = useState([]);
+  const [comingSoonLoading, setComingSoonLoading] = useState(true);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [heroReady, setHeroReady] = useState(false);
   const [forceBrowse, setForceBrowse] = useState(false);
   const [sortBy, setSortBy] = useState('latest'); // latest | rated | az
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 20;
+  const [catalogTotal, setCatalogTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [topRatedMovies, setTopRatedMovies] = useState([]);
+  const [loadedBatchIndex, setLoadedBatchIndex] = useState(-1);
+  const batchCacheRef = useRef(new Map());
+  const catalogQueryKeyRef = useRef('');
 
-  const hasActiveFilters = Boolean(searchTerm || selectedGenre || selectedYear);
+  const hasActiveFilters = Boolean(searchTerm || selectedGenre || selectedYear || comingSoonOnly);
   const isDiscoveryMode = !hasActiveFilters && contentType === 'movies' && !forceBrowse;
 
   useEffect(() => {
@@ -63,6 +78,7 @@ const Home = () => {
 
     const fetchComingSoon = async () => {
       try {
+        setComingSoonLoading(true);
         const [moviesRes, tvRes] = await Promise.all([
           fetch('/api/movies/coming-soon'),
           fetch('/api/tvshows/coming-soon')
@@ -75,9 +91,13 @@ const Home = () => {
         const shows = tvJson.success
           ? (tvJson.data.tvShows || []).map((t) => ({ ...t, _kind: 'tvshow' }))
           : [];
-        setComingSoonItems([...movies, ...shows].sort((a, b) => (a.year || 0) - (b.year || 0)));
+        setComingSoonItems(
+          [...movies, ...shows].sort((a, b) => (a.year || 9999) - (b.year || 9999))
+        );
       } catch (err) {
         console.error('Error fetching coming soon:', err);
+      } finally {
+        setComingSoonLoading(false);
       }
     };
 
@@ -90,15 +110,18 @@ const Home = () => {
     setSearchTerm(params.get('search') || '');
     setSelectedGenre(params.get('genre') || '');
     setSelectedYear(params.get('year') || '');
+    setComingSoonOnly(params.get('category') === 'coming-soon');
     setContentType(params.get('type') === 'tvshows' ? 'tvshows' : 'movies');
     setForceBrowse(params.get('browse') === '1');
+    setCurrentPage(1);
 
     if (
       params.get('genre') ||
       params.get('year') ||
       params.get('search') ||
       params.get('type') === 'tvshows' ||
-      params.get('browse') === '1'
+      params.get('browse') === '1' ||
+      params.get('category') === 'coming-soon'
     ) {
       setTimeout(() => {
         document.getElementById('movies-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -175,75 +198,134 @@ const Home = () => {
     });
   };
 
+  const handleComingSoonSelect = (enabled) => {
+    buildBrowseParams((params) => {
+      if (!enabled || comingSoonOnly) params.delete('category');
+      else {
+        params.set('category', 'coming-soon');
+        params.delete('search');
+      }
+    });
+  };
+
+  const openComingSoonCategory = () => {
+    navigate('/?browse=1&category=coming-soon');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const switchContentType = (nextType) => {
     if (nextType === 'tvshows') navigate('/?type=tvshows');
     else navigate('/?browse=1');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const fetchMovies = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      let url = '/api/movies?limit=1000';
-      if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
-      if (selectedGenre) url += `&genre=${encodeURIComponent(selectedGenre)}`;
-      if (selectedYear) url += `&year=${selectedYear}`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-      const result = await response.json();
-      if (result.success) setMovies(result.data.movies);
-      else throw new Error(result.message || 'Failed to fetch movies');
-    } catch (err) {
-      console.error('Error fetching movies:', err);
-      setError(err.message || 'Failed to load movies. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [searchTerm, selectedGenre, selectedYear]);
+  const catalogQueryKey = useMemo(
+    () =>
+      [
+        contentType,
+        searchTerm.trim(),
+        selectedGenre,
+        selectedYear,
+        comingSoonOnly ? 'coming-soon' : '',
+        sortBy
+      ].join('|'),
+    [contentType, searchTerm, selectedGenre, selectedYear, comingSoonOnly, sortBy]
+  );
 
-  const fetchTVShows = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      let url = '/api/tvshows?limit=1000';
-      if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
-      if (selectedGenre) url += `&genre=${encodeURIComponent(selectedGenre)}`;
-      if (selectedYear) url += `&year=${selectedYear}`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-      const result = await response.json();
-      if (result.success) setTVShows(result.data.tvShows);
-      else throw new Error(result.message || 'Failed to fetch TV shows');
-    } catch (err) {
-      console.error('Error fetching TV shows:', err);
-      setError(err.message || 'Failed to load TV shows. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [searchTerm, selectedGenre, selectedYear]);
+  const applyBatchToState = useCallback(
+    (batchIndex, items, total) => {
+      if (contentType === 'tvshows') setTVShows(items);
+      else setMovies(items);
+      setLoadedBatchIndex(batchIndex);
+      setCatalogTotal(total);
+      setTotalPages(Math.max(1, Math.ceil(total / PAGE_SIZE)));
+    },
+    [contentType]
+  );
 
-  // Discovery home needs both catalogs; browse mode fetches the active type only
+  const fetchCatalogBatch = useCallback(
+    async (batchIndex, { signal, silent = false } = {}) => {
+      if (batchIndex < 0) return null;
+
+      const cacheKey = `${catalogQueryKey}#${batchIndex}`;
+      const cached = batchCacheRef.current.get(cacheKey);
+      if (cached) {
+        if (!silent) applyBatchToState(batchIndex, cached.items, cached.total);
+        return cached;
+      }
+
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
+
+      const buildUrl = contentType === 'tvshows' ? buildTVShowsUrl : buildMoviesUrl;
+      const listKey = contentType === 'tvshows' ? 'tvShows' : 'movies';
+      const totalKey = contentType === 'tvshows' ? 'totalTVShows' : 'totalMovies';
+
+      const response = await fetch(
+        buildUrl({
+          page: batchIndex + 1,
+          limit: BATCH_SIZE,
+          search: searchTerm,
+          genre: selectedGenre,
+          year: selectedYear,
+          sort: sortBy,
+          status: comingSoonOnly ? 'coming_soon' : ''
+        }),
+        signal ? { signal } : undefined
+      );
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(
+          result.message ||
+            (contentType === 'tvshows' ? 'Failed to load TV shows' : 'Failed to load movies')
+        );
+      }
+
+      const items = result.data?.[listKey] || [];
+      const total = Number(result.data?.pagination?.[totalKey]) || 0;
+      const payload = { items, total };
+      batchCacheRef.current.set(cacheKey, payload);
+
+      if (!silent) applyBatchToState(batchIndex, items, total);
+      return payload;
+    },
+    [
+      catalogQueryKey,
+      contentType,
+      searchTerm,
+      selectedGenre,
+      selectedYear,
+      comingSoonOnly,
+      sortBy,
+      applyBatchToState
+    ]
+  );
+
+  // Discovery: small slices only. Browse: 500-item batches, 20 shown per UI page.
   useEffect(() => {
     if (isDiscoveryMode) {
       const load = async () => {
         setLoading(true);
         setError(null);
         try {
-          const [moviesRes, tvRes] = await Promise.all([
-            fetch('/api/movies?limit=1000'),
-            fetch('/api/tvshows?limit=1000')
+          const [latestRes, ratedRes, tvRes] = await Promise.all([
+            fetch(buildMoviesUrl({ page: 1, limit: 20, sort: 'latest' })),
+            fetch(buildMoviesUrl({ page: 1, limit: 20, sort: 'rated' })),
+            fetch(buildTVShowsUrl({ page: 1, limit: 20, sort: 'latest' }))
           ]);
-          const moviesJson = await moviesRes.json();
-          const tvJson = await tvRes.json();
-          if (moviesJson.success) setMovies(moviesJson.data.movies || []);
-          if (tvJson.success) setTVShows(tvJson.data.tvShows || []);
+          const [latestJson, ratedJson, tvJson] = await Promise.all([
+            latestRes.json(),
+            ratedRes.json(),
+            tvRes.json()
+          ]);
+          if (!latestJson.success || !ratedJson.success || !tvJson.success) {
+            throw new Error('Failed to load the catalog.');
+          }
+          setMovies(latestJson.data.movies || []);
+          setTopRatedMovies(ratedJson.data.movies || []);
+          setTVShows(tvJson.data.tvShows || []);
         } catch (err) {
           console.error('Error loading discovery catalog:', err);
           setError('Failed to load the catalog.');
@@ -255,18 +337,49 @@ const Home = () => {
       return undefined;
     }
 
-    if (searchTerm.trim().length > 2) {
-      const timeoutId = setTimeout(() => {
-        if (contentType === 'tvshows') fetchTVShows();
-        else fetchMovies();
-      }, 300);
-      return () => clearTimeout(timeoutId);
+    if (catalogQueryKeyRef.current !== catalogQueryKey) {
+      catalogQueryKeyRef.current = catalogQueryKey;
+      batchCacheRef.current.clear();
+      setLoadedBatchIndex(-1);
     }
 
-    if (contentType === 'tvshows') fetchTVShows();
-    else fetchMovies();
-    return undefined;
-  }, [isDiscoveryMode, contentType, selectedGenre, selectedYear, searchTerm, fetchMovies, fetchTVShows]);
+    const controller = new AbortController();
+    const batchIndex = batchIndexForPage(currentPage);
+    const delay = searchTerm.trim().length > 2 ? 300 : 0;
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        const cacheKey = `${catalogQueryKey}#${batchIndex}`;
+        if (!batchCacheRef.current.has(cacheKey)) {
+          setLoading(true);
+          setError(null);
+        }
+
+        const payload = await fetchCatalogBatch(batchIndex, {
+          signal: controller.signal
+        });
+
+        // Prefetch next 500 so the following ~25 UI pages stay instant
+        if (payload && (batchIndex + 1) * BATCH_SIZE < payload.total) {
+          fetchCatalogBatch(batchIndex + 1, {
+            signal: controller.signal,
+            silent: true
+          }).catch(() => {});
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.error('Error fetching catalog batch:', err);
+        setError(err.message || 'Failed to load catalog. Please try again.');
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, delay);
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [isDiscoveryMode, catalogQueryKey, currentPage, searchTerm, fetchCatalogBatch]);
 
   const clearFilters = useCallback(() => {
     if (contentType === 'tvshows') navigate('/?type=tvshows', { replace: true });
@@ -274,9 +387,12 @@ const Home = () => {
   }, [navigate, contentType]);
 
   const fetchUserRatings = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || contentType === 'tvshows') return;
+    const start = ((currentPage - 1) * PAGE_SIZE) % BATCH_SIZE;
+    const visible = movies.slice(start, start + PAGE_SIZE);
+    if (visible.length === 0) return;
     try {
-      const ratingPromises = movies.map(async (movie) => {
+      const ratingPromises = visible.map(async (movie) => {
         try {
           const response = await fetch(`/api/movies/${movie._id}/rating`, {
             headers: { Authorization: `Bearer ${token}` }
@@ -296,11 +412,11 @@ const Home = () => {
       ratings.forEach((rating) => {
         ratingsMap[rating.movieId] = rating;
       });
-      setUserRatings(ratingsMap);
+      setUserRatings((prev) => ({ ...prev, ...ratingsMap }));
     } catch (err) {
       console.error('Error fetching user ratings:', err);
     }
-  }, [movies, isAuthenticated, token]);
+  }, [movies, currentPage, isAuthenticated, token, contentType]);
 
   const showNotification = (message, type = 'info') => {
     const notification = document.createElement('div');
@@ -367,50 +483,25 @@ const Home = () => {
     }
   }, [movies, isAuthenticated, token, fetchUserRatings, isDiscoveryMode]);
 
-  const latestMovies = useMemo(() => movies.slice(0, 20), [movies]);
+  const latestMovies = movies;
+  const latestTVShows = tvShows;
 
-  const topRatedMovies = useMemo(() => {
-    return [...movies]
-      .sort((a, b) => (b.imdbRating || b.averageRating || 0) - (a.imdbRating || a.averageRating || 0))
-      .slice(0, 20);
-  }, [movies]);
+  const catalogItems = contentType === 'tvshows' ? tvShows : movies;
+  const catalogCount = catalogTotal;
 
-  const latestTVShows = useMemo(() => tvShows.slice(0, 20), [tvShows]);
+  // Slice the current 500-batch into a 20-item UI page (instant when batch is cached)
+  const pagedItems = useMemo(() => {
+    if (isDiscoveryMode) return catalogItems;
+    const neededBatch = batchIndexForPage(currentPage);
+    if (loadedBatchIndex !== neededBatch) return [];
+    const start = ((currentPage - 1) * PAGE_SIZE) % BATCH_SIZE;
+    return catalogItems.slice(start, start + PAGE_SIZE);
+  }, [isDiscoveryMode, catalogItems, currentPage, loadedBatchIndex]);
 
-  const sortCatalog = useCallback((items) => {
-    const list = [...items];
-    if (sortBy === 'rated') {
-      return list.sort(
-        (a, b) => (b.imdbRating || b.averageRating || 0) - (a.imdbRating || a.averageRating || 0)
-      );
-    }
-    if (sortBy === 'az') {
-      return list.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-    }
-    // latest — API already returns newest first; keep stable
-    return list;
-  }, [sortBy]);
-
-  const browsedMovies = useMemo(() => sortCatalog(movies), [movies, sortCatalog]);
-  const browsedTVShows = useMemo(() => sortCatalog(tvShows), [tvShows, sortCatalog]);
-
-  const catalogItems = contentType === 'tvshows' ? browsedTVShows : browsedMovies;
-  const catalogCount = catalogItems.length;
-  const totalPages = Math.max(1, Math.ceil(catalogCount / PAGE_SIZE));
-
-  // Reset to page 1 whenever the catalog context changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [contentType, selectedGenre, selectedYear, searchTerm, sortBy]);
-
+  // Keep current page in range when totals shrink (e.g. after filtering)
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
-
-  const pagedItems = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return catalogItems.slice(start, start + PAGE_SIZE);
-  }, [catalogItems, currentPage]);
 
   const pageNumbers = useMemo(() => {
     const pages = [];
@@ -466,13 +557,7 @@ const Home = () => {
 
   const renderDiscovery = () => (
     <div className="home-discovery">
-      {loading && movies.length === 0 ? (
-        <div className="home-discovery-loading">
-          <div className="home-discovery-spinner" />
-          <p>Loading...</p>
-        </div>
-      ) : (
-        <>
+      <>
           <section className="home-hero">
             <div className="home-hero-media">
               {homeBanners.length > 0 ? (
@@ -569,27 +654,67 @@ const Home = () => {
           </section>
 
           <div className="home-rows" id="browse-anchor">
-            {comingSoonItems.length > 0 && (
+            <nav className="home-categories" aria-label="Browse categories">
+              <button
+                type="button"
+                className="home-category-chip is-active"
+                onClick={openComingSoonCategory}
+              >
+                Coming Soon
+              </button>
+              <button
+                type="button"
+                className="home-category-chip"
+                onClick={openBrowseMovies}
+              >
+                Trending
+              </button>
+              <button
+                type="button"
+                className="home-category-chip"
+                onClick={() => navigate('/?browse=1&sort=rated')}
+              >
+                Top Rated
+              </button>
+              <button
+                type="button"
+                className="home-category-chip"
+                onClick={() => navigate('/?type=tvshows')}
+              >
+                TV Shows
+              </button>
+            </nav>
+
+            {(comingSoonLoading || comingSoonItems.length > 0) && (
               <ContentRow
                 title="Coming Soon"
                 subtitle="Titles arriving on NK Movie Hub"
+                onViewAll={openComingSoonCategory}
               >
-                {comingSoonItems.map((item) => (
-                  <PosterCard
-                    key={`${item._kind}-${item._id}`}
-                    item={item}
-                    badge="Coming Soon"
-                    onClick={() =>
-                      navigate(
-                        item._kind === 'tvshow' ? `/tvshow/${item._id}` : `/movie/${item._id}`
-                      )
-                    }
-                  />
-                ))}
+                {comingSoonLoading && comingSoonItems.length === 0 ? (
+                  <div className="home-row-loading">Loading upcoming titles…</div>
+                ) : (
+                  comingSoonItems.map((item) => (
+                    <PosterCard
+                      key={`${item._kind}-${item._id}`}
+                      item={item}
+                      badge="Coming Soon"
+                      onClick={() =>
+                        navigate(
+                          item._kind === 'tvshow' ? `/tvshow/${item._id}` : `/movie/${item._id}`
+                        )
+                      }
+                    />
+                  ))
+                )}
               </ContentRow>
             )}
 
-            {latestMovies.length > 0 && (
+            {loading && movies.length === 0 ? (
+              <div className="home-row-loading home-row-loading-block">
+                Loading trending titles…
+              </div>
+            ) : latestMovies.length > 0 && (
               <ContentRow
                 title="Trending Now"
                 subtitle="Fresh titles from the catalog"
@@ -645,12 +770,11 @@ const Home = () => {
             )}
           </div>
         </>
-      )}
     </div>
   );
 
   const renderBrowse = () => {
-    const filterCount = [selectedGenre, selectedYear].filter(Boolean).length;
+    const filterCount = [selectedGenre, selectedYear, comingSoonOnly || null].filter(Boolean).length;
 
     return (
     <div className="browse-shelf">
@@ -665,6 +789,7 @@ const Home = () => {
                 · Page {currentPage} of {totalPages}
               </>
             )}
+            {comingSoonOnly ? ' · Coming Soon' : ''}
             {selectedGenre ? ` · ${selectedGenre}` : ''}
             {selectedYear ? ` · ${selectedYear}` : ''}
             {searchTerm ? ` · “${searchTerm}”` : ''}
@@ -691,7 +816,7 @@ const Home = () => {
             {filterCount > 0 && <span className="browse-filters-count">{filterCount}</span>}
           </button>
 
-          {(searchTerm || selectedGenre || selectedYear) && (
+          {(searchTerm || selectedGenre || selectedYear || comingSoonOnly) && (
             <button type="button" className="browse-shelf-clear" onClick={clearFilters}>
               Reset
             </button>
@@ -731,7 +856,10 @@ const Home = () => {
             key={option.id}
             type="button"
             className={`browse-sort-chip${sortBy === option.id ? ' is-active' : ''}`}
-            onClick={() => setSortBy(option.id)}
+            onClick={() => {
+              setSortBy(option.id);
+              setCurrentPage(1);
+            }}
           >
             {option.label}
           </button>
@@ -740,6 +868,19 @@ const Home = () => {
 
       <div className={`browse-filters-panel${filtersOpen ? ' is-open' : ''}`}>
         <div className="browse-filters-grid">
+          <div className="browse-filters-block">
+            <h3 className="browse-filters-heading">Categories</h3>
+            <div className="browse-filters-chips">
+              <button
+                type="button"
+                className={`browse-chip${comingSoonOnly ? ' is-active' : ''}`}
+                onClick={() => handleComingSoonSelect(true)}
+              >
+                Coming Soon
+              </button>
+            </div>
+          </div>
+
           <div className="browse-filters-block">
             <h3 className="browse-filters-heading">Genres</h3>
             <div className="browse-filters-chips">
@@ -792,9 +933,10 @@ const Home = () => {
         </div>
       </div>
 
-      {(searchTerm || selectedGenre || selectedYear) && (
+      {(searchTerm || selectedGenre || selectedYear || comingSoonOnly) && (
         <div className="browse-active-note">
           {searchTerm && <span>Search: {searchTerm}</span>}
+          {comingSoonOnly && <span>Category: Coming Soon</span>}
           {selectedGenre && <span>Genre: {selectedGenre}</span>}
           {selectedYear && <span>Year: {selectedYear}</span>}
         </div>
@@ -812,7 +954,11 @@ const Home = () => {
             <p>{error}</p>
             <button
               className="btn btn-primary"
-              onClick={contentType === 'tvshows' ? fetchTVShows : fetchMovies}
+              onClick={() =>
+                fetchCatalogBatch(batchIndexForPage(currentPage)).catch((err) => {
+                  setError(err.message || 'Failed to load catalog. Please try again.');
+                })
+              }
             >
               Try again
             </button>
