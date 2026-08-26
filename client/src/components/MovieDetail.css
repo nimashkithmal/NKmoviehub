@@ -827,6 +827,18 @@
   background: #f0f0f0;
 }
 
+.md-btn-coming-soon {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  cursor: not-allowed;
+}
+
+.md-btn-coming-soon:disabled {
+  opacity: 1;
+  transform: none;
+}
+
 .md-btn-secondary {
   background: rgba(20, 20, 20, 0.55);
   color: #fff;

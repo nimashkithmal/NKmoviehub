@@ -49,7 +49,9 @@ const TVShowDetail = () => {
     }
   };
 
-  const handleWatchEpisode = (episode) => {    
+  const handleWatchEpisode = (episode) => {
+    if (tvShow?.status === 'coming_soon') return;
+
     // Create a movie-like object for the player
     const episodeMovie = {
       _id: `${tvShow._id}-ep${episode.episodeNumber}`,
@@ -62,7 +64,9 @@ const TVShowDetail = () => {
     setShowPlayer(true);
   };
 
-  const handleWatchShow = () => {    
+  const handleWatchShow = () => {
+    if (tvShow?.status === 'coming_soon') return;
+
     if (tvShow.showUrl) {
       const episode = {
         _id: tvShow._id,
@@ -574,21 +578,24 @@ const TVShowDetail = () => {
                   ))}
                 </div>
               </div>
-            ) : tvShow.showUrl ? (
+            ) : tvShow.showUrl || tvShow.status === 'coming_soon' ? (
               <div className="movie-detail-actions" style={{ marginTop: '30px' }}>
-                {isAuthenticated ? (
-                  <button 
-                    className="btn btn-primary btn-large"
-                    onClick={handleWatchShow}
+                {tvShow.status === 'coming_soon' ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-large"
+                    disabled
+                    aria-disabled="true"
                   >
-                    📺 Watch TV Show
+                    Coming Soon
                   </button>
                 ) : (
-                  <button 
+                  <button
+                    type="button"
                     className="btn btn-primary btn-large"
                     onClick={handleWatchShow}
                   >
-                    📺 Watch TV Show
+                    Watch TV Show
                   </button>
                 )}
               </div>

@@ -6,6 +6,16 @@ const { protect, restrictToAdmin } = require('../middleware/auth');
 // Cloudinary is configured once in utils/cloudinaryUpload; every poster that
 // reaches the database is uploaded there first
 const { cloudinary, uploadPoster, uploadPosters } = require('../utils/cloudinaryUpload');
+const {
+  extractTvTmdbId,
+  getTrendingTmdbIds,
+  orderDocsByTrending
+} = require('../utils/trendingPopular');
+const {
+  promoteReleasedComingSoon,
+  sortComingSoon,
+  filterUpcomingOnly
+} = require('../utils/comingSoon');
 
 const router = express.Router();
 
@@ -63,10 +73,23 @@ router.get('/', async (req, res) => {
     const { page = 1, limit = 1000, search = '', genre = '', year = '', status = 'active', sort = 'latest' } = req.query;
     
     // Public catalog: active by default; Coming Soon category uses status=coming_soon
-    const allowedStatus = status === 'coming_soon' ? 'coming_soon' : 'active';
-    const filter = { status: allowedStatus };
+    // Search should also find Coming Soon titles
+    const hasSearch = Boolean(search && String(search).trim());
+    const comingSoonOnly = status === 'coming_soon';
+    if (comingSoonOnly) {
+      await promoteReleasedComingSoon(TVShow);
+    }
+
+    const filter = {};
+    if (comingSoonOnly) {
+      filter.status = 'coming_soon';
+    } else if (hasSearch) {
+      filter.status = { $in: ['active', 'coming_soon'] };
+    } else {
+      filter.status = 'active';
+    }
     
-    if (search && search.trim()) {
+    if (hasSearch) {
       filter.$or = [
         { title: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
@@ -90,6 +113,60 @@ router.get('/', async (req, res) => {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(2000, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
+
+    // Coming Soon browse: only future releases, nearest first
+    if (comingSoonOnly) {
+      const candidates = await TVShow.find(filter)
+        .populate('addedBy', 'name email')
+        .lean();
+      const upcoming = filterUpcomingOnly(candidates);
+      const total = upcoming.length;
+      const tvShows = upcoming.slice(skip, skip + limitNum);
+
+      return res.json({
+        success: true,
+        data: {
+          tvShows,
+          pagination: {
+            currentPage: pageNum,
+            totalPages: Math.max(1, Math.ceil(total / limitNum) || 1),
+            totalTVShows: total,
+            tvShowsPerPage: limitNum
+          }
+        }
+      });
+    }
+
+    // Popular: order by 2embed trending TV (only titles we have in DB)
+    if (sort === 'popular') {
+      const trendingIds = await getTrendingTmdbIds('tv');
+      const candidates = await TVShow.find(filter)
+        .select('_id showUrl episodes.episodeUrl')
+        .lean();
+      const orderedIds = orderDocsByTrending(candidates, trendingIds, extractTvTmdbId).map(
+        (doc) => doc._id
+      );
+      const total = orderedIds.length;
+      const pageIds = orderedIds.slice(skip, skip + limitNum);
+      const found = await TVShow.find({ _id: { $in: pageIds } })
+        .populate('addedBy', 'name email')
+        .lean();
+      const byId = new Map(found.map((s) => [String(s._id), s]));
+      const tvShows = pageIds.map((id) => byId.get(String(id))).filter(Boolean);
+
+      return res.json({
+        success: true,
+        data: {
+          tvShows,
+          pagination: {
+            currentPage: pageNum,
+            totalPages: Math.max(1, Math.ceil(total / limitNum) || 1),
+            totalTVShows: total,
+            tvShowsPerPage: limitNum
+          }
+        }
+      });
+    }
 
     let sortSpec = { year: -1, createdAt: -1 };
     if (sort === 'rated') sortSpec = { imdbRating: -1, averageRating: -1, createdAt: -1 };
@@ -234,14 +311,17 @@ router.get('/filters', async (req, res) => {
 // @access  Public
 router.get('/coming-soon', async (req, res) => {
   try {
+    await promoteReleasedComingSoon(TVShow);
+
     const tvShows = await TVShow.find({ status: 'coming_soon' })
       .select('-__v')
-      .sort({ year: 1, createdAt: -1 })
-      .limit(40);
+      .lean();
+
+    const upcoming = filterUpcomingOnly(tvShows);
 
     res.json({
       success: true,
-      data: { tvShows }
+      data: { tvShows: upcoming.slice(0, 40) }
     });
   } catch (error) {
     console.error('Get coming soon TV shows error:', error);

@@ -448,17 +448,28 @@ const MovieDetail = () => {
               )}
 
               <div className="md-actions">
-                {movie.movieUrl && (
+                {movie.status === 'coming_soon' ? (
                   <button
                     type="button"
-                    className="md-btn md-btn-primary"
-                    onClick={() => setShowPlayer(true)}
+                    className="md-btn md-btn-coming-soon"
+                    disabled
+                    aria-disabled="true"
                   >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                    Watch Now
+                    Coming Soon
                   </button>
+                ) : (
+                  movie.movieUrl && (
+                    <button
+                      type="button"
+                      className="md-btn md-btn-primary"
+                      onClick={() => setShowPlayer(true)}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                      Watch Now
+                    </button>
+                  )
                 )}
                 {trailerUrl && (
                   <button

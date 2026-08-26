@@ -49,12 +49,15 @@ const Home = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [heroReady, setHeroReady] = useState(false);
   const [forceBrowse, setForceBrowse] = useState(false);
-  const [sortBy, setSortBy] = useState('latest'); // latest | rated | az
+  const [sortBy, setSortBy] = useState('latest'); // popular | latest | rated | az
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [catalogTotal, setCatalogTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [topRatedMovies, setTopRatedMovies] = useState([]);
+  const [trendingNow, setTrendingNow] = useState([]);
+  const [nowPlaying, setNowPlaying] = useState([]);
+  const [trendingTVShows, setTrendingTVShows] = useState([]);
   const [loadedBatchIndex, setLoadedBatchIndex] = useState(-1);
   const batchCacheRef = useRef(new Map());
   const catalogQueryKeyRef = useRef('');
@@ -92,7 +95,21 @@ const Home = () => {
           ? (tvJson.data.tvShows || []).map((t) => ({ ...t, _kind: 'tvshow' }))
           : [];
         setComingSoonItems(
-          [...movies, ...shows].sort((a, b) => (a.year || 9999) - (b.year || 9999))
+          [...movies, ...shows].sort((a, b) => {
+            const key = (item) => {
+              if (item.releaseDate) {
+                const iso = String(item.releaseDate).match(/^(\d{4}-\d{2}-\d{2})/);
+                if (iso) return iso[1];
+                const t = Date.parse(item.releaseDate);
+                if (!Number.isNaN(t)) return new Date(t).toISOString().slice(0, 10);
+              }
+              if (item.year) return `${item.year}-12-31`;
+              return '9999-12-31';
+            };
+            const diff = key(a).localeCompare(key(b));
+            if (diff !== 0) return diff;
+            return String(a.title || '').localeCompare(String(b.title || ''));
+          })
         );
       } catch (err) {
         console.error('Error fetching coming soon:', err);
@@ -113,6 +130,10 @@ const Home = () => {
     setComingSoonOnly(params.get('category') === 'coming-soon');
     setContentType(params.get('type') === 'tvshows' ? 'tvshows' : 'movies');
     setForceBrowse(params.get('browse') === '1');
+    const sortParam = params.get('sort');
+    if (sortParam === 'popular' || sortParam === 'rated' || sortParam === 'az' || sortParam === 'latest') {
+      setSortBy(sortParam);
+    }
     setCurrentPage(1);
 
     if (
@@ -303,44 +324,64 @@ const Home = () => {
     ]
   );
 
-  // Discovery: small slices only. Browse: 500-item batches, 20 shown per UI page.
+  // Discovery: live rows from 2embed (matched to local catalog), refresh periodically
   useEffect(() => {
-    if (isDiscoveryMode) {
-      const load = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-          const [latestRes, ratedRes, tvRes] = await Promise.all([
-            fetch(buildMoviesUrl({ page: 1, limit: 20, sort: 'latest' })),
-            fetch(buildMoviesUrl({ page: 1, limit: 20, sort: 'rated' })),
-            fetch(buildTVShowsUrl({ page: 1, limit: 20, sort: 'latest' }))
-          ]);
-          const [latestJson, ratedJson, tvJson] = await Promise.all([
-            latestRes.json(),
-            ratedRes.json(),
-            tvRes.json()
-          ]);
-          if (!latestJson.success || !ratedJson.success || !tvJson.success) {
-            throw new Error('Failed to load the catalog.');
-          }
-          setMovies(latestJson.data.movies || []);
-          setTopRatedMovies(ratedJson.data.movies || []);
-          setTVShows(tvJson.data.tvShows || []);
-        } catch (err) {
-          console.error('Error loading discovery catalog:', err);
-          setError('Failed to load the catalog.');
-        } finally {
-          setLoading(false);
+    if (!isDiscoveryMode) return undefined;
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const loadDiscovery = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch('/api/discovery/home?limit=20', {
+          signal: controller.signal
+        });
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.message || 'Failed to load home discovery');
         }
-      };
-      load();
-      return undefined;
-    }
+
+        if (cancelled) return;
+        setTrendingNow(result.data.trendingNow || []);
+        setNowPlaying(result.data.nowPlaying || []);
+        setTrendingTVShows(result.data.trendingTVShows || []);
+        setTopRatedMovies(result.data.topRatedMovies || []);
+        // Keep legacy state in sync for any leftover references
+        setMovies(result.data.trendingNow || []);
+        setTVShows(result.data.trendingTVShows || []);
+      } catch (err) {
+        if (err.name === 'AbortError' || cancelled) return;
+        console.error('Error loading discovery catalog:', err);
+        setError('Failed to load the catalog.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadDiscovery();
+    const refreshId = setInterval(loadDiscovery, 10 * 60 * 1000);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearInterval(refreshId);
+    };
+  }, [isDiscoveryMode]);
+
+  // Browse: 500-item batches, 20 shown per UI page.
+  useEffect(() => {
+    if (isDiscoveryMode) return undefined;
 
     if (catalogQueryKeyRef.current !== catalogQueryKey) {
       catalogQueryKeyRef.current = catalogQueryKey;
       batchCacheRef.current.clear();
       setLoadedBatchIndex(-1);
+      setLoading(true);
+      setError(null);
+      if (contentType === 'tvshows') setTVShows([]);
+      else setMovies([]);
     }
 
     const controller = new AbortController();
@@ -370,6 +411,11 @@ const Home = () => {
         if (err.name === 'AbortError') return;
         console.error('Error fetching catalog batch:', err);
         setError(err.message || 'Failed to load catalog. Please try again.');
+        if (contentType === 'tvshows') setTVShows([]);
+        else setMovies([]);
+        setLoadedBatchIndex(batchIndexForPage(currentPage));
+        setCatalogTotal(0);
+        setTotalPages(1);
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -379,7 +425,7 @@ const Home = () => {
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [isDiscoveryMode, catalogQueryKey, currentPage, searchTerm, fetchCatalogBatch]);
+  }, [isDiscoveryMode, catalogQueryKey, currentPage, searchTerm, fetchCatalogBatch, contentType]);
 
   const clearFilters = useCallback(() => {
     if (contentType === 'tvshows') navigate('/?type=tvshows', { replace: true });
@@ -483,9 +529,6 @@ const Home = () => {
     }
   }, [movies, isAuthenticated, token, fetchUserRatings, isDiscoveryMode]);
 
-  const latestMovies = movies;
-  const latestTVShows = tvShows;
-
   const catalogItems = contentType === 'tvshows' ? tvShows : movies;
   const catalogCount = catalogTotal;
 
@@ -497,6 +540,9 @@ const Home = () => {
     const start = ((currentPage - 1) * PAGE_SIZE) % BATCH_SIZE;
     return catalogItems.slice(start, start + PAGE_SIZE);
   }, [isDiscoveryMode, catalogItems, currentPage, loadedBatchIndex]);
+
+  const catalogWaitingForBatch =
+    !isDiscoveryMode && loadedBatchIndex !== batchIndexForPage(currentPage);
 
   // Keep current page in range when totals shrink (e.g. after filtering)
   useEffect(() => {
@@ -520,10 +566,11 @@ const Home = () => {
   };
 
   const featuredMovie = useMemo(() => {
-    const withImages = topRatedMovies.filter((m) => getItemImage(m));
+    const pool = [...trendingNow, ...nowPlaying, ...topRatedMovies, ...movies];
+    const withImages = pool.filter((m) => getItemImage(m));
     if (withImages.length === 0) return movies.find((m) => getItemImage(m)) || movies[0] || null;
     return withImages[Math.min(2, withImages.length - 1)];
-  }, [topRatedMovies, movies]);
+  }, [trendingNow, nowPlaying, topRatedMovies, movies]);
 
   // Active hero slide: banner artwork + linked movie/TV details (never poster)
   const activeBanner = homeBanners[currentSlide] || null;
@@ -665,7 +712,7 @@ const Home = () => {
               <button
                 type="button"
                 className="home-category-chip"
-                onClick={openBrowseMovies}
+                onClick={() => navigate('/?browse=1&sort=popular')}
               >
                 Trending
               </button>
@@ -679,7 +726,7 @@ const Home = () => {
               <button
                 type="button"
                 className="home-category-chip"
-                onClick={() => navigate('/?type=tvshows')}
+                onClick={() => navigate('/?type=tvshows&sort=popular')}
               >
                 TV Shows
               </button>
@@ -688,7 +735,7 @@ const Home = () => {
             {(comingSoonLoading || comingSoonItems.length > 0) && (
               <ContentRow
                 title="Coming Soon"
-                subtitle="Titles arriving on NK Movie Hub"
+                subtitle="Upcoming releases — nearest first"
                 onViewAll={openComingSoonCategory}
               >
                 {comingSoonLoading && comingSoonItems.length === 0 ? (
@@ -710,57 +757,77 @@ const Home = () => {
               </ContentRow>
             )}
 
-            {loading && movies.length === 0 ? (
+            {loading && trendingNow.length === 0 && nowPlaying.length === 0 ? (
               <div className="home-row-loading home-row-loading-block">
-                Loading trending titles…
+                Loading live titles from 2embed…
               </div>
-            ) : latestMovies.length > 0 && (
-              <ContentRow
-                title="Trending Now"
-                subtitle="Fresh titles from the catalog"
-                onViewAll={openBrowseMovies}
-              >
-                {latestMovies.map((movie) => (
-                  <PosterCard
-                    key={movie._id}
-                    item={movie}
-                    onClick={() => navigate(`/movie/${movie._id}`)}
-                  />
-                ))}
-              </ContentRow>
-            )}
+            ) : (
+              <>
+                {trendingNow.length > 0 && (
+                  <ContentRow
+                    title="Trending Now"
+                    subtitle="Most popular this week"
+                    onViewAll={() => navigate('/?browse=1&sort=popular')}
+                  >
+                    {trendingNow.map((movie) => (
+                      <PosterCard
+                        key={movie._id}
+                        item={movie}
+                        onClick={() => navigate(`/movie/${movie._id}`)}
+                      />
+                    ))}
+                  </ContentRow>
+                )}
 
-            {topRatedMovies.length > 0 && (
-              <ContentRow
-                title="Top Rated Movies"
-                subtitle="Highest IMDb scores on NK Movie Hub"
-                onViewAll={openBrowseMovies}
-              >
-                {topRatedMovies.map((movie) => (
-                  <PosterCard
-                    key={movie._id}
-                    item={movie}
-                    onClick={() => navigate(`/movie/${movie._id}`)}
-                  />
-                ))}
-              </ContentRow>
-            )}
+                {nowPlaying.length > 0 && (
+                  <ContentRow
+                    title="Now Playing"
+                    subtitle="In theaters now"
+                    onViewAll={() => navigate('/?browse=1&sort=popular')}
+                  >
+                    {nowPlaying.map((movie) => (
+                      <PosterCard
+                        key={movie._id}
+                        item={movie}
+                        onClick={() => navigate(`/movie/${movie._id}`)}
+                      />
+                    ))}
+                  </ContentRow>
+                )}
 
-            {latestTVShows.length > 0 && (
-              <ContentRow
-                title="TV Shows"
-                subtitle="Series ready to binge"
-                onViewAll={() => navigate('/?type=tvshows')}
-              >
-                {latestTVShows.map((show) => (
-                  <PosterCard
-                    key={show._id}
-                    item={show}
-                    kind="tvshow"
-                    onClick={() => navigate(`/tvshow/${show._id}`)}
-                  />
-                ))}
-              </ContentRow>
+                {trendingTVShows.length > 0 && (
+                  <ContentRow
+                    title="Trending TV Shows"
+                    subtitle="Most watched series this week"
+                    onViewAll={() => navigate('/?type=tvshows&sort=popular')}
+                  >
+                    {trendingTVShows.map((show) => (
+                      <PosterCard
+                        key={show._id}
+                        item={show}
+                        kind="tvshow"
+                        onClick={() => navigate(`/tvshow/${show._id}`)}
+                      />
+                    ))}
+                  </ContentRow>
+                )}
+
+                {topRatedMovies.length > 0 && (
+                  <ContentRow
+                    title="Top Rated Movies"
+                    subtitle="Critically acclaimed all-time greats"
+                    onViewAll={() => navigate('/?browse=1&sort=rated')}
+                  >
+                    {topRatedMovies.map((movie) => (
+                      <PosterCard
+                        key={movie._id}
+                        item={movie}
+                        onClick={() => navigate(`/movie/${movie._id}`)}
+                      />
+                    ))}
+                  </ContentRow>
+                )}
+              </>
             )}
 
             {error && (
@@ -848,6 +915,7 @@ const Home = () => {
       <div className="browse-sort-row" aria-label="Sort catalog">
         <span className="browse-sort-label">Sort</span>
         {[
+          { id: 'popular', label: 'Popular' },
           { id: 'latest', label: 'Newest' },
           { id: 'rated', label: 'Top rated' },
           { id: 'az', label: 'A – Z' }
@@ -943,7 +1011,7 @@ const Home = () => {
       )}
 
       <div id="movies-section" className="browse-shelf-body">
-        {loading ? (
+        {loading || catalogWaitingForBatch ? (
           <div className="loading-state">
             <div className="loading-spinner" />
             <h3>Loading {contentType === 'tvshows' ? 'TV shows' : 'movies'}...</h3>
