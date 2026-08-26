@@ -324,7 +324,7 @@ const Home = () => {
     ]
   );
 
-  // Discovery: live rows from 2embed (matched to local catalog), refresh periodically
+  // Discovery: live home rows matched to local catalog; refresh periodically
   useEffect(() => {
     if (!isDiscoveryMode) return undefined;
 
@@ -759,7 +759,7 @@ const Home = () => {
 
             {loading && trendingNow.length === 0 && nowPlaying.length === 0 ? (
               <div className="home-row-loading home-row-loading-block">
-                Loading live titles from 2embed…
+                Loading live titles…
               </div>
             ) : (
               <>
