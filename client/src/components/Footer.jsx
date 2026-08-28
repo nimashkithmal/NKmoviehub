@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
+import { APP_VERSION } from '../version';
 
 const Footer = () => {
   const location = useLocation();
@@ -52,6 +53,7 @@ const Footer = () => {
                   <div className="logo-subtitle-section">
                     <span className="logo-subtitle">Entertainment Platform</span>
                     <span className="subtitle-underline" aria-hidden="true"></span>
+                    <span className="footer-version">v{APP_VERSION}</span>
                   </div>
                 </div>
               </Link>
