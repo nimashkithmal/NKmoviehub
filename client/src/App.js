@@ -34,11 +34,13 @@ const AppShell = () => {
   const location = useLocation();
   const isDetailPage =
     location.pathname.startsWith('/movie/') || location.pathname.startsWith('/tvshow/');
+  const isFullBleedMain =
+    isDetailPage || location.pathname === '/collections';
 
   return (
     <div className={`App${isDetailPage ? ' is-detail-page' : ''}`}>
       {!isDetailPage && <Navbar />}
-      <main className={`container${isDetailPage ? ' container-detail' : ''}`}>
+      <main className={`container${isFullBleedMain ? ' container-detail' : ''}`}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/collections" element={<Collections />} />

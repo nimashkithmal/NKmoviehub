@@ -122,8 +122,8 @@ const ContactForm = ({ compact = false, onDone }) => {
     return (
       <div className="contact-success">
         <div className="success-icon">✓</div>
-        <h3>Message sent</h3>
-        <p>Thanks — we will get back to you within 24 hours.</p>
+        <h3>Request received</h3>
+        <p>Thanks — we&apos;ll review your request and get back to you soon.</p>
         <button 
           className="btn btn-primary"
           onClick={() => setSuccess(false)}
@@ -182,7 +182,7 @@ const ContactForm = ({ compact = false, onDone }) => {
             value={formData.subject}
             onChange={handleInputChange}
             className={`form-input ${getFieldError('subject') ? 'form-error' : isFieldValid('subject') && formData.subject ? 'form-valid' : ''}`}
-            placeholder="What's this about?"
+            placeholder="e.g. Movie request: Avengers: Doomsday"
             maxLength={200}
           />
           {getFieldError('subject') && (
@@ -198,7 +198,7 @@ const ContactForm = ({ compact = false, onDone }) => {
             value={formData.message}
             onChange={handleInputChange}
             className={`form-textarea ${getFieldError('message') ? 'form-error' : isFieldValid('message') && formData.message ? 'form-valid' : ''}`}
-            placeholder="Tell us more..."
+            placeholder="Movie or TV show name, year if you know it, and anything else that helps us find it..."
             rows={compact ? 3 : 6}
             maxLength={2000}
           />
@@ -230,7 +230,7 @@ const ContactForm = ({ compact = false, onDone }) => {
               Sending...
             </>
           ) : (
-            'Send message'
+            'Send request'
           )}
         </button>
       </form>

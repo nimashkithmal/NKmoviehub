@@ -9,10 +9,11 @@ const ContactSection = () => {
     <section id="contact" className="contact-strip">
       <div className="contact-strip-inner">
         <div className="contact-strip-copy">
-          <span className="contact-strip-eyebrow">Still watching?</span>
-          <h2 className="contact-strip-title">Drop us a line</h2>
+          <span className="contact-strip-eyebrow">Can&apos;t find something?</span>
+          <h2 className="contact-strip-title">Request a title</h2>
           <p className="contact-strip-text">
-            Bugs, requests, or just saying hi — we reply within a day.
+            Missing a movie or TV series? Send us the name — we&apos;ll try to add it.
+            Bugs and feedback welcome too.
           </p>
           <a href="mailto:qwe730375@gmail.com" className="contact-strip-mail">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -40,7 +41,7 @@ const ContactSection = () => {
               className="contact-strip-cta"
               onClick={() => setOpen(true)}
             >
-              Write a message
+              Request a title
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   d="M5 12h14M13 6l6 6-6 6"

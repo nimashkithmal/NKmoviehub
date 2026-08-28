@@ -8,7 +8,7 @@ const { protect, restrictToAdmin } = require('../middleware/auth');
 const {
   extractTmdbId,
   getTrendingTmdbIds,
-  orderDocsByTrending
+  orderDocsTrendingFirst
 } = require('../utils/trendingPopular');
 const {
   promoteReleasedComingSoon,
@@ -141,11 +141,13 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // Popular: order by 2embed trending (only titles we have in DB)
+    // Popular: trending titles first, then the rest of the catalog
     if (sort === 'popular') {
-      const trendingIds = await getTrendingTmdbIds('movie');
-      const candidates = await Movie.find(filter).select('_id movieUrl').lean();
-      const orderedIds = orderDocsByTrending(candidates, trendingIds, (doc) =>
+      const trendingIds = await getTrendingTmdbIds('movie', 2);
+      const candidates = await Movie.find(filter)
+        .select('_id movieUrl imdbRating averageRating year title')
+        .lean();
+      const orderedIds = orderDocsTrendingFirst(candidates, trendingIds, (doc) =>
         extractTmdbId(doc.movieUrl)
       ).map((doc) => doc._id);
       const total = orderedIds.length;
@@ -1154,9 +1156,15 @@ router.get('/:id/questions', async (req, res) => {
       });
     }
 
-    const questions = await MovieQuestion.find({ movie: movie._id })
+    const sessionId = String(req.query.sessionId || '').trim().slice(0, 80);
+    const filter = { movie: movie._id };
+    if (sessionId) {
+      filter.sessionId = sessionId;
+    }
+
+    const questions = await MovieQuestion.find(filter)
       .sort({ createdAt: 1 })
-      .select('question answer answeredAt createdAt')
+      .select('question answer answeredAt createdAt fromName fromEmail')
       .lean();
 
     res.json({
@@ -1186,6 +1194,9 @@ router.post('/:id/ask', async (req, res) => {
     }
 
     const message = String(req.body?.message || req.body?.question || '').trim().slice(0, 2000);
+    const sessionId = String(req.body?.sessionId || '').trim().slice(0, 80);
+    const fromName = String(req.body?.fromName || req.body?.name || '').trim().slice(0, 100);
+    const fromEmail = String(req.body?.fromEmail || req.body?.email || '').trim().slice(0, 120);
 
     if (!message) {
       return res.status(400).json({
@@ -1196,7 +1207,10 @@ router.post('/:id/ask', async (req, res) => {
 
     const question = await MovieQuestion.create({
       movie: movie._id,
-      question: message
+      question: message,
+      sessionId,
+      fromName,
+      fromEmail
     });
 
     await Notification.create({
@@ -1206,7 +1220,8 @@ router.post('/:id/ask', async (req, res) => {
       movie: movie._id,
       movieTitle: movie.title,
       question: question._id,
-      fromName: 'Guest'
+      fromName: fromName || 'Guest',
+      fromEmail
     });
 
     res.status(201).json({

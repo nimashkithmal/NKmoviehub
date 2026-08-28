@@ -17,6 +17,7 @@ const CollectionManagement = ({ token, showNotification }) => {
   const [description, setDescription] = useState('');
   const [order, setOrder] = useState(0);
   const [status, setStatus] = useState('active');
+  const [category, setCategory] = useState('action_franchises');
   const [selectedIds, setSelectedIds] = useState([]);
   const [catalogQuery, setCatalogQuery] = useState('');
 
@@ -62,6 +63,7 @@ const CollectionManagement = ({ token, showNotification }) => {
     setDescription('');
     setOrder(collections.length);
     setStatus('active');
+    setCategory('action_franchises');
     setSelectedIds([]);
     setCatalogQuery('');
   };
@@ -72,6 +74,7 @@ const CollectionManagement = ({ token, showNotification }) => {
     setDescription(collection.description || '');
     setOrder(collection.order ?? 0);
     setStatus(collection.status || 'active');
+    setCategory(collection.category || 'action_franchises');
     setSelectedIds((collection.movies || []).map((m) => m._id || m));
     setCatalogQuery('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -124,6 +127,7 @@ const CollectionManagement = ({ token, showNotification }) => {
         description: description.trim(),
         order: Number(order) || 0,
         status,
+        category,
         movieIds: selectedIds
       };
 
@@ -236,6 +240,20 @@ const CollectionManagement = ({ token, showNotification }) => {
           </div>
 
           <div className="cm-form-row">
+            <div className="form-group">
+              <label htmlFor="collection-category">Category</label>
+              <select
+                id="collection-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                <option value="superhero_action">Superhero / Action</option>
+                <option value="fantasy_adventure">Fantasy / Adventure</option>
+                <option value="sci_fi">Sci-Fi</option>
+                <option value="action_franchises">Action Franchises</option>
+                <option value="horror_thriller">Horror / Thriller</option>
+              </select>
+            </div>
             <div className="form-group">
               <label htmlFor="collection-order">Order</label>
               <input

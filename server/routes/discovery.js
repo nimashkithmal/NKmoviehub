@@ -65,43 +65,20 @@ router.get('/home', async (req, res) => {
   try {
     const limit = Math.min(30, Math.max(8, parseInt(req.query.limit, 10) || 20));
 
-    const [weekMovies, dayMovies, monthMovies, weekTv] = await Promise.all([
-      fetchTrendingResults('movie', 'week', 6),
-      fetchTrendingResults('movie', 'day', 4),
-      fetchTrendingResults('movie', 'month', 6),
-      fetchTrendingResults('tv', 'week', 6)
-    ]);
+    // One movie + one TV trending request (sequential via shared queue), page 1 only.
+    const weekMovies = await fetchTrendingResults('movie', 'week', 1);
+    const weekTv = await fetchTrendingResults('tv', 'week', 1);
 
     const trendingIds = weekMovies
       .map((r) => (r?.tmdb_id != null ? String(r.tmdb_id) : ''))
       .filter(Boolean);
 
-    // Recent theatrical releases from day+week trending
-    const nowPlayingSource = [...dayMovies, ...weekMovies];
-    const nowPlayingSeen = new Set();
-    const nowPlayingMerged = [];
-    for (const row of nowPlayingSource) {
-      const id = row?.tmdb_id != null ? String(row.tmdb_id) : '';
-      if (!id || nowPlayingSeen.has(id)) continue;
-      nowPlayingSeen.add(id);
-      nowPlayingMerged.push(row);
-    }
-    const nowPlayingIds = pickNowPlayingIds(nowPlayingMerged, {
+    const nowPlayingIds = pickNowPlayingIds(weekMovies, {
       days: 75,
       limit: 60
     });
 
-    // Top rated from week+month trending by vote_average
-    const ratedSource = [...weekMovies, ...monthMovies];
-    const ratedSeen = new Set();
-    const ratedMerged = [];
-    for (const row of ratedSource) {
-      const id = row?.tmdb_id != null ? String(row.tmdb_id) : '';
-      if (!id || ratedSeen.has(id)) continue;
-      ratedSeen.add(id);
-      ratedMerged.push(row);
-    }
-    const topRatedIds = pickTopRatedIds(ratedMerged, {
+    const topRatedIds = pickTopRatedIds(weekMovies, {
       limit: 60,
       minVotes: 20
     });
@@ -110,13 +87,31 @@ router.get('/home', async (req, res) => {
       .map((r) => (r?.tmdb_id != null ? String(r.tmdb_id) : ''))
       .filter(Boolean);
 
-    const [trendingMovieIds, nowPlayingMovieIds, topRatedMovieIds, trendingShowIds] =
-      await Promise.all([
-        matchMovieIds(trendingIds),
-        matchMovieIds(nowPlayingIds),
-        matchMovieIds(topRatedIds),
-        matchTvIds(trendingTvIds)
-      ]);
+    let trendingMovieIds = await matchMovieIds(trendingIds);
+    let nowPlayingMovieIds = await matchMovieIds(nowPlayingIds);
+    let topRatedMovieIds = await matchMovieIds(topRatedIds);
+    let trendingShowIds = await matchTvIds(trendingTvIds);
+
+    // If external trending is unavailable, fall back to local catalog order.
+    if (!trendingMovieIds.length) {
+      const fallbackMovies = await Movie.find({ status: 'active' })
+        .sort({ imdbRating: -1, year: -1, createdAt: -1 })
+        .select('_id')
+        .limit(limit)
+        .lean();
+      trendingMovieIds = fallbackMovies.map((m) => m._id);
+      nowPlayingMovieIds = trendingMovieIds;
+      topRatedMovieIds = trendingMovieIds;
+    }
+
+    if (!trendingShowIds.length) {
+      const fallbackShows = await TVShow.find({ status: 'active' })
+        .sort({ imdbRating: -1, year: -1, createdAt: -1 })
+        .select('_id')
+        .limit(limit)
+        .lean();
+      trendingShowIds = fallbackShows.map((s) => s._id);
+    }
 
     const [trendingNow, nowPlaying, topRatedMovies, trendingTVShows] =
       await Promise.all([
@@ -134,7 +129,7 @@ router.get('/home', async (req, res) => {
         trendingTVShows,
         topRatedMovies,
         meta: {
-          source: '2embed',
+          source: weekMovies.length || weekTv.length ? 'live' : 'catalog',
           refreshedAt: new Date().toISOString(),
           cacheMinutes: 15
         }
