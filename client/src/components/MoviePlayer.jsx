@@ -643,6 +643,12 @@ const MoviePlayer = ({ movie, onClose }) => {
               )}
             </>
           )}
+
+          {!isLoading && !hasError && (
+            <div className="movie-player-brand" aria-hidden="true">
+              NK Movie Hub
+            </div>
+          )}
         </div>
       </div>
     </div>

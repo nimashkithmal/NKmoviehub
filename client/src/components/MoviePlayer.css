@@ -142,6 +142,26 @@
   outline: none;
 }
 
+.movie-player-brand {
+  position: absolute;
+  bottom: 0.85rem;
+  right: 0.85rem;
+  z-index: 6;
+  pointer-events: none;
+  user-select: none;
+  padding: 0.32rem 0.62rem;
+  border-radius: 0.4rem;
+  background: rgba(0, 0, 0, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
 /* Video Loading Overlay */
 .video-loading-overlay {
   position: absolute;

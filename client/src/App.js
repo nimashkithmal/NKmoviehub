@@ -11,6 +11,7 @@ import AddTVShow from './components/AddTVShow';
 import MovieDetail from './components/MovieDetail';
 import TVShowDetail from './components/TVShowDetail';
 import Collections from './components/Collections';
+import LegalPage, { ContactPage } from './components/LegalPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { trackPageView } from './utils/analytics';
@@ -49,6 +50,11 @@ const AppShell = () => {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/collections" element={<Collections />} />
+          <Route path="/about" element={<LegalPage slug="about" />} />
+          <Route path="/privacy" element={<LegalPage slug="privacy" />} />
+          <Route path="/terms" element={<LegalPage slug="terms" />} />
+          <Route path="/dmca" element={<LegalPage slug="dmca" />} />
+          <Route path="/contact" element={<ContactPage />} />
           <Route path="/movie/:id" element={<MovieDetail />} />
           <Route path="/tvshow/:id" element={<TVShowDetail />} />
           <Route path="/login" element={<Login />} />
