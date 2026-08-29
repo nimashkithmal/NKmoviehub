@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import MoviePlayer from './MoviePlayer';
+import { trackContentView, trackWatchClick } from '../utils/analytics';
 import './MovieDetail.css';
 
 const TVShowDetail = () => {
@@ -22,6 +23,15 @@ const TVShowDetail = () => {
     setSelectedImageIndex(0); // Reset image index when TV show changes
     setActiveSeason(1);
   }, [id]);
+
+  useEffect(() => {
+    if (!tvShow?._id) return;
+    trackContentView({
+      contentType: 'tv_show',
+      itemId: tvShow._id,
+      itemName: tvShow.title
+    });
+  }, [tvShow?._id, tvShow?.title]);
 
   const fetchTVShowDetails = async () => {
     try {
@@ -62,6 +72,11 @@ const TVShowDetail = () => {
     
     setSelectedEpisode(episodeMovie);
     setShowPlayer(true);
+    trackWatchClick({
+      contentType: 'tv_episode',
+      itemId: tvShow._id,
+      itemName: episodeMovie.title
+    });
   };
 
   const handleWatchShow = () => {
@@ -76,6 +91,11 @@ const TVShowDetail = () => {
       };
       setSelectedEpisode(episode);
       setShowPlayer(true);
+      trackWatchClick({
+        contentType: 'tv_show',
+        itemId: tvShow._id,
+        itemName: tvShow.title
+      });
     }
   };
 

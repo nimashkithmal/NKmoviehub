@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import MoviePlayer from './MoviePlayer';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
+import { trackContentView, trackWatchClick } from '../utils/analytics';
 import './MovieDetail.css';
 
 const FAV_KEY = 'nk_favorite_movies';
@@ -149,6 +150,15 @@ const MovieDetail = () => {
     loadExtras();
     return () => controller.abort();
   }, [movie?.movieUrl]);
+
+  useEffect(() => {
+    if (!movie?._id) return;
+    trackContentView({
+      contentType: 'movie',
+      itemId: movie._id,
+      itemName: movie.title
+    });
+  }, [movie?._id, movie?.title]);
 
   const fetchMovieDetails = async () => {
     try {
@@ -527,7 +537,14 @@ const MovieDetail = () => {
                     <button
                       type="button"
                       className="md-btn md-btn-primary"
-                      onClick={() => setShowPlayer(true)}
+                      onClick={() => {
+                        trackWatchClick({
+                          contentType: 'movie',
+                          itemId: movie._id,
+                          itemName: movie.title
+                        });
+                        setShowPlayer(true);
+                      }}
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M8 5v14l11-7z" />

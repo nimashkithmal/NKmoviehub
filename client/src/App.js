@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -13,6 +13,7 @@ import TVShowDetail from './components/TVShowDetail';
 import Collections from './components/Collections';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { trackPageView } from './utils/analytics';
 import './App.css';
 
 // Protected Route component
@@ -36,6 +37,10 @@ const AppShell = () => {
     location.pathname.startsWith('/movie/') || location.pathname.startsWith('/tvshow/');
   const isFullBleedMain =
     isDetailPage || location.pathname === '/collections';
+
+  useEffect(() => {
+    trackPageView(location.pathname + location.search, document.title);
+  }, [location.pathname, location.search]);
 
   return (
     <div className={`App${isDetailPage ? ' is-detail-page' : ''}`}>
