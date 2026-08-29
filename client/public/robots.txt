@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /add-movie
+Disallow: /add-tvshow
+Disallow: /login
+Disallow: /forgot-password
+
+Sitemap: https://nkmoviehub.vercel.app/sitemap.xml
