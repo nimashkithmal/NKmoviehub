@@ -1,4 +1,5 @@
 const express = require('express');
+const { CATEGORY_IDS } = require('../constants/collectionCategories');
 const { body, validationResult } = require('express-validator');
 const Collection = require('../models/Collection');
 const Movie = require('../models/Movie');
@@ -6,13 +7,13 @@ const { protect, restrictToAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-const MOVIE_FIELDS = 'title year status';
+const MOVIE_FIELDS = 'title year status releaseDate';
 
 const populateMovies = (query) =>
   query.populate({
     path: 'movies',
     select: MOVIE_FIELDS,
-    match: { status: 'active' }
+    match: { status: { $in: ['active', 'coming_soon'] } }
   });
 
 // @route   GET /api/collections
@@ -21,7 +22,7 @@ router.get('/', async (req, res) => {
   try {
     const collections = await populateMovies(
       Collection.find({ status: 'active' }).sort({ order: 1, createdAt: 1 })
-    ).select('name description order movies');
+    ).select('name description category order movies timelineYears');
 
     res.json({
       success: true,
@@ -62,7 +63,7 @@ router.get('/:id', async (req, res) => {
   try {
     const collection = await populateMovies(
       Collection.findOne({ _id: req.params.id, status: 'active' })
-    ).select('name description order movies');
+    ).select('name description category order movies timelineYears');
 
     if (!collection) {
       return res.status(404).json({
@@ -99,6 +100,7 @@ router.post('/', protect, restrictToAdmin, [
   body('description').optional({ checkFalsy: true }).isLength({ max: 500 }),
   body('order').optional().isInt({ min: 0 }),
   body('status').optional().isIn(['active', 'inactive']),
+  body('category').optional().isIn(CATEGORY_IDS),
   body('movieIds').optional().isArray()
 ], async (req, res) => {
   try {
@@ -116,6 +118,7 @@ router.post('/', protect, restrictToAdmin, [
       description = '',
       order = 0,
       status = 'active',
+      category = 'action_franchises',
       movieIds = []
     } = req.body;
 
@@ -126,6 +129,7 @@ router.post('/', protect, restrictToAdmin, [
       description: (description || '').trim(),
       order: Number(order) || 0,
       status,
+      category,
       movies,
       addedBy: req.user._id
     });
@@ -152,6 +156,7 @@ router.put('/:id', protect, restrictToAdmin, [
   body('description').optional({ checkFalsy: true }).isLength({ max: 500 }),
   body('order').optional().isInt({ min: 0 }),
   body('status').optional().isIn(['active', 'inactive']),
+  body('category').optional().isIn(CATEGORY_IDS),
   body('movieIds').optional().isArray()
 ], async (req, res) => {
   try {
@@ -172,12 +177,13 @@ router.put('/:id', protect, restrictToAdmin, [
       });
     }
 
-    const { name, description, order, status, movieIds } = req.body;
+    const { name, description, order, status, category, movieIds } = req.body;
 
     if (name !== undefined) collection.name = name.trim();
     if (description !== undefined) collection.description = String(description).trim();
     if (order !== undefined) collection.order = Number(order) || 0;
     if (status !== undefined) collection.status = status;
+    if (category !== undefined) collection.category = category;
     if (movieIds !== undefined) {
       collection.movies = await sanitizeMovieIds(movieIds);
     }

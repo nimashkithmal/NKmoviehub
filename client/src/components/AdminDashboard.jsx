@@ -5,6 +5,7 @@ import ContactManagement from './ContactManagement';
 import AdminManagement from './AdminManagement';
 import BannerManagement from './BannerManagement';
 import CollectionManagement from './CollectionManagement';
+import AnalyticsDashboard from './AnalyticsDashboard';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -1139,6 +1140,12 @@ const AdminDashboard = () => {
         >
           Collections
         </button>
+        <button
+          className={`tab-button ${activeTab === 'analytics' ? 'active' : ''}`}
+          onClick={() => setActiveTab('analytics')}
+        >
+          Analytics
+        </button>
         <button 
           className={`tab-button ${activeTab === 'contacts' ? 'active' : ''}`}
           onClick={() => setActiveTab('contacts')}
@@ -1148,7 +1155,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Statistics Cards */}
-      {activeTab !== 'banners' && activeTab !== 'admins' && activeTab !== 'contacts' && activeTab !== 'collections' && (
+      {activeTab !== 'banners' && activeTab !== 'admins' && activeTab !== 'contacts' && activeTab !== 'collections' && activeTab !== 'analytics' && (
       <div className="dashboard-stats">
         {activeTab === 'tvshows' ? (
           <>
@@ -2380,6 +2387,11 @@ const AdminDashboard = () => {
           token={token}
           showNotification={showNotification}
         />
+      )}
+
+      {/* Analytics Section */}
+      {activeTab === 'analytics' && (
+        <AnalyticsDashboard token={token} />
       )}
 
       {/* Contact Management Section */}

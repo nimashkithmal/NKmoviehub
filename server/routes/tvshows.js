@@ -9,7 +9,7 @@ const { cloudinary, uploadPoster, uploadPosters } = require('../utils/cloudinary
 const {
   extractTvTmdbId,
   getTrendingTmdbIds,
-  orderDocsByTrending
+  orderDocsTrendingFirst
 } = require('../utils/trendingPopular');
 const {
   promoteReleasedComingSoon,
@@ -137,13 +137,13 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // Popular: order by 2embed trending TV (only titles we have in DB)
+    // Popular: trending titles first, then the rest of the catalog
     if (sort === 'popular') {
-      const trendingIds = await getTrendingTmdbIds('tv');
+      const trendingIds = await getTrendingTmdbIds('tv', 2);
       const candidates = await TVShow.find(filter)
-        .select('_id showUrl episodes.episodeUrl')
+        .select('_id showUrl episodes.episodeUrl imdbRating averageRating year title')
         .lean();
-      const orderedIds = orderDocsByTrending(candidates, trendingIds, extractTvTmdbId).map(
+      const orderedIds = orderDocsTrendingFirst(candidates, trendingIds, extractTvTmdbId).map(
         (doc) => doc._id
       );
       const total = orderedIds.length;

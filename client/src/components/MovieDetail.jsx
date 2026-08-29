@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import MoviePlayer from './MoviePlayer';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
+import { trackContentView, trackWatchClick } from '../utils/analytics';
 import './MovieDetail.css';
 
 const FAV_KEY = 'nk_favorite_movies';
@@ -53,6 +54,17 @@ const formatDate = (value) => {
   });
 };
 
+const formatMessageDate = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
+
 const languageLabel = (code) => {
   if (!code) return null;
   try {
@@ -72,28 +84,45 @@ const MovieDetail = () => {
   const [showPlayer, setShowPlayer] = useState(false);
   const [showTrailer, setShowTrailer] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [askMessage, setAskMessage] = useState('');
+  const [askName, setAskName] = useState('');
+  const [askEmail, setAskEmail] = useState('');
   const [askSending, setAskSending] = useState(false);
   const [askStatus, setAskStatus] = useState({ type: '', text: '' });
+  const chatThreadRef = useRef(null);
 
   useEffect(() => {
     fetchMovieDetails();
-    fetchQuestions();
     setExtras(null);
     setShowTrailer(false);
-    setChatOpen(false);
+    setQuestions([]);
     setAskMessage('');
+    setAskName('');
+    setAskEmail('');
     setAskStatus({ type: '', text: '' });
     setIsFavorite(readFavorites().includes(id));
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const fetchQuestions = useCallback(async () => {
+    if (!id) return;
+    try {
+      const response = await fetch(`/api/movies/${id}/questions`);
+      const result = await response.json();
+      if (result.success) {
+        setQuestions(result.data.questions || []);
+      }
+    } catch (err) {
+      console.error('Error fetching questions:', err);
+    }
+  }, [id]);
+
   useEffect(() => {
-    if (!chatOpen || !id) return undefined;
+    if (!id) return undefined;
+    fetchQuestions();
     const timer = setInterval(fetchQuestions, 15000);
     return () => clearInterval(timer);
-  }, [chatOpen, id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, fetchQuestions]);
 
   useEffect(() => {
     if (!movie?.movieUrl) return undefined;
@@ -122,6 +151,15 @@ const MovieDetail = () => {
     return () => controller.abort();
   }, [movie?.movieUrl]);
 
+  useEffect(() => {
+    if (!movie?._id) return;
+    trackContentView({
+      contentType: 'movie',
+      itemId: movie._id,
+      itemName: movie.title
+    });
+  }, [movie?._id, movie?.title]);
+
   const fetchMovieDetails = async () => {
     try {
       setLoading(true);
@@ -148,17 +186,31 @@ const MovieDetail = () => {
     }
   };
 
-  const fetchQuestions = async () => {
-    try {
-      const response = await fetch(`/api/movies/${id}/questions`);
-      const result = await response.json();
-      if (result.success) {
-        setQuestions(result.data.questions || []);
+  const chatMessages = useMemo(() => {
+    const items = [];
+    for (const q of questions) {
+      items.push({
+        id: `${q._id}-q`,
+        role: 'user',
+        text: q.question,
+        at: q.createdAt
+      });
+      if (q.answer) {
+        items.push({
+          id: `${q._id}-a`,
+          role: 'admin',
+          text: q.answer,
+          at: q.answeredAt || q.createdAt
+        });
       }
-    } catch (err) {
-      console.error('Error fetching questions:', err);
     }
-  };
+    return items;
+  }, [questions]);
+
+  useEffect(() => {
+    if (!chatThreadRef.current) return;
+    chatThreadRef.current.scrollTop = chatThreadRef.current.scrollHeight;
+  }, [chatMessages]);
 
   const posterSrc = useMemo(() => {
     if (!movie) return '';
@@ -238,11 +290,30 @@ const MovieDetail = () => {
     }
   };
 
+  const openSocialShare = (platform) => {
+    const shareUrl = window.location.href;
+    const title = movie?.title ? `Watch ${movie.title} on NK Movie Hub` : 'NK Movie Hub';
+    const encodedUrl = encodeURIComponent(shareUrl);
+    const encodedTitle = encodeURIComponent(title);
+
+    const urls = {
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+      twitter: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`,
+      whatsapp: `https://wa.me/?text=${encodeURIComponent(`${title} ${shareUrl}`)}`,
+      pinterest: `https://pinterest.com/pin/create/button/?url=${encodedUrl}&description=${encodedTitle}`,
+      tumblr: `https://www.tumblr.com/share/link?url=${encodedUrl}&name=${encodedTitle}`
+    };
+
+    const target = urls[platform];
+    if (!target) return;
+    window.open(target, '_blank', 'noopener,noreferrer,width=640,height=480');
+  };
+
   const handleAskSubmit = async (e) => {
     e.preventDefault();
     const message = askMessage.trim();
     if (!message) {
-      setAskStatus({ type: 'error', text: 'Type a question first.' });
+      setAskStatus({ type: 'error', text: 'Write a comment first.' });
       return;
     }
 
@@ -252,7 +323,11 @@ const MovieDetail = () => {
       const response = await fetch(`/api/movies/${id}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
+        body: JSON.stringify({
+          message,
+          fromName: askName.trim(),
+          fromEmail: askEmail.trim()
+        })
       });
       const result = await response.json();
       if (!response.ok || !result.success) {
@@ -462,7 +537,14 @@ const MovieDetail = () => {
                     <button
                       type="button"
                       className="md-btn md-btn-primary"
-                      onClick={() => setShowPlayer(true)}
+                      onClick={() => {
+                        trackWatchClick({
+                          contentType: 'movie',
+                          itemId: movie._id,
+                          itemName: movie.title
+                        });
+                        setShowPlayer(true);
+                      }}
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M8 5v14l11-7z" />
@@ -494,98 +576,6 @@ const MovieDetail = () => {
             </div>
           )}
 
-          <div className="md-ask-wrap">
-            {!chatOpen ? (
-              <div className="md-ask-card">
-                <div className="md-ask-card-main">
-                  <div className="md-ask-card-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h2 className="md-ask-card-title">Ask About This Movie</h2>
-                    <p className="md-ask-card-sub">
-                      Ask anything about this movie — themes, characters, trivia...
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="md-ask-start"
-                  onClick={() => setChatOpen(true)}
-                >
-                  Start Chat
-                </button>
-              </div>
-            ) : (
-              <div className="md-ask-panel">
-                <div className="md-ask-panel-head">
-                  <div className="md-ask-panel-title">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                    <span>Ask About This Movie</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="md-ask-hide"
-                    onClick={() => setChatOpen(false)}
-                  >
-                    Hide
-                  </button>
-                </div>
-
-                <div className="md-ask-thread">
-                  {questions.length === 0 ? (
-                    <p className="md-ask-empty">Ask anything — themes, characters, trivia...</p>
-                  ) : (
-                    questions.map((q) => (
-                      <div key={q._id} className="md-ask-qa">
-                        <div className="md-ask-q">
-                          <span className="md-ask-bubble-label">Q</span>
-                          <p>{q.question}</p>
-                        </div>
-                        {q.answer ? (
-                          <div className="md-ask-a">
-                            <span className="md-ask-bubble-label">A</span>
-                            <p>{q.answer}</p>
-                          </div>
-                        ) : (
-                          <div className="md-ask-pending">Waiting for admin reply...</div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <form className="md-ask-compose" onSubmit={handleAskSubmit}>
-                  <input
-                    type="text"
-                    value={askMessage}
-                    onChange={(e) => setAskMessage(e.target.value)}
-                    placeholder="Ask about the movie..."
-                    maxLength={2000}
-                    disabled={askSending}
-                  />
-                  <button
-                    type="submit"
-                    className="md-ask-send"
-                    disabled={askSending || !askMessage.trim()}
-                    aria-label="Send question"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                    </svg>
-                  </button>
-                </form>
-                {askStatus.text && (
-                  <p className={`md-ask-status is-${askStatus.type}`}>{askStatus.text}</p>
-                )}
-              </div>
-            )}
-          </div>
-
           {detailItems.length > 0 && (
             <div className="md-facts">
               {detailItems.map((item, index) =>
@@ -600,6 +590,77 @@ const MovieDetail = () => {
               )}
             </div>
           )}
+
+          <div className="md-comments-wrap">
+            <h2 className="md-section-title">Comments</h2>
+
+            <form className="md-comments-form" onSubmit={handleAskSubmit}>
+              <textarea
+                className="md-comments-textarea"
+                value={askMessage}
+                onChange={(e) => setAskMessage(e.target.value)}
+                placeholder="Write a comment.."
+                rows={5}
+                maxLength={2000}
+                disabled={askSending}
+              />
+              <div className="md-comments-fields">
+                <input
+                  type="text"
+                  value={askName}
+                  onChange={(e) => setAskName(e.target.value)}
+                  placeholder="Display Name"
+                  maxLength={100}
+                  disabled={askSending}
+                />
+                <input
+                  type="email"
+                  value={askEmail}
+                  onChange={(e) => setAskEmail(e.target.value)}
+                  placeholder="Email Address"
+                  maxLength={120}
+                  disabled={askSending}
+                />
+              </div>
+              <div className="md-comments-actions">
+                <button
+                  type="submit"
+                  className="md-comments-submit"
+                  disabled={askSending || !askMessage.trim()}
+                >
+                  {askSending ? 'Posting…' : 'Post comment'}
+                </button>
+              </div>
+              {askStatus.text && (
+                <p className={`md-ask-status is-${askStatus.type}`}>{askStatus.text}</p>
+              )}
+            </form>
+
+            <div className="md-ask-feed" ref={chatThreadRef}>
+              {chatMessages.length === 0 ? (
+                <p className="md-ask-empty">No comments yet. Be the first to comment.</p>
+              ) : (
+                chatMessages.map((msg) => (
+                  <article key={msg.id} className={`md-msg-item is-${msg.role}`}>
+                    <div className="md-msg-avatar" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v1.2h19.2v-1.2c0-3.2-6.4-4.8-9.6-4.8z" />
+                      </svg>
+                    </div>
+                    <div className="md-msg-body">
+                      <div className="md-msg-meta">
+                        {msg.role === 'admin' && (
+                          <span className="md-msg-author">NK Movie Hub</span>
+                        )}
+                        <time dateTime={msg.at}>{formatMessageDate(msg.at)}</time>
+                      </div>
+                      <p className="md-msg-text">{msg.text}</p>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </div>
 
           {cast.length > 0 && (
             <div className="md-cast">
@@ -623,6 +684,65 @@ const MovieDetail = () => {
               </div>
             </div>
           )}
+
+          <div className="md-share-bar">
+            <div className="md-share-label">
+              <span>Share</span>
+            </div>
+            <div className="md-share-buttons">
+              <button
+                type="button"
+                className="md-share-btn is-facebook"
+                onClick={() => openSocialShare('facebook')}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M14 8.5V6.8c0-.7.5-1.3 1.2-1.3H17V3h-2.4C12.8 3 12 4.8 12 6.5V8.5H9v2.3h3V18h3v-7.2h2.5l.5-2.3H15z" />
+                </svg>
+                Facebook
+              </button>
+              <button
+                type="button"
+                className="md-share-btn is-twitter"
+                onClick={() => openSocialShare('twitter')}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20.2 4.2c-.7.3-1.4.5-2.2.6.8-.5 1.3-1.2 1.6-2.1-.7.4-1.5.7-2.4.9C16.9 2.8 16 2.4 15 2.4c-2.1 0-3.8 1.7-3.8 3.8 0 .3 0 .6.1.9-3.1-.2-5.9-1.7-7.7-4-.3.6-.5 1.2-.5 1.9 0 1.3.7 2.5 1.7 3.2-.6 0-1.2-.2-1.7-.5v.1c0 1.8 1.3 3.4 3 3.7-.3.1-.7.1-1 .1-.2 0-.5 0-.7-.1.5 1.5 1.9 2.6 3.6 2.6-1.3 1-3 1.6-4.8 1.6-.3 0-.6 0-.9-.1 1.7 1.1 3.7 1.7 5.9 1.7 7.1 0 11-5.9 11-11v-.5c.8-.5 1.4-1.2 2-2z" />
+                </svg>
+                Twitter
+              </button>
+              <button
+                type="button"
+                className="md-share-btn is-icon is-whatsapp"
+                onClick={() => openSocialShare('whatsapp')}
+                aria-label="Share on WhatsApp"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M17.5 13.4c-.3-.1-1.6-.8-1.9-.9-.3-.1-.5-.1-.7.2-.2.3-.8 1-.9 1.1-.2.2-.3.2-.6.1-.3-.1-1.2-.4-2.3-1.4-.8-.7-1.4-1.6-1.6-1.9-.2-.3 0-.5.1-.6.1-.1.3-.3.4-.5.1-.2.1-.3 0-.5-.1-.2-.7-1.7-1-2.3-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.7.3-.2.3-1 1-1 2.4s1 2.8 1.1 3c.1.2 2 3 4.8 4.2.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.5-.1 1.6-.7 1.8-1.3.2-.6.2-1.2.2-1.3-.1-.1-.3-.2-.6-.3z" />
+                  <path d="M12 2C6.5 2 2 6.1 2 11.2c0 2 .6 3.9 1.6 5.5L2 22l5.5-1.5c1.5.8 3.2 1.3 4.9 1.3 5.5 0 10-4.1 10-9.2S17.5 2 12 2zm0 16.8c-1.5 0-3-.4-4.3-1.2l-.3-.2-3.2.9.9-3.1-.2-.3c-.9-1.3-1.4-2.8-1.4-4.4 0-4.3 3.9-7.8 8.7-7.8s8.7 3.5 8.7 7.8-3.9 7.8-8.7 7.8z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="md-share-btn is-icon is-pinterest"
+                onClick={() => openSocialShare('pinterest')}
+                aria-label="Share on Pinterest"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 2C6.5 2 2 6.5 2 12c0 4.1 2.5 7.6 6 9.2-.1-.8-.1-2 .2-3 .2-.9 1.5-5.8 1.5-5.8s-.4-.8-.4-2c0-1.9 1.1-3.3 2.5-3.3 1.2 0 1.7.9 1.7 2 0 1.2-.8 3-1.2 4.7-.3 1.4.7 2.6 2.1 2.6 2.5 0 4.4-2.6 4.4-6.4 0-3.3-2.4-5.6-5.8-5.6-4 0-6.3 3-6.3 6.1 0 1.2.5 2.5 1.1 3.2.1.1.1.2.1.3l-.4 1.7c-.1.4-.3.5-.7.3-2.6-1.2-4.2-5-4.2-8 0-6.5 4.7-12.5 13.6-12.5 7.1 0 12.7 5.1 12.7 11.9 0 7.1-4.5 12.8-10.7 12.8-2.1 0-4.1-1.1-4.8-2.4l-1.3 5c-.5 1.9-1.8 4.3-2.7 5.8.6.2 1.3.3 2 .3 5.5 0 10-4.5 10-10S17.5 2 12 2z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="md-share-btn is-icon is-tumblr"
+                onClick={() => openSocialShare('tumblr')}
+                aria-label="Share on Tumblr"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M14.7 17.3V20c-1.4.7-2.6 1-3.8 1-3.7 0-5.4-2.1-5.4-6.2V8.3H3.5V5.4c2.4-.8 3.5-2.7 3.7-5.2h3.1v4.2h4.1v3.4h-4.1v6.1c0 1.5.7 2.2 2.1 2.2.8 0 1.6-.2 2.4-.6z" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </section>
       </div>
     </>
