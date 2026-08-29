@@ -60,6 +60,14 @@ const Footer = () => {
             </div>
           </div>
           
+          <nav className="footer-links" aria-label="Site links">
+            <Link to="/about">About</Link>
+            <Link to="/contact">Contact</Link>
+            <Link to="/privacy">Privacy</Link>
+            <Link to="/terms">Terms</Link>
+            <Link to="/dmca">DMCA</Link>
+          </nav>
+
           <div className="footer-divider"></div>
           
           <div className="footer-bottom">
