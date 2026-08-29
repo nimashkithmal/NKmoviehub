@@ -6,19 +6,93 @@
     <link rel="alternate icon" href="%PUBLIC_URL%/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
+    <meta name="robots" content="index, follow" />
     <meta
       name="description"
-      content="NKMovieHUB - User Management System"
+      content="NK Movie Hub — discover movies and TV series, browse curated collections, and find where to watch your favourite titles."
     />
+    <link rel="canonical" href="https://nkmoviehub.vercel.app/" />
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="NK Movie Hub" />
+    <meta
+      property="og:description"
+      content="Discover movies and TV series, browse curated collections, and find where to watch your favourite titles."
+    />
+    <meta property="og:url" content="https://nkmoviehub.vercel.app/" />
+    <meta property="og:site_name" content="NK Movie Hub" />
     <script
       async
       src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2725285703855468"
       crossorigin="anonymous"
     ></script>
-    <title>NKMovieHUB</title>
+    <title>NK Movie Hub — Movies &amp; TV Series</title>
+    <style>
+      #static-fallback {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 3rem;
+        font-family: Arial, sans-serif;
+        color: #e5e5e5;
+        background: #0a0a0a;
+        line-height: 1.6;
+      }
+      #static-fallback h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.75rem;
+        color: #fff;
+      }
+      #static-fallback p {
+        margin: 0 0 1rem;
+        color: #b3b3b3;
+      }
+      #static-fallback nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem 1.25rem;
+        margin-top: 1.25rem;
+      }
+      #static-fallback a {
+        color: #c4b5fd;
+      }
+    </style>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+    <noscript>
+      <main id="static-fallback">
+        <h1>NK Movie Hub</h1>
+        <p>
+          Entertainment platform for discovering movies and TV series, browsing curated
+          collections, and requesting missing titles.
+        </p>
+        <nav aria-label="Site pages">
+          <a href="/">Home</a>
+          <a href="/collections">Collections</a>
+          <a href="/about">About</a>
+          <a href="/contact">Contact</a>
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms &amp; Conditions</a>
+          <a href="/dmca">DMCA / Copyright</a>
+        </nav>
+      </main>
+    </noscript>
+    <div id="root">
+      <main id="static-fallback">
+        <h1>NK Movie Hub</h1>
+        <p>
+          Entertainment platform for discovering movies and TV series, browsing curated
+          collections, and requesting missing titles.
+        </p>
+        <nav aria-label="Site pages">
+          <a href="/">Home</a>
+          <a href="/collections">Collections</a>
+          <a href="/about">About</a>
+          <a href="/contact">Contact</a>
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms &amp; Conditions</a>
+          <a href="/dmca">DMCA / Copyright</a>
+        </nav>
+      </main>
+    </div>
   </body>
-</html> 
+</html>
