@@ -134,7 +134,7 @@ const MovieDetail = () => {
     const loadExtras = async () => {
       try {
         const query = tmdb ? `tmdb_id=${tmdb}` : `imdb_id=${imdb}`;
-        const response = await fetch(`https://api.2embed.cc/movie?${query}`, {
+        const response = await fetch(`/api/embed/movie?${query}`, {
           signal: controller.signal
         });
         if (!response.ok) return;

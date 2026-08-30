@@ -48,6 +48,7 @@ const collectionRoutes = require('./routes/collections');
 const notificationRoutes = require('./routes/notifications');
 const discoveryRoutes = require('./routes/discovery');
 const analyticsRoutes = require('./routes/analytics');
+const embedRoutes = require('./routes/embed');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -82,6 +83,7 @@ app.use('/api/collections', collectionRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/discovery', discoveryRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/embed', embedRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
