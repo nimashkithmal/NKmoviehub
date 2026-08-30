@@ -15,6 +15,7 @@ import LegalPage, { ContactPage } from './components/LegalPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { trackPageView } from './utils/analytics';
+import { updatePageSeo } from './utils/seo';
 import './App.css';
 
 // Protected Route component
@@ -40,6 +41,7 @@ const AppShell = () => {
     isDetailPage || location.pathname === '/collections';
 
   useEffect(() => {
+    updatePageSeo(location.pathname);
     trackPageView(location.pathname + location.search, document.title);
   }, [location.pathname, location.search]);
 
