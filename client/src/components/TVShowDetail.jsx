@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import MoviePlayer from './MoviePlayer';
 import { trackContentView, trackWatchClick } from '../utils/analytics';
-import { setDetailPageTitle } from '../utils/seo';
+import { setDetailPageMeta } from '../utils/seo';
 import './MovieDetail.css';
 
 const TVShowDetail = () => {
@@ -27,13 +27,19 @@ const TVShowDetail = () => {
 
   useEffect(() => {
     if (!tvShow?._id) return;
-    setDetailPageTitle(tvShow.title);
+    setDetailPageMeta({
+      title: tvShow.year ? `${tvShow.title} (${tvShow.year})` : tvShow.title,
+      description: tvShow.description,
+      image: tvShow.bannerUrl || tvShow.imageUrl,
+      pathname: `/tvshow/${id}`,
+      type: 'video.tv_show'
+    });
     trackContentView({
       contentType: 'tv_show',
       itemId: tvShow._id,
       itemName: tvShow.title
     });
-  }, [tvShow?._id, tvShow?.title]);
+  }, [tvShow?._id, tvShow?.title, tvShow?.year, tvShow?.description, tvShow?.bannerUrl, tvShow?.imageUrl, id]);
 
   const fetchTVShowDetails = async () => {
     try {

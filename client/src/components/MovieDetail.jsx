@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import MoviePlayer from './MoviePlayer';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 import { trackContentView, trackWatchClick } from '../utils/analytics';
-import { setDetailPageTitle } from '../utils/seo';
+import { setDetailPageMeta } from '../utils/seo';
 import './MovieDetail.css';
 
 const FAV_KEY = 'nk_favorite_movies';
@@ -154,13 +154,19 @@ const MovieDetail = () => {
 
   useEffect(() => {
     if (!movie?._id) return;
-    setDetailPageTitle(movie.title);
+    setDetailPageMeta({
+      title: movie.year ? `${movie.title} (${movie.year})` : movie.title,
+      description: movie.description || movie.tagline,
+      image: movie.bannerUrl || movie.imageUrl,
+      pathname: `/movie/${id}`,
+      type: 'video.movie'
+    });
     trackContentView({
       contentType: 'movie',
       itemId: movie._id,
       itemName: movie.title
     });
-  }, [movie?._id, movie?.title]);
+  }, [movie?._id, movie?.title, movie?.year, movie?.description, movie?.tagline, movie?.bannerUrl, movie?.imageUrl, id]);
 
   const fetchMovieDetails = async () => {
     try {
