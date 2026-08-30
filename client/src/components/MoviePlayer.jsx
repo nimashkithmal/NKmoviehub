@@ -1,7 +1,22 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import Hls from 'hls.js';
 import './MoviePlayer.css';
 
-// Helper function to detect video URL type
+const isHlsUrl = (url = '') => /\.m3u8(\?|$)/i.test(url);
+
+const getDirectSources = (movie) => {
+  if (!movie?.movieUrl) return [];
+  if (Array.isArray(movie.qualitySources) && movie.qualitySources.length) {
+    return movie.qualitySources
+      .filter((source) => source?.url)
+      .map((source, index) => ({
+        id: source.id || `q-${index}`,
+        label: source.label || `Quality ${index + 1}`,
+        url: source.url
+      }));
+  }
+  return [{ id: 'default', label: 'Auto', url: movie.movieUrl }];
+};
 const getVideoType = (url) => {
   if (!url) return 'unknown';
 
@@ -199,6 +214,7 @@ const getVimeoId = (url) => {
 const MoviePlayer = ({ movie, onClose }) => {
   const videoRef = useRef(null);
   const iframeRef = useRef(null);
+  const hlsRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -209,6 +225,13 @@ const MoviePlayer = ({ movie, onClose }) => {
   const [embedSources, setEmbedSources] = useState([]);
   const [activeSourceId, setActiveSourceId] = useState('');
   const [googleDriveUrls, setGoogleDriveUrls] = useState(null);
+  const [directSources, setDirectSources] = useState([]);
+  const [activeDirectSourceId, setActiveDirectSourceId] = useState('');
+  const [directPlayUrl, setDirectPlayUrl] = useState('');
+  const [hlsQualities, setHlsQualities] = useState([]);
+  const [activeHlsLevel, setActiveHlsLevel] = useState(-1);
+  const [showQualityMenu, setShowQualityMenu] = useState(false);
+  const [showEmbedQualityTip, setShowEmbedQualityTip] = useState(false);
 
   // Determine video type and prepare embed URL
   useEffect(() => {
@@ -277,7 +300,12 @@ const MoviePlayer = ({ movie, onClose }) => {
     } else if (type === 'direct') {
       setEmbedSources([]);
       setActiveSourceId('');
-      // Will be handled by video element
+      const sources = getDirectSources(movie);
+      setDirectSources(sources);
+      setActiveDirectSourceId(sources[0]?.id || '');
+      setDirectPlayUrl(sources[0]?.url || movie.movieUrl);
+      setHlsQualities([]);
+      setActiveHlsLevel(-1);
       setIsLoading(true);
     } else {
       setEmbedSources([]);
@@ -297,6 +325,33 @@ const MoviePlayer = ({ movie, onClose }) => {
     setIsLoading(true);
     setIsPlaying(true);
   };
+
+  const switchDirectSource = (source) => {
+    if (!source || source.id === activeDirectSourceId) return;
+    setActiveDirectSourceId(source.id);
+    setDirectPlayUrl(source.url);
+    setHlsQualities([]);
+    setActiveHlsLevel(-1);
+    setHasError(false);
+    setErrorMessage('');
+    setIsLoading(true);
+    setIsPlaying(false);
+  };
+
+  const changeHlsQuality = useCallback((levelIndex) => {
+    const hls = hlsRef.current;
+    if (!hls) return;
+    hls.currentLevel = levelIndex;
+    setActiveHlsLevel(levelIndex);
+    setShowQualityMenu(false);
+  }, []);
+
+  const destroyHls = useCallback(() => {
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+  }, []);
 
   // Block embed ad popups / redirects while the player is open
   useEffect(() => {
@@ -338,8 +393,65 @@ const MoviePlayer = ({ movie, onClose }) => {
   }, []);
 
   useEffect(() => {
+    if (videoType !== 'direct' || !directPlayUrl) return undefined;
+
+    const video = videoRef.current;
+    if (!video) return undefined;
+
+    destroyHls();
+    setHlsQualities([]);
+    setActiveHlsLevel(-1);
+
+    if (isHlsUrl(directPlayUrl)) {
+      if (Hls.isSupported()) {
+        const hls = new Hls({ enableWorker: true });
+        hlsRef.current = hls;
+        hls.loadSource(directPlayUrl);
+        hls.attachMedia(video);
+
+        const onManifest = () => {
+          const levels = hls.levels.map((level, index) => ({
+            index,
+            label: level.height ? `${level.height}p` : `Stream ${index + 1}`
+          }));
+          setHlsQualities([{ index: -1, label: 'Auto' }, ...levels]);
+          setActiveHlsLevel(hls.currentLevel);
+        };
+
+        hls.on(Hls.Events.MANIFEST_PARSED, onManifest);
+        hls.on(Hls.Events.LEVEL_SWITCHED, () => {
+          setActiveHlsLevel(hls.currentLevel);
+        });
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (!data?.fatal) return;
+          setHasError(true);
+          setErrorMessage('Unable to load this stream quality.');
+          setIsLoading(false);
+        });
+
+        return () => {
+          hls.off(Hls.Events.MANIFEST_PARSED, onManifest);
+          destroyHls();
+        };
+      }
+
+      if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = directPlayUrl;
+      } else {
+        setHasError(true);
+        setErrorMessage('HLS playback is not supported in this browser.');
+        setIsLoading(false);
+      }
+      return undefined;
+    }
+
+    video.src = directPlayUrl;
+    return undefined;
+  }, [videoType, directPlayUrl, destroyHls]);
+
+  useEffect(() => {
     // Only handle direct video files (Google Drive uses iframe)
-    if (videoType !== 'direct') return;
+    if (videoType !== 'direct' || !directPlayUrl) return;
     
     const video = videoRef.current;
     if (!video) return;
@@ -449,10 +561,12 @@ const MoviePlayer = ({ movie, onClose }) => {
       // Pause video on cleanup
       if (video) {
         video.pause();
-        video.src = '';
+        video.removeAttribute('src');
+        video.load();
       }
+      destroyHls();
     };
-  }, [videoType, movie?.movieUrl]);
+  }, [videoType, directPlayUrl, destroyHls]);
 
   // Handle ESC key to close
   useEffect(() => {
@@ -484,6 +598,13 @@ const MoviePlayer = ({ movie, onClose }) => {
     return null;
   }
 
+  const isEmbedPlayer = ['youtube', 'vimeo', 'googledrive', 'embed'].includes(videoType);
+  const showDirectQualityMenu = videoType === 'direct' && (hlsQualities.length > 1 || directSources.length > 1);
+  const activeHlsLabel =
+    hlsQualities.find((item) => item.index === activeHlsLevel)?.label || 'Auto';
+  const activeDirectLabel =
+    directSources.find((item) => item.id === activeDirectSourceId)?.label || 'Auto';
+
   return (
     <div className="movie-player-overlay" onClick={onClose}>
       <div className="movie-player-container" onClick={(e) => e.stopPropagation()}>
@@ -503,6 +624,69 @@ const MoviePlayer = ({ movie, onClose }) => {
                   {source.label}
                 </button>
               ))}
+            </div>
+          )}
+          {showDirectQualityMenu && (
+            <div className="movie-player-quality">
+              <button
+                type="button"
+                className="movie-player-quality-btn"
+                onClick={() => setShowQualityMenu((open) => !open)}
+                aria-expanded={showQualityMenu}
+                aria-haspopup="listbox"
+              >
+                Quality: {hlsQualities.length > 1 ? activeHlsLabel : activeDirectLabel}
+              </button>
+              {showQualityMenu && (
+                <div className="movie-player-quality-menu" role="listbox">
+                  {hlsQualities.length > 1
+                    ? hlsQualities.map((item) => (
+                        <button
+                          key={item.index}
+                          type="button"
+                          role="option"
+                          className={`movie-player-quality-option${
+                            activeHlsLevel === item.index ? ' is-active' : ''
+                          }`}
+                          onClick={() => changeHlsQuality(item.index)}
+                        >
+                          {item.label}
+                        </button>
+                      ))
+                    : directSources.map((source) => (
+                        <button
+                          key={source.id}
+                          type="button"
+                          role="option"
+                          className={`movie-player-quality-option${
+                            activeDirectSourceId === source.id ? ' is-active' : ''
+                          }`}
+                          onClick={() => switchDirectSource(source)}
+                        >
+                          {source.label}
+                        </button>
+                      ))}
+                </div>
+              )}
+            </div>
+          )}
+          {isEmbedPlayer && (
+            <div className="movie-player-quality">
+              <button
+                type="button"
+                className="movie-player-quality-btn"
+                onClick={() => setShowEmbedQualityTip((open) => !open)}
+                aria-expanded={showEmbedQualityTip}
+              >
+                Quality
+              </button>
+              {showEmbedQualityTip && (
+                <div className="movie-player-quality-tip">
+                  Use the settings icon inside the video player to change quality
+                  (Auto / 1080p / 720p). Different servers may also offer different
+                  stream quality.
+                </div>
+              )}
             </div>
           )}
           <button className="movie-player-close" onClick={onClose}>
@@ -614,22 +798,9 @@ const MoviePlayer = ({ movie, onClose }) => {
                 autoPlay
                 playsInline
                 preload="auto"
-                src={movie.movieUrl}
                 crossOrigin="anonymous"
                 onLoadedData={() => setIsLoading(false)}
               >
-                <source 
-                  src={movie.movieUrl} 
-                  type="video/mp4" 
-                />
-                <source 
-                  src={movie.movieUrl} 
-                  type="video/webm" 
-                />
-                <source 
-                  src={movie.movieUrl} 
-                  type="video/ogg" 
-                />
                 Your browser does not support the video tag.
               </video>
               
