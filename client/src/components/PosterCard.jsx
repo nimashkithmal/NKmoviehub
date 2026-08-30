@@ -18,6 +18,8 @@ const getRating = (item) => {
  */
 const PosterCard = ({ item, onClick, badge }) => {
   const rating = getRating(item);
+  const matureBadge = item.matureContent ? '18+' : null;
+  const displayBadge = badge || matureBadge;
 
   return (
     <button
@@ -33,7 +35,7 @@ const PosterCard = ({ item, onClick, badge }) => {
           loading="lazy"
           onError={(e) => handleImageError(e, item.title)}
         />
-        {badge && <span className="poster-card-badge">{badge}</span>}
+        {displayBadge && <span className="poster-card-badge">{displayBadge}</span>}
         <div className="poster-card-overlay">
           {rating && (
             <span className="poster-card-rating">
@@ -45,8 +47,8 @@ const PosterCard = ({ item, onClick, badge }) => {
           )}
           <div className="poster-card-actions">
             <span className="poster-card-play">
-              {badge ? (
-                badge
+              {displayBadge ? (
+                displayBadge
               ) : (
                 <>
                   <svg viewBox="0 0 24 24" aria-hidden="true">

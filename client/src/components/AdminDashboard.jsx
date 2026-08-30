@@ -66,7 +66,8 @@ const AdminDashboard = () => {
     runtime: '',
     releaseDate: '',
     tagline: '',
-    trailerUrl: ''
+    trailerUrl: '',
+    matureContent: false
   });
   const [tvShowImageFiles, setTVShowImageFiles] = useState([]);
   const [tvShowImagePreviews, setTVShowImagePreviews] = useState([]);
@@ -811,7 +812,8 @@ const AdminDashboard = () => {
       runtime: tvShow.runtime != null ? String(tvShow.runtime) : '',
       releaseDate: tvShow.releaseDate || '',
       tagline: tvShow.tagline || '',
-      trailerUrl: tvShow.trailerUrl || ''
+      trailerUrl: tvShow.trailerUrl || '',
+      matureContent: !!tvShow.matureContent
     });
     
     // Gallery posters only — never include the detail banner
@@ -2204,6 +2206,18 @@ const AdminDashboard = () => {
                 onChange={(e) => setTVShowFormData({...tvShowFormData, tagline: e.target.value})}
                 placeholder="Optional short tagline"
               />
+            </div>
+            <div className="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!!tvShowFormData.matureContent}
+                  onChange={(e) => setTVShowFormData({ ...tvShowFormData, matureContent: e.target.checked })}
+                  style={{ marginRight: '0.5rem' }}
+                />
+                18+ mature content
+              </label>
+              <small>Shows an 18+ badge on posters and the detail page.</small>
             </div>
             <div className="form-group">
               <label>Trailer URL (Watch Trailer)</label>

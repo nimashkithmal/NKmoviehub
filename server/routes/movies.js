@@ -15,6 +15,12 @@ const {
   sortComingSoon,
   filterUpcomingOnly
 } = require('../utils/comingSoon');
+const {
+  applyPublicCatalogFilter,
+  filterPublicItems,
+  evaluateContentPolicy,
+  isPubliclyAccessible
+} = require('../utils/contentPolicy');
 const fetch = require('node-fetch');
 // Cloudinary is configured once in utils/cloudinaryUpload; every poster that
 // reaches the database is uploaded there first
@@ -83,7 +89,7 @@ router.get('/', async (req, res) => {
       await promoteReleasedComingSoon(Movie);
     }
 
-    const filter = {};
+    const filter = applyPublicCatalogFilter({});
     if (comingSoonOnly) {
       filter.status = 'coming_soon';
     } else if (hasSearch) {
@@ -123,7 +129,7 @@ router.get('/', async (req, res) => {
       const candidates = await Movie.find(filter)
         .populate('addedBy', 'name email')
         .lean();
-      const upcoming = filterUpcomingOnly(candidates);
+      const upcoming = filterPublicItems(filterUpcomingOnly(candidates));
       const total = upcoming.length;
       const movies = upcoming.slice(skip, skip + limitNum);
 
@@ -149,14 +155,18 @@ router.get('/', async (req, res) => {
         .lean();
       const orderedIds = orderDocsTrendingFirst(candidates, trendingIds, (doc) =>
         extractTmdbId(doc.movieUrl)
-      ).map((doc) => doc._id);
+      )
+        .filter((doc) => isPubliclyAccessible(doc))
+        .map((doc) => doc._id);
       const total = orderedIds.length;
       const pageIds = orderedIds.slice(skip, skip + limitNum);
       const found = await Movie.find({ _id: { $in: pageIds } })
         .populate('addedBy', 'name email')
         .lean();
       const byId = new Map(found.map((m) => [String(m._id), m]));
-      const movies = pageIds.map((id) => byId.get(String(id))).filter(Boolean);
+      const movies = filterPublicItems(
+        pageIds.map((id) => byId.get(String(id))).filter(Boolean)
+      );
 
       return res.json({
         success: true,
@@ -177,11 +187,13 @@ router.get('/', async (req, res) => {
     else if (sort === 'az') sortSpec = { title: 1 };
     
     // Get movies with pagination
-    const movies = await Movie.find(filter)
-      .populate('addedBy', 'name email')
-      .sort(sortSpec)
-      .skip(skip)
-      .limit(limitNum);
+    const movies = filterPublicItems(
+      await Movie.find(filter)
+        .populate('addedBy', 'name email')
+        .sort(sortSpec)
+        .skip(skip)
+        .limit(limitNum)
+    );
     
     // Get total count for pagination
     const total = await Movie.countDocuments(filter);
@@ -282,7 +294,7 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
 router.get('/filters', async (req, res) => {
   try {
     // Split combined strings like "Action, Adventure, Comedy" into single genres
-    const rawGenres = await Movie.distinct('genre', { status: 'active' });
+    const rawGenres = await Movie.distinct('genre', applyPublicCatalogFilter({ status: 'active' }));
     const genreSet = new Set();
     for (const value of rawGenres) {
       String(value || '')
@@ -295,7 +307,7 @@ router.get('/filters', async (req, res) => {
     const genres = Array.from(genreSet).sort((a, b) => a.localeCompare(b));
     
     // Get unique years, sorted descending
-    const years = await Movie.distinct('year', { status: 'active' });
+    const years = await Movie.distinct('year', applyPublicCatalogFilter({ status: 'active' }));
     const sortedYears = years.sort((a, b) => b - a);
     
     res.json({
@@ -321,16 +333,17 @@ router.get('/coming-soon', async (req, res) => {
   try {
     await promoteReleasedComingSoon(Movie);
 
-    const movies = await Movie.find({ status: 'coming_soon' })
-      .select('-__v')
-      .lean();
-
-    // Only keep titles with a future release (nearest first)
-    const upcoming = filterUpcomingOnly(movies);
+    const movies = filterPublicItems(
+      filterUpcomingOnly(
+        await Movie.find(applyPublicCatalogFilter({ status: 'coming_soon' }))
+          .select('-__v')
+          .lean()
+      )
+    );
 
     res.json({
       success: true,
-      data: { movies: upcoming.slice(0, 40) }
+      data: { movies: movies.slice(0, 40) }
     });
   } catch (error) {
     console.error('Get coming soon movies error:', error);
@@ -524,7 +537,7 @@ router.get('/:id', async (req, res) => {
     const movie = await Movie.findById(req.params.id)
       .populate('addedBy', 'name email');
     
-    if (!movie) {
+    if (!movie || !isPubliclyAccessible(movie)) {
       return res.status(404).json({
         success: false,
         message: 'Movie not found'
@@ -654,6 +667,20 @@ router.post('/', protect, restrictToAdmin, [
       return res.status(400).json({
         success: false,
         message: `Missing required fields: ${missingFields.join(', ')}`
+      });
+    }
+
+    const policyCheck = evaluateContentPolicy({
+      title,
+      description,
+      genre,
+      tagline: req.body.tagline
+    });
+    if (policyCheck.restricted) {
+      return res.status(400).json({
+        success: false,
+        message: 'This title cannot be published due to content policy.',
+        reason: policyCheck.reason
       });
     }
 
@@ -915,6 +942,34 @@ router.put('/:id', protect, restrictToAdmin, [
     console.log('updateData.imdbRating:', updateData.imdbRating, 'Type:', typeof updateData.imdbRating);
     console.log('updateData keys:', Object.keys(updateData));
     console.log('Has imdbRating in updateData?', 'imdbRating' in updateData);
+
+    const existing = await Movie.findById(req.params.id).select(
+      'title description genre tagline status policyRestricted'
+    );
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'Movie not found'
+      });
+    }
+
+    const policyCheck = evaluateContentPolicy({
+      title: updateData.title || existing.title,
+      description: updateData.description || existing.description,
+      genre: updateData.genre || existing.genre,
+      tagline: updateData.tagline ?? existing.tagline,
+      policyRestricted: existing.policyRestricted
+    });
+    if (policyCheck.restricted) {
+      updateData.policyRestricted = true;
+      updateData.policyRestrictedReason = policyCheck.reason;
+      if (['active', 'coming_soon'].includes(updateData.status || existing.status)) {
+        updateData.status = 'inactive';
+      }
+    } else {
+      updateData.policyRestricted = false;
+      updateData.policyRestrictedReason = '';
+    }
 
     // Use findByIdAndUpdate with the update object directly (MongoDB will handle it correctly)
     const movie = await Movie.findByIdAndUpdate(
@@ -1488,6 +1543,56 @@ router.get('/:id/ratings', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while fetching movie ratings'
+    });
+  }
+});
+
+// @route   POST /api/movies/admin/enforce-content-policy
+// @desc    Hide titles that violate AdSense content policy
+// @access  Private/Admin
+router.post('/admin/enforce-content-policy', protect, restrictToAdmin, async (req, res) => {
+  try {
+    const movies = await Movie.find({}).select('title description tagline genre status policyRestricted');
+    let movieCount = 0;
+
+    for (const doc of movies) {
+      const result = evaluateContentPolicy(doc);
+      if (!result.restricted) continue;
+      movieCount += 1;
+      doc.policyRestricted = true;
+      doc.policyRestrictedReason = result.reason;
+      if (doc.status === 'active' || doc.status === 'coming_soon') {
+        doc.status = 'inactive';
+      }
+      await doc.save();
+    }
+
+    const TVShow = require('../models/TVShow');
+    const shows = await TVShow.find({}).select('title description tagline genre status policyRestricted');
+    let tvCount = 0;
+
+    for (const doc of shows) {
+      const result = evaluateContentPolicy(doc);
+      if (!result.restricted) continue;
+      tvCount += 1;
+      doc.policyRestricted = true;
+      doc.policyRestrictedReason = result.reason;
+      if (doc.status === 'active' || doc.status === 'coming_soon') {
+        doc.status = 'inactive';
+      }
+      await doc.save();
+    }
+
+    res.json({
+      success: true,
+      message: `Content policy enforced. Restricted ${movieCount} movies and ${tvCount} TV shows.`,
+      data: { restrictedMovies: movieCount, restrictedTvShows: tvCount }
+    });
+  } catch (error) {
+    console.error('Enforce content policy error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while enforcing content policy'
     });
   }
 });

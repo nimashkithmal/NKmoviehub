@@ -346,7 +346,12 @@ const TVShowDetail = () => {
           </div>
 
           <div className="movie-detail-info">
-            <h1 className="movie-detail-title">{tvShow.title}</h1>
+            <h1 className="movie-detail-title">
+              {tvShow.title}
+              {tvShow.matureContent && (
+                <span className="mature-badge" title="Mature content — 18+">18+</span>
+              )}
+            </h1>
             
             <div className="movie-detail-meta">
               <div className="meta-item">

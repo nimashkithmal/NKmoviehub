@@ -120,6 +120,16 @@ const movieSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
+  },
+  policyRestricted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  policyRestrictedReason: {
+    type: String,
+    trim: true,
+    default: ''
   }
 }, {
   timestamps: true

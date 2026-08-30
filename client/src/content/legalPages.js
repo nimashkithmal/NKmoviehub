@@ -79,6 +79,10 @@ export const LEGAL_PAGES = {
         body: `By accessing NK Movie Hub, you agree to these Terms & Conditions. If you do not agree, please do not use the site.`
       },
       {
+        heading: 'Content standards',
+        body: `NK Movie Hub is intended for general audiences. We do not publish sexually explicit, pornographic, or adult-only entertainment. Titles that violate our content standards may be removed or hidden without notice.`
+      },
+      {
         heading: 'Use of the service',
         list: [
           'The site is provided for personal, non-commercial entertainment browsing',

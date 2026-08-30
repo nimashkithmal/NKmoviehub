@@ -43,6 +43,7 @@ const CatalogCard = ({ item, kind = 'movie', onClick }) => {
         />
 
         {kind === 'tvshow' && <span className="catalog-card-badge">TV</span>}
+        {item.matureContent && <span className="catalog-card-badge catalog-card-badge-mature">18+</span>}
 
         <div className="catalog-card-overlay">
           {rating && (
