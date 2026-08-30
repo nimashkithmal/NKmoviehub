@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import MoviePlayer from './MoviePlayer';
 import { trackContentView, trackWatchClick } from '../utils/analytics';
+import { setDetailPageTitle } from '../utils/seo';
 import './MovieDetail.css';
 
 const TVShowDetail = () => {
@@ -26,6 +27,7 @@ const TVShowDetail = () => {
 
   useEffect(() => {
     if (!tvShow?._id) return;
+    setDetailPageTitle(tvShow.title);
     trackContentView({
       contentType: 'tv_show',
       itemId: tvShow._id,

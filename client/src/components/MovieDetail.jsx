@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import MoviePlayer from './MoviePlayer';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 import { trackContentView, trackWatchClick } from '../utils/analytics';
+import { setDetailPageTitle } from '../utils/seo';
 import './MovieDetail.css';
 
 const FAV_KEY = 'nk_favorite_movies';
@@ -153,6 +154,7 @@ const MovieDetail = () => {
 
   useEffect(() => {
     if (!movie?._id) return;
+    setDetailPageTitle(movie.title);
     trackContentView({
       contentType: 'movie',
       itemId: movie._id,

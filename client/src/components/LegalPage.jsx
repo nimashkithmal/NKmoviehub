@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { getLegalPage } from '../content/legalPages';
 import ContactForm from './ContactForm';
@@ -6,12 +6,6 @@ import './LegalPage.css';
 
 const LegalPage = ({ slug }) => {
   const page = getLegalPage(slug);
-
-  useEffect(() => {
-    if (page) {
-      document.title = `${page.title} | NK Movie Hub`;
-    }
-  }, [page]);
 
   if (!page) {
     return <Navigate to="/" replace />;
@@ -51,12 +45,7 @@ const LegalPage = ({ slug }) => {
   );
 };
 
-export const ContactPage = () => {
-  useEffect(() => {
-    document.title = 'Contact Us | NK Movie Hub';
-  }, []);
-
-  return (
+export const ContactPage = () => (
     <div className="legal-page">
     <div className="legal-shell">
       <nav className="legal-breadcrumb" aria-label="Breadcrumb">
@@ -91,7 +80,6 @@ export const ContactPage = () => {
       </div>
     </div>
   </div>
-  );
-};
+);
 
 export default LegalPage;
