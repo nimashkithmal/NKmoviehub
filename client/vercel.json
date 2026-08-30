@@ -21,6 +21,32 @@
   ],
   "rewrites": [
     {
+      "source": "/movie/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(googlebot|google-inspectiontool|adsbot-google|mediapartners-google|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|embedly|pinterest|slackbot).*"
+        }
+      ],
+      "destination": "/api/prerender/movie/:id"
+    },
+    {
+      "source": "/tvshow/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(googlebot|google-inspectiontool|adsbot-google|mediapartners-google|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|embedly|pinterest|slackbot).*"
+        }
+      ],
+      "destination": "/api/prerender/tvshow/:id"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "http://51.20.40.2/api/seo/sitemap.xml"
+    },
+    {
       "source": "/api/:path*",
       "destination": "http://51.20.40.2/api/:path*"
     }

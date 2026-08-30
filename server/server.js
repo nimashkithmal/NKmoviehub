@@ -49,6 +49,7 @@ const notificationRoutes = require('./routes/notifications');
 const discoveryRoutes = require('./routes/discovery');
 const analyticsRoutes = require('./routes/analytics');
 const embedRoutes = require('./routes/embed');
+const seoRoutes = require('./routes/seo');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -84,6 +85,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/discovery', discoveryRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/embed', embedRoutes);
+app.use('/api/seo', seoRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

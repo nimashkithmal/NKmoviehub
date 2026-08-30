@@ -1,0 +1,32 @@
+const { buildTvShowHtml } = require('../../../lib/seoHtml');
+
+const API_BASE = (process.env.API_BASE_URL || 'http://51.20.40.2').replace(/\/$/, '');
+const SITE_ORIGIN = (process.env.SITE_URL || 'https://nkmoviehub.vercel.app').replace(/\/$/, '');
+
+module.exports = async (req, res) => {
+  const { id } = req.query;
+  if (!id) {
+    return res.status(400).send('Missing TV show id');
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/api/tvshows/${id}`);
+    if (!response.ok) {
+      return res.status(response.status).send('TV show not found');
+    }
+
+    const result = await response.json();
+    const tvShow = result?.data?.tvShow;
+    if (!tvShow) {
+      return res.status(404).send('TV show not found');
+    }
+
+    const html = buildTvShowHtml(tvShow, SITE_ORIGIN);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
+    return res.status(200).send(html);
+  } catch (error) {
+    console.error('TV show prerender error:', error);
+    return res.status(500).send('Failed to prerender TV show page');
+  }
+};

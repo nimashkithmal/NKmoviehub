@@ -50,6 +50,7 @@ const upsertLink = (rel, href) => {
 };
 
 const upsertMeta = (selector, attributes, content) => {
+  if (!content) return;
   let meta = document.querySelector(selector);
   if (!meta) {
     meta = document.createElement('meta');
@@ -59,6 +60,12 @@ const upsertMeta = (selector, attributes, content) => {
     document.head.appendChild(meta);
   }
   meta.content = content;
+};
+
+const truncate = (text = '', max = 160) => {
+  const clean = String(text).replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, max - 1).trim()}…`;
 };
 
 export const updatePageSeo = (pathname = '/') => {
@@ -74,6 +81,32 @@ export const updatePageSeo = (pathname = '/') => {
   if (staticTitle) {
     document.title = staticTitle;
   }
+};
+
+export const setDetailPageMeta = ({
+  title,
+  description,
+  image,
+  pathname,
+  type = 'video.movie'
+}) => {
+  if (!title || !pathname) return;
+
+  const pageTitle = `${title} | NK Movie Hub`;
+  const canonical = getCanonicalUrl(pathname);
+  const metaDescription = truncate(description || `Watch ${title} on NK Movie Hub.`);
+
+  document.title = pageTitle;
+  upsertLink('canonical', canonical);
+  upsertMeta('meta[name="description"]', { name: 'description' }, metaDescription);
+  upsertMeta('meta[property="og:title"]', { property: 'og:title' }, pageTitle);
+  upsertMeta('meta[property="og:description"]', { property: 'og:description' }, metaDescription);
+  upsertMeta('meta[property="og:url"]', { property: 'og:url' }, canonical);
+  upsertMeta('meta[property="og:type"]', { property: 'og:type' }, type);
+  upsertMeta('meta[property="og:image"]', { property: 'og:image' }, image || '');
+  upsertMeta('meta[name="twitter:title"]', { name: 'twitter:title' }, pageTitle);
+  upsertMeta('meta[name="twitter:description"]', { name: 'twitter:description' }, metaDescription);
+  upsertMeta('meta[name="twitter:image"]', { name: 'twitter:image' }, image || '');
 };
 
 export const setDetailPageTitle = (title, suffix = 'NK Movie Hub') => {
