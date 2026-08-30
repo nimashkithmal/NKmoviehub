@@ -101,6 +101,75 @@
   color: #fff;
 }
 
+.movie-player-quality {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.movie-player-quality-btn {
+  border: 1px solid var(--gray-400);
+  background: var(--gray-100);
+  color: var(--gray-800);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.movie-player-quality-btn:hover {
+  background: var(--gray-300);
+}
+
+.movie-player-quality-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  min-width: 8.5rem;
+  background: #111;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.65rem;
+  padding: 0.35rem;
+  z-index: 20;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.movie-player-quality-option {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #f3f3f3;
+  text-align: left;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.45rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.movie-player-quality-option:hover,
+.movie-player-quality-option.is-active {
+  background: rgba(229, 9, 20, 0.18);
+  color: #fff;
+}
+
+.movie-player-quality-tip {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  width: min(18rem, 70vw);
+  background: #111;
+  color: #ddd;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.65rem;
+  padding: 0.7rem 0.8rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  z-index: 20;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
 .movie-player-close {
   width: 40px;
   height: 40px;
