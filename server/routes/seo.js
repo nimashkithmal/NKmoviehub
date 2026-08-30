@@ -1,6 +1,7 @@
 const express = require('express');
 const Movie = require('../models/Movie');
 const TVShow = require('../models/TVShow');
+const { buildMovieHtml, buildTvShowHtml } = require('../utils/seoHtml');
 
 const router = express.Router();
 
@@ -93,6 +94,46 @@ ${body}
   } catch (error) {
     console.error('Sitemap error:', error);
     return res.status(500).send('Failed to generate sitemap');
+  }
+});
+
+// @route   GET /api/seo/prerender/movie/:id
+// @desc    Bot-friendly HTML for movie pages
+// @access  Public
+router.get('/prerender/movie/:id', async (req, res) => {
+  try {
+    const movie = await Movie.findById(req.params.id).lean();
+    if (!movie) {
+      return res.status(404).send('Movie not found');
+    }
+
+    const html = buildMovieHtml(movie, SITE_ORIGIN);
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+    return res.send(html);
+  } catch (error) {
+    console.error('Movie prerender error:', error);
+    return res.status(500).send('Failed to prerender movie page');
+  }
+});
+
+// @route   GET /api/seo/prerender/tvshow/:id
+// @desc    Bot-friendly HTML for TV show pages
+// @access  Public
+router.get('/prerender/tvshow/:id', async (req, res) => {
+  try {
+    const tvShow = await TVShow.findById(req.params.id).lean();
+    if (!tvShow) {
+      return res.status(404).send('TV show not found');
+    }
+
+    const html = buildTvShowHtml(tvShow, SITE_ORIGIN);
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+    return res.send(html);
+  } catch (error) {
+    console.error('TV show prerender error:', error);
+    return res.status(500).send('Failed to prerender TV show page');
   }
 });
 

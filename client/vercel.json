@@ -29,7 +29,7 @@
           "value": "(?i).*(googlebot|google-inspectiontool|adsbot-google|mediapartners-google|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|embedly|pinterest|slackbot).*"
         }
       ],
-      "destination": "/api/prerender/movie/:id"
+      "destination": "http://51.20.40.2/api/seo/prerender/movie/:id"
     },
     {
       "source": "/tvshow/:id",
@@ -40,7 +40,7 @@
           "value": "(?i).*(googlebot|google-inspectiontool|adsbot-google|mediapartners-google|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot|embedly|pinterest|slackbot).*"
         }
       ],
-      "destination": "/api/prerender/tvshow/:id"
+      "destination": "http://51.20.40.2/api/seo/prerender/tvshow/:id"
     },
     {
       "source": "/sitemap.xml",
