@@ -6,6 +6,8 @@ const TVShow = require('../models/TVShow');
 const { protect, restrictToAdmin } = require('../middleware/auth');
 const { cloudinary, uploadImage } = require('../utils/cloudinaryUpload');
 
+const { isPubliclyAccessible } = require('../utils/contentPolicy');
+
 const router = express.Router();
 
 const DETAIL_FIELDS = 'title year description genre imdbRating averageRating imageUrl images';
@@ -27,9 +29,15 @@ const populateBanner = (query) =>
 // @route   GET /api/banners
 router.get('/', async (req, res) => {
   try {
-    const banners = await populateBanner(
+    const banners = (await populateBanner(
       Banner.find({ status: 'active' }).sort({ order: 1, createdAt: 1 })
-    ).select('imageUrl title order movie tvShow');
+    )
+      .select('imageUrl title order movie tvShow')
+      .lean()).filter(
+      (banner) =>
+        (!banner.movie || isPubliclyAccessible(banner.movie)) &&
+        (!banner.tvShow || isPubliclyAccessible(banner.tvShow))
+    );
 
     res.json({
       success: true,

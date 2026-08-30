@@ -9,6 +9,7 @@ const {
   pickNowPlayingIds,
   pickTopRatedIds
 } = require('../utils/trendingPopular');
+const { filterPublicItems, isPubliclyAccessible } = require('../utils/contentPolicy');
 
 const router = express.Router();
 
@@ -17,7 +18,8 @@ const hydrateMovies = async (orderedIds, limit = 20) => {
   if (!pageIds.length) return [];
   const found = await Movie.find({
     _id: { $in: pageIds },
-    status: 'active'
+    status: 'active',
+    policyRestricted: { $ne: true }
   })
     .select('-__v')
     .lean();
@@ -30,7 +32,8 @@ const hydrateTVShows = async (orderedIds, limit = 20) => {
   if (!pageIds.length) return [];
   const found = await TVShow.find({
     _id: { $in: pageIds },
-    status: 'active'
+    status: 'active',
+    policyRestricted: { $ne: true }
   })
     .select('-__v')
     .lean();
@@ -40,7 +43,7 @@ const hydrateTVShows = async (orderedIds, limit = 20) => {
 
 const matchMovieIds = async (tmdbIds) => {
   if (!tmdbIds.length) return [];
-  const candidates = await Movie.find({ status: 'active' })
+  const candidates = await Movie.find({ status: 'active', policyRestricted: { $ne: true } })
     .select('_id movieUrl')
     .lean();
   return orderDocsByTrending(candidates, tmdbIds, (doc) =>
@@ -50,7 +53,7 @@ const matchMovieIds = async (tmdbIds) => {
 
 const matchTvIds = async (tmdbIds) => {
   if (!tmdbIds.length) return [];
-  const candidates = await TVShow.find({ status: 'active' })
+  const candidates = await TVShow.find({ status: 'active', policyRestricted: { $ne: true } })
     .select('_id showUrl episodes.episodeUrl')
     .lean();
   return orderDocsByTrending(candidates, tmdbIds, extractTvTmdbId).map(
@@ -94,7 +97,7 @@ router.get('/home', async (req, res) => {
 
     // If external trending is unavailable, fall back to local catalog order.
     if (!trendingMovieIds.length) {
-      const fallbackMovies = await Movie.find({ status: 'active' })
+      const fallbackMovies = await Movie.find({ status: 'active', policyRestricted: { $ne: true } })
         .sort({ imdbRating: -1, year: -1, createdAt: -1 })
         .select('_id')
         .limit(limit)
@@ -105,7 +108,7 @@ router.get('/home', async (req, res) => {
     }
 
     if (!trendingShowIds.length) {
-      const fallbackShows = await TVShow.find({ status: 'active' })
+      const fallbackShows = await TVShow.find({ status: 'active', policyRestricted: { $ne: true } })
         .sort({ imdbRating: -1, year: -1, createdAt: -1 })
         .select('_id')
         .limit(limit)
@@ -124,10 +127,10 @@ router.get('/home', async (req, res) => {
     res.json({
       success: true,
       data: {
-        trendingNow,
-        nowPlaying,
-        trendingTVShows,
-        topRatedMovies,
+        trendingNow: filterPublicItems(trendingNow),
+        nowPlaying: filterPublicItems(nowPlaying),
+        trendingTVShows: filterPublicItems(trendingTVShows),
+        topRatedMovies: filterPublicItems(topRatedMovies),
         meta: {
           source: weekMovies.length || weekTv.length ? 'live' : 'catalog',
           refreshedAt: new Date().toISOString(),

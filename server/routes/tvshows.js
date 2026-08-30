@@ -16,6 +16,12 @@ const {
   sortComingSoon,
   filterUpcomingOnly
 } = require('../utils/comingSoon');
+const {
+  applyPublicCatalogFilter,
+  filterPublicItems,
+  evaluateContentPolicy,
+  isPubliclyAccessible
+} = require('../utils/contentPolicy');
 
 const router = express.Router();
 
@@ -62,6 +68,7 @@ const pickMetaFields = (body = {}) => {
   }
   if (body.budget !== undefined) meta.budget = parseMoneyInput(body.budget);
   if (body.revenue !== undefined) meta.revenue = parseMoneyInput(body.revenue);
+  if (body.matureContent !== undefined) meta.matureContent = body.matureContent === true || body.matureContent === 'true';
   return meta;
 };
 
@@ -80,7 +87,7 @@ router.get('/', async (req, res) => {
       await promoteReleasedComingSoon(TVShow);
     }
 
-    const filter = {};
+    const filter = applyPublicCatalogFilter({});
     if (comingSoonOnly) {
       filter.status = 'coming_soon';
     } else if (hasSearch) {
@@ -119,7 +126,7 @@ router.get('/', async (req, res) => {
       const candidates = await TVShow.find(filter)
         .populate('addedBy', 'name email')
         .lean();
-      const upcoming = filterUpcomingOnly(candidates);
+      const upcoming = filterPublicItems(filterUpcomingOnly(candidates));
       const total = upcoming.length;
       const tvShows = upcoming.slice(skip, skip + limitNum);
 
@@ -143,16 +150,18 @@ router.get('/', async (req, res) => {
       const candidates = await TVShow.find(filter)
         .select('_id showUrl episodes.episodeUrl imdbRating averageRating year title')
         .lean();
-      const orderedIds = orderDocsTrendingFirst(candidates, trendingIds, extractTvTmdbId).map(
-        (doc) => doc._id
-      );
+      const orderedIds = orderDocsTrendingFirst(candidates, trendingIds, extractTvTmdbId)
+        .filter((doc) => isPubliclyAccessible(doc))
+        .map((doc) => doc._id);
       const total = orderedIds.length;
       const pageIds = orderedIds.slice(skip, skip + limitNum);
       const found = await TVShow.find({ _id: { $in: pageIds } })
         .populate('addedBy', 'name email')
         .lean();
       const byId = new Map(found.map((s) => [String(s._id), s]));
-      const tvShows = pageIds.map((id) => byId.get(String(id))).filter(Boolean);
+      const tvShows = filterPublicItems(
+        pageIds.map((id) => byId.get(String(id))).filter(Boolean)
+      );
 
       return res.json({
         success: true,
@@ -173,11 +182,13 @@ router.get('/', async (req, res) => {
     else if (sort === 'az') sortSpec = { title: 1 };
     
     // Get TV shows with pagination
-    const tvShows = await TVShow.find(filter)
-      .populate('addedBy', 'name email')
-      .sort(sortSpec)
-      .skip(skip)
-      .limit(limitNum);
+    const tvShows = filterPublicItems(
+      await TVShow.find(filter)
+        .populate('addedBy', 'name email')
+        .sort(sortSpec)
+        .skip(skip)
+        .limit(limitNum)
+    );
     
     // Get total count for pagination
     const total = await TVShow.countDocuments(filter);
@@ -357,7 +368,7 @@ router.get('/:id', async (req, res) => {
     const tvShow = await TVShow.findById(req.params.id)
       .populate('addedBy', 'name email');
     
-    if (!tvShow) {
+    if (!tvShow || !isPubliclyAccessible(tvShow)) {
       return res.status(404).json({
         success: false,
         message: 'TV Show not found'

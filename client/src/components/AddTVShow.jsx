@@ -22,6 +22,7 @@ const AddTVShow = () => {
     releaseDate: '',
     tagline: '',
     trailerUrl: '',
+    matureContent: false,
     imageFiles: [],
     numberOfSeasons: 0
   });
@@ -284,6 +285,7 @@ const AddTVShow = () => {
         releaseDate: formData.releaseDate,
         tagline: formData.tagline,
         trailerUrl: formData.trailerUrl,
+        matureContent: formData.matureContent,
         imageFiles: base64Images, // Send array of base64 images
         numberOfSeasons: formData.numberOfSeasons || (seasons.length > 0 ? seasons.length : 1)
       };
@@ -518,6 +520,20 @@ const AddTVShow = () => {
               {getFieldError('imdbRating') && (
                 <small className="error-message">{getFieldError('imdbRating')}</small>
               )}
+            </div>
+
+            <div className="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  name="matureContent"
+                  checked={formData.matureContent}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, matureContent: e.target.checked }))}
+                  style={{ marginRight: '0.5rem' }}
+                />
+                18+ mature content
+              </label>
+              <small>Shows an 18+ badge on posters and the detail page.</small>
             </div>
           </div>
 

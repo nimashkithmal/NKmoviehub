@@ -147,6 +147,21 @@ const tvShowSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
+  },
+  policyRestricted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  policyRestrictedReason: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  matureContent: {
+    type: Boolean,
+    default: false,
+    index: true
   }
 }, {
   timestamps: true

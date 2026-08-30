@@ -87,6 +87,13 @@
   border-radius: 0.3rem;
 }
 
+.catalog-card-badge-mature {
+  top: auto;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  background: #b91c1c;
+}
+
 .catalog-card-overlay {
   position: absolute;
   inset: 0;

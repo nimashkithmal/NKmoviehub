@@ -2,6 +2,7 @@ const express = require('express');
 const Movie = require('../models/Movie');
 const TVShow = require('../models/TVShow');
 const { buildMovieHtml, buildTvShowHtml } = require('../utils/seoHtml');
+const { isPubliclyAccessible } = require('../utils/contentPolicy');
 
 const router = express.Router();
 
@@ -41,11 +42,11 @@ const xmlEscape = (value = '') =>
 router.get('/sitemap.xml', async (req, res) => {
   try {
     const [movies, tvShows] = await Promise.all([
-      Movie.find({ status: { $in: ['active', 'coming_soon'] } })
+      Movie.find({ status: { $in: ['active', 'coming_soon'] }, policyRestricted: { $ne: true } })
         .select('_id updatedAt')
         .sort({ updatedAt: -1 })
         .lean(),
-      TVShow.find({ status: { $in: ['active', 'coming_soon'] } })
+      TVShow.find({ status: { $in: ['active', 'coming_soon'] }, policyRestricted: { $ne: true } })
         .select('_id updatedAt')
         .sort({ updatedAt: -1 })
         .lean()
@@ -103,7 +104,7 @@ ${body}
 router.get('/prerender/movie/:id', async (req, res) => {
   try {
     const movie = await Movie.findById(req.params.id).lean();
-    if (!movie) {
+    if (!movie || !isPubliclyAccessible(movie)) {
       return res.status(404).send('Movie not found');
     }
 
@@ -123,7 +124,7 @@ router.get('/prerender/movie/:id', async (req, res) => {
 router.get('/prerender/tvshow/:id', async (req, res) => {
   try {
     const tvShow = await TVShow.findById(req.params.id).lean();
-    if (!tvShow) {
+    if (!tvShow || !isPubliclyAccessible(tvShow)) {
       return res.status(404).send('TV show not found');
     }
 
