@@ -9,7 +9,7 @@ const BLOCKED_GENRE_PATTERNS = [
 ];
 
 const BLOCKED_TEXT_PATTERNS = [
-  /\b(porn|hentai|playboy|x-?rated|onlyfans)\b/i,
+  /\b(porn|hentai|x-?rated|onlyfans)\b/i,
   /\b(adult film|adult movie|adult video|adult entertainment|adult only)\b/i,
   /\b(pornographic|sexually explicit|graphic sex|hardcore porn)\b/i,
   /\b(sexual fetish|sex shop|sex toy)\b/i,

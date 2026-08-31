@@ -1,10 +1,12 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import CatalogCard from './CatalogCard';
+import { withReturnPath } from '../utils/navigation';
 import './CatalogGrid.css';
 
 const TVShowGrid = ({ tvShows, searchTerm = '', selectedGenre = '', selectedYear = '' }) => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const hasSearchTerm = searchTerm && searchTerm.trim().length > 0;
   const hasGenreFilter = selectedGenre && selectedGenre.trim().length > 0;
@@ -30,7 +32,7 @@ const TVShowGrid = ({ tvShows, searchTerm = '', selectedGenre = '', selectedYear
               key={tvShow._id}
               item={tvShow}
               kind="tvshow"
-              onClick={() => navigate(`/tvshow/${tvShow._id}`)}
+              onClick={() => navigate(`/tvshow/${tvShow._id}`, withReturnPath(location))}
             />
           ))}
         </div>

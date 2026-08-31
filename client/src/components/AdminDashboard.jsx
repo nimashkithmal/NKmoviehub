@@ -67,7 +67,8 @@ const AdminDashboard = () => {
     releaseDate: '',
     tagline: '',
     trailerUrl: '',
-    matureContent: false
+    matureContent: false,
+    tmdbId: ''
   });
   const [tvShowImageFiles, setTVShowImageFiles] = useState([]);
   const [tvShowImagePreviews, setTVShowImagePreviews] = useState([]);
@@ -813,7 +814,8 @@ const AdminDashboard = () => {
       releaseDate: tvShow.releaseDate || '',
       tagline: tvShow.tagline || '',
       trailerUrl: tvShow.trailerUrl || '',
-      matureContent: !!tvShow.matureContent
+      matureContent: !!tvShow.matureContent,
+      tmdbId: tvShow.tmdbId || ''
     });
     
     // Gallery posters only — never include the detail banner
@@ -2206,6 +2208,16 @@ const AdminDashboard = () => {
                 onChange={(e) => setTVShowFormData({...tvShowFormData, tagline: e.target.value})}
                 placeholder="Optional short tagline"
               />
+            </div>
+            <div className="form-group">
+              <label>TMDB TV ID (optional)</label>
+              <input
+                type="text"
+                value={tvShowFormData.tmdbId || ''}
+                onChange={(e) => setTVShowFormData({ ...tvShowFormData, tmdbId: e.target.value })}
+                placeholder="e.g. 81356"
+              />
+              <small>Used for alternate streaming servers on the watch page.</small>
             </div>
             <div className="form-group">
               <label>

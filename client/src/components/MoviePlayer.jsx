@@ -81,73 +81,19 @@ const getEmbedPlayableUrl = (url) => {
     const id = tvEmbedMatch[1];
     const s = tvEmbedMatch[2];
     const e = tvEmbedMatch[3];
-    if (s && e) return `https://www.2embed.cc/embedtv/${id}?s=${s}&e=${e}`;
-    if (s) return `https://www.2embed.cc/embedtv/${id}?s=${s}`;
+    if (s && e) return `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`;
+    if (s) return `https://www.2embed.cc/embedtv/${id}&s=${s}`;
     return `https://www.2embed.cc/embedtv/${id}`;
   }
 
   const tvMatch = url.match(/2embed\.[^/]+\/tv\/(\d+)/i);
   if (tvMatch) return `https://www.2embed.cc/embedtv/${tvMatch[1]}`;
 
-  // Already an embed URL — normalize odd &s= form
-  if (url.includes('/embedtv/') && url.includes('&s=') && !url.includes('?')) {
-    return url.replace(/\/embedtv\/(\d+)&/, '/embedtv/$1?');
-  }
   if (url.includes('/embed/') || url.includes('/embedtv/')) return url;
   return url;
 };
 
-/** Build alternate iframe sources when 2embed has no stream for a title */
-const buildEmbedSources = (url) => {
-  const primary = getEmbedPlayableUrl(url);
-  if (!primary) return [];
-
-  const sources = [{ id: '2embed', label: 'Server 1', url: primary }];
-
-  const tmdbMovie = primary.match(/2embed\.[^/]+\/embed\/(\d+)/i);
-  const imdbMovie = primary.match(/2embed\.[^/]+\/embed\/(tt\d+)/i);
-  const tvMatch = primary.match(
-    /2embed\.[^/]+\/embedtv\/(\d+)(?:\?s=(\d+)(?:&e=(\d+))?)?/i
-  );
-
-  if (tmdbMovie) {
-    const id = tmdbMovie[1];
-    sources.push({
-      id: 'vidsrc',
-      label: 'Server 2',
-      url: `https://vidsrc.to/embed/movie/${id}`
-    });
-    sources.push({
-      id: 'vidsrcme',
-      label: 'Server 3',
-      url: `https://vidsrc.me/embed/movie/${id}`
-    });
-  } else if (imdbMovie) {
-    const id = imdbMovie[1];
-    sources.push({
-      id: 'vidsrc-imdb',
-      label: 'Server 2',
-      url: `https://vidsrc.to/embed/movie?imdb=${id}`
-    });
-  } else if (tvMatch) {
-    const id = tvMatch[1];
-    const s = tvMatch[2] || '1';
-    const e = tvMatch[3] || '1';
-    sources.push({
-      id: 'vidsrc-tv',
-      label: 'Server 2',
-      url: `https://vidsrc.to/embed/tv/${id}/${s}/${e}`
-    });
-  }
-
-  // De-dupe by URL
-  const seen = new Set();
-  return sources.filter((s) => {
-    if (seen.has(s.url)) return false;
-    seen.add(s.url);
-    return true;
-  });
-};
+import { buildEmbedSourcesFromUrl } from '../utils/embedSources';
 
 // Helper function to extract Google Drive file ID and convert to playable URL
 const getGoogleDrivePlayableUrl = (url) => {
@@ -257,7 +203,7 @@ const MoviePlayer = ({ movie, onClose }) => {
         setIsLoading(false);
       }
     } else if (type === 'embed') {
-      const sources = buildEmbedSources(movie.movieUrl);
+      const sources = buildEmbedSourcesFromUrl(movie.movieUrl);
       if (sources.length) {
         setEmbedSources(sources);
         setActiveSourceId(sources[0].id);

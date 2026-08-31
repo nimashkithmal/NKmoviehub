@@ -732,6 +732,24 @@
   display: block;
 }
 
+.md-poster-tv {
+  position: relative;
+}
+
+.md-poster-badge {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  z-index: 2;
+  background: #e50914;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.25rem;
+}
+
 .md-copy {
   display: flex;
   flex-direction: column;
