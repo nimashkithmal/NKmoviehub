@@ -4,7 +4,28 @@
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href="%PUBLIC_URL%/favicon.svg" />
     <link rel="alternate icon" href="%PUBLIC_URL%/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" id="viewport-meta" />
+    <script>
+      (function () {
+        var meta = document.getElementById('viewport-meta');
+        if (!meta) return;
+        var mobileMq = window.matchMedia('(max-width: 1024px)');
+        function applyViewport() {
+          meta.setAttribute(
+            'content',
+            mobileMq.matches
+              ? 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'
+              : 'width=device-width, initial-scale=1'
+          );
+        }
+        applyViewport();
+        if (mobileMq.addEventListener) {
+          mobileMq.addEventListener('change', applyViewport);
+        } else if (mobileMq.addListener) {
+          mobileMq.addListener(applyViewport);
+        }
+      })();
+    </script>
     <meta name="theme-color" content="#000000" />
     <meta name="robots" content="index, follow" />
     <meta name="google-site-verification" content="Tpr0JoBaznAG0gZzE9v4N-QXyqOrE7Le43LuevQEGMw" />

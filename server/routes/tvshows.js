@@ -23,6 +23,10 @@ const {
   isPubliclyAccessible
 } = require('../utils/contentPolicy');
 const { normalizeEpisodeRecord, extractTmdbId } = require('../utils/tvEpisodeUrls');
+const {
+  applyLanguageFilter,
+  collectLanguageOptions
+} = require('../utils/languageFilter');
 
 const processEpisodeList = (episodes = [], tmdbId = '') =>
   episodes
@@ -96,7 +100,16 @@ const pickMetaFields = (body = {}) => {
 // @access  Public
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 1000, search = '', genre = '', year = '', status = 'active', sort = 'latest' } = req.query;
+    const {
+      page = 1,
+      limit = 1000,
+      search = '',
+      genre = '',
+      year = '',
+      language = '',
+      status = 'active',
+      sort = 'popular'
+    } = req.query;
     
     // Public catalog: active by default; Coming Soon category uses status=coming_soon
     // Search should also find Coming Soon titles
@@ -134,6 +147,8 @@ router.get('/', async (req, res) => {
     if (year) {
       filter.year = parseInt(year);
     }
+
+    applyLanguageFilter(filter, language);
 
     // Calculate pagination
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -319,12 +334,16 @@ router.get('/filters', async (req, res) => {
     // Get unique years, sorted descending
     const years = await TVShow.distinct('year', { status: 'active' });
     const sortedYears = years.sort((a, b) => b - a);
+
+    const rawLanguages = await TVShow.distinct('language', { status: 'active' });
+    const languages = collectLanguageOptions(rawLanguages);
     
     res.json({
       success: true,
       data: {
         genres,
-        years: sortedYears
+        years: sortedYears,
+        languages
       }
     });
   } catch (error) {

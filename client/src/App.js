@@ -12,6 +12,7 @@ import MovieDetail from './components/MovieDetail';
 import TVShowDetail from './components/TVShowDetail';
 import TVWatchPage from './components/TVWatchPage';
 import Collections from './components/Collections';
+import CastCollection from './components/CastCollection';
 import LegalPage, { ContactPage } from './components/LegalPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -41,7 +42,7 @@ const AppShell = () => {
     location.pathname.startsWith('/tvshow/') ||
     location.pathname.startsWith('/watch/');
   const isFullBleedMain =
-    isDetailPage || location.pathname === '/collections';
+    isDetailPage || location.pathname === '/collections' || location.pathname === '/cast-collection';
 
   useEffect(() => {
     updatePageSeo(location.pathname);
@@ -55,6 +56,7 @@ const AppShell = () => {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/collections" element={<Collections />} />
+          <Route path="/cast-collection" element={<CastCollection />} />
           <Route path="/about" element={<LegalPage slug="about" />} />
           <Route path="/privacy" element={<LegalPage slug="privacy" />} />
           <Route path="/terms" element={<LegalPage slug="terms" />} />

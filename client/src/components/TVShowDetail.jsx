@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 import { trackContentView, trackWatchClick } from '../utils/analytics';
 import { setDetailPageMeta } from '../utils/seo';
+import { toTrailerEmbedUrl } from '../utils/trailerUrl';
 import { getTvShowTmdbId } from '../utils/tvEpisodes';
 import { goBackOr, withReturnPath } from '../utils/navigation';
 import './MovieDetail.css';
@@ -209,7 +210,7 @@ const TVShowDetail = () => {
             </button>
             <iframe
               title={`${tvShow.title} trailer`}
-              src={`${trailerUrl}${trailerUrl.includes('?') ? '&' : '?'}autoplay=1`}
+              src={toTrailerEmbedUrl(trailerUrl)}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />

@@ -81,8 +81,13 @@ export const buildEmbedSourcesFromUrl = (url) => {
   const imdbMovie = primary.match(/2embed\.[^/]+\/embed\/(tt\d+)/i);
   if (movieMatch) {
     const id = movieMatch[1];
-    sources.push({ url: `https://vidsrc.to/embed/movie/${id}` });
-    sources.push({ url: `https://vidsrc.me/embed/movie/${id}` });
+    sources.push(
+      { url: `https://vidsrc.to/embed/movie/${id}` },
+      { url: `https://vidsrc.me/embed/movie/${id}` },
+      { url: `https://embed.su/embed/movie/${id}` },
+      { url: `https://player.autoembed.cc/embed/movie/${id}` },
+      { url: `https://vidsrcme.ru/embed/movie/${id}` }
+    );
   } else if (imdbMovie) {
     sources.push({ url: `https://vidsrc.to/embed/movie?imdb=${imdbMovie[1]}` });
   }

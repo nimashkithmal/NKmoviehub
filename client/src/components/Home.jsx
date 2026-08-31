@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import MovieGrid from './MovieGrid';
 import TVShowGrid from './TVShowGrid';
@@ -9,6 +8,7 @@ import PosterCard from './PosterCard';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 import { buildMoviesUrl, buildTVShowsUrl } from '../utils/fetchAllPaged';
 import { withReturnPath } from '../utils/navigation';
+import BrowseCatalogToolbar from './BrowseCatalogToolbar';
 import './MovieGrid.css';
 import './HomeDiscovery.css';
 import './BrowseShelf.css';
@@ -18,6 +18,8 @@ const PAGE_SIZE = 20;
 const BATCH_SIZE = 500;
 const DISCOVERY_CACHE_KEY = 'nk-home-discovery-v1';
 const DISCOVERY_CACHE_TTL_MS = 15 * 60 * 1000;
+/** How often home rows refetch while the discovery page stays open */
+const HOME_LIVE_REFRESH_MS = 10 * 60 * 1000;
 
 const readDiscoveryCache = () => {
   try {
@@ -78,7 +80,6 @@ const batchIndexForPage = (page) =>
   Math.floor(((Math.max(1, page) - 1) * PAGE_SIZE) / BATCH_SIZE);
 
 const Home = () => {
-  const { isAuthenticated, token } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [movies, setMovies] = useState([]);
@@ -88,21 +89,17 @@ const Home = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState('');
   const [comingSoonOnly, setComingSoonOnly] = useState(false);
-  const [userRatings, setUserRatings] = useState({});
-  const [ratingLoading, setRatingLoading] = useState({});
   const [contentType, setContentType] = useState('movies');
-  const [availableGenres, setAvailableGenres] = useState([]);
-  const [availableYears, setAvailableYears] = useState([]);
-  const [filtersLoading, setFiltersLoading] = useState(false);
   const [homeBanners, setHomeBanners] = useState([]);
   const [comingSoonItems, setComingSoonItems] = useState([]);
   const [comingSoonLoading, setComingSoonLoading] = useState(true);
+  const [comingSoonRefreshing, setComingSoonRefreshing] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [heroReady, setHeroReady] = useState(false);
   const [forceBrowse, setForceBrowse] = useState(false);
-  const [sortBy, setSortBy] = useState('latest'); // popular | latest | rated | az
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sortBy, setSortBy] = useState('popular'); // popular | latest | rated | az
   const [currentPage, setCurrentPage] = useState(1);
   const [catalogTotal, setCatalogTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -115,7 +112,9 @@ const Home = () => {
   const batchCacheRef = useRef(new Map());
   const catalogQueryKeyRef = useRef('');
 
-  const hasActiveFilters = Boolean(searchTerm || selectedGenre || selectedYear || comingSoonOnly);
+  const hasActiveFilters = Boolean(
+    searchTerm || selectedGenre || selectedYear || selectedLanguage || comingSoonOnly
+  );
   const isDiscoveryMode = !hasActiveFilters && contentType === 'movies' && !forceBrowse;
 
   useEffect(() => {
@@ -132,66 +131,93 @@ const Home = () => {
       }
     };
 
-    const fetchComingSoon = async () => {
-      try {
-        setComingSoonLoading(true);
-        const [moviesRes, tvRes] = await Promise.all([
-          fetch('/api/movies/coming-soon'),
-          fetch('/api/tvshows/coming-soon')
-        ]);
-        const moviesJson = await moviesRes.json();
-        const tvJson = await tvRes.json();
-        const movies = moviesJson.success
-          ? (moviesJson.data.movies || []).map((m) => ({ ...m, _kind: 'movie' }))
-          : [];
-        const shows = tvJson.success
-          ? (tvJson.data.tvShows || []).map((t) => ({ ...t, _kind: 'tvshow' }))
-          : [];
-        setComingSoonItems(
-          [...movies, ...shows].sort((a, b) => {
-            const key = (item) => {
-              if (item.releaseDate) {
-                const iso = String(item.releaseDate).match(/^(\d{4}-\d{2}-\d{2})/);
-                if (iso) return iso[1];
-                const t = Date.parse(item.releaseDate);
-                if (!Number.isNaN(t)) return new Date(t).toISOString().slice(0, 10);
-              }
-              if (item.year) return `${item.year}-12-31`;
-              return '9999-12-31';
-            };
-            const diff = key(a).localeCompare(key(b));
-            if (diff !== 0) return diff;
-            return String(a.title || '').localeCompare(String(b.title || ''));
-          })
-        );
-      } catch (err) {
-        console.error('Error fetching coming soon:', err);
-      } finally {
-        setComingSoonLoading(false);
+    fetchBanners();
+  }, []);
+
+  const loadComingSoon = useCallback(async ({ showRefresh = false } = {}) => {
+    if (showRefresh) setComingSoonRefreshing(true);
+    else setComingSoonLoading(true);
+    try {
+      const [moviesRes, tvRes] = await Promise.all([
+        fetch('/api/movies/coming-soon'),
+        fetch('/api/tvshows/coming-soon')
+      ]);
+      const moviesJson = await moviesRes.json();
+      const tvJson = await tvRes.json();
+      const movies = moviesJson.success
+        ? (moviesJson.data.movies || []).map((m) => ({ ...m, _kind: 'movie' }))
+        : [];
+      const shows = tvJson.success
+        ? (tvJson.data.tvShows || []).map((t) => ({ ...t, _kind: 'tvshow' }))
+        : [];
+      setComingSoonItems(
+        [...movies, ...shows].sort((a, b) => {
+          const key = (item) => {
+            if (item.releaseDate) {
+              const iso = String(item.releaseDate).match(/^(\d{4}-\d{2}-\d{2})/);
+              if (iso) return iso[1];
+              const t = Date.parse(item.releaseDate);
+              if (!Number.isNaN(t)) return new Date(t).toISOString().slice(0, 10);
+            }
+            if (item.year) return `${item.year}-12-31`;
+            return '9999-12-31';
+          };
+          const diff = key(a).localeCompare(key(b));
+          if (diff !== 0) return diff;
+          return String(a.title || '').localeCompare(String(b.title || ''));
+        })
+      );
+    } catch (err) {
+      console.error('Error fetching coming soon:', err);
+    } finally {
+      setComingSoonLoading(false);
+      setComingSoonRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isDiscoveryMode) return undefined;
+
+    loadComingSoon();
+    const refreshId = setInterval(
+      () => loadComingSoon({ showRefresh: true }),
+      HOME_LIVE_REFRESH_MS
+    );
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadComingSoon({ showRefresh: true });
       }
     };
+    document.addEventListener('visibilitychange', onVisible);
 
-    fetchBanners();
-    fetchComingSoon();
-  }, []);
+    return () => {
+      clearInterval(refreshId);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [isDiscoveryMode, loadComingSoon]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     setSearchTerm(params.get('search') || '');
     setSelectedGenre(params.get('genre') || '');
     setSelectedYear(params.get('year') || '');
+    setSelectedLanguage(params.get('language') || '');
     setComingSoonOnly(params.get('category') === 'coming-soon');
     setContentType(params.get('type') === 'tvshows' ? 'tvshows' : 'movies');
     setForceBrowse(params.get('browse') === '1');
     const sortParam = params.get('sort');
     if (sortParam === 'popular' || sortParam === 'rated' || sortParam === 'az' || sortParam === 'latest') {
       setSortBy(sortParam);
+    } else {
+      setSortBy('popular');
     }
     setCurrentPage(1);
 
     if (
       params.get('genre') ||
       params.get('year') ||
+      params.get('language') ||
       params.get('search') ||
       params.get('type') === 'tvshows' ||
       params.get('browse') === '1' ||
@@ -211,85 +237,14 @@ const Home = () => {
     return () => clearInterval(interval);
   }, [homeBanners.length]);
 
-  useEffect(() => {
-    const fetchFilters = async () => {
-      try {
-        setFiltersLoading(true);
-        const apiEndpoint = contentType === 'tvshows' ? '/api/tvshows/filters' : '/api/movies/filters';
-        const response = await fetch(apiEndpoint);
-        const result = await response.json();
-        if (result.success) {
-          setAvailableGenres(result.data.genres || []);
-          setAvailableYears(result.data.years || []);
-        }
-      } catch (err) {
-        console.error('Error fetching filters:', err);
-        setAvailableGenres([]);
-        setAvailableYears([]);
-      } finally {
-        setFiltersLoading(false);
-      }
-    };
-
-    fetchFilters();
-  }, [contentType]);
-
-  const buildBrowseParams = useCallback(
-    (mutator) => {
-      const params = new URLSearchParams(location.search);
-      mutator(params);
-      if (contentType === 'tvshows') {
-        params.set('type', 'tvshows');
-        params.delete('browse');
-      } else {
-        params.delete('type');
-        params.set('browse', '1');
-      }
-      const queryString = params.toString();
-      navigate(queryString ? `/?${queryString}` : '/?browse=1', { replace: true });
-    },
-    [navigate, location.search, contentType]
-  );
-
-  const handleGenreSelect = (genre) => {
-    buildBrowseParams((params) => {
-      if (!genre || selectedGenre === genre) params.delete('genre');
-      else {
-        params.set('genre', genre);
-        params.delete('search');
-      }
-    });
-  };
-
-  const handleYearSelect = (year) => {
-    buildBrowseParams((params) => {
-      const value = year == null ? '' : String(year);
-      if (!value || selectedYear === value) params.delete('year');
-      else {
-        params.set('year', value);
-        params.delete('search');
-      }
-    });
-  };
-
-  const handleComingSoonSelect = (enabled) => {
-    buildBrowseParams((params) => {
-      if (!enabled || comingSoonOnly) params.delete('category');
-      else {
-        params.set('category', 'coming-soon');
-        params.delete('search');
-      }
-    });
-  };
-
   const openComingSoonCategory = () => {
     navigate('/?browse=1&category=coming-soon');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const switchContentType = (nextType) => {
-    if (nextType === 'tvshows') navigate('/?type=tvshows');
-    else navigate('/?browse=1');
+    if (nextType === 'tvshows') navigate('/?type=tvshows&sort=popular');
+    else navigate('/?browse=1&sort=popular');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -300,10 +255,11 @@ const Home = () => {
         searchTerm.trim(),
         selectedGenre,
         selectedYear,
+        selectedLanguage,
         comingSoonOnly ? 'coming-soon' : '',
         sortBy
       ].join('|'),
-    [contentType, searchTerm, selectedGenre, selectedYear, comingSoonOnly, sortBy]
+    [contentType, searchTerm, selectedGenre, selectedYear, selectedLanguage, comingSoonOnly, sortBy]
   );
 
   const applyBatchToState = useCallback(
@@ -344,6 +300,7 @@ const Home = () => {
           search: searchTerm,
           genre: selectedGenre,
           year: selectedYear,
+          language: selectedLanguage,
           sort: sortBy,
           status: comingSoonOnly ? 'coming_soon' : ''
         }),
@@ -371,6 +328,7 @@ const Home = () => {
       searchTerm,
       selectedGenre,
       selectedYear,
+      selectedLanguage,
       comingSoonOnly,
       sortBy,
       applyBatchToState
@@ -450,12 +408,23 @@ const Home = () => {
     };
 
     bootstrapDiscovery();
-    const refreshId = setInterval(() => loadLiveDiscovery({ showRefresh: true }), 10 * 60 * 1000);
+    const refreshId = setInterval(
+      () => loadLiveDiscovery({ showRefresh: true }),
+      HOME_LIVE_REFRESH_MS
+    );
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadLiveDiscovery({ showRefresh: hasDiscoveryRows(readDiscoveryCache()) });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
 
     return () => {
       cancelled = true;
       controller.abort();
       clearInterval(refreshId);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [isDiscoveryMode]);
 
@@ -517,106 +486,9 @@ const Home = () => {
   }, [isDiscoveryMode, catalogQueryKey, currentPage, searchTerm, fetchCatalogBatch, contentType]);
 
   const clearFilters = useCallback(() => {
-    if (contentType === 'tvshows') navigate('/?type=tvshows', { replace: true });
-    else navigate('/?browse=1', { replace: true });
+    if (contentType === 'tvshows') navigate('/?type=tvshows&sort=popular', { replace: true });
+    else navigate('/?browse=1&sort=popular', { replace: true });
   }, [navigate, contentType]);
-
-  const fetchUserRatings = useCallback(async () => {
-    if (!isAuthenticated || contentType === 'tvshows') return;
-    const start = ((currentPage - 1) * PAGE_SIZE) % BATCH_SIZE;
-    const visible = movies.slice(start, start + PAGE_SIZE);
-    if (visible.length === 0) return;
-    try {
-      const ratingPromises = visible.map(async (movie) => {
-        try {
-          const response = await fetch(`/api/movies/${movie._id}/rating`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (response.ok) {
-            const result = await response.json();
-            return { movieId: movie._id, ...result.data };
-          }
-        } catch (err) {
-          console.error(`Error fetching rating for movie ${movie._id}:`, err);
-        }
-        return { movieId: movie._id, rating: null, review: '', hasRated: false };
-      });
-
-      const ratings = await Promise.all(ratingPromises);
-      const ratingsMap = {};
-      ratings.forEach((rating) => {
-        ratingsMap[rating.movieId] = rating;
-      });
-      setUserRatings((prev) => ({ ...prev, ...ratingsMap }));
-    } catch (err) {
-      console.error('Error fetching user ratings:', err);
-    }
-  }, [movies, currentPage, isAuthenticated, token, contentType]);
-
-  const showNotification = (message, type = 'info') => {
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.innerHTML = `
-      <div class="notification-content">
-        <span class="notification-message">${message}</span>
-        <button class="notification-close">×</button>
-      </div>
-    `;
-    document.body.appendChild(notification);
-    setTimeout(() => notification.parentNode?.removeChild(notification), 5000);
-    notification.querySelector('.notification-close').addEventListener('click', () => {
-      notification.parentNode?.removeChild(notification);
-    });
-  };
-
-  const handleRateMovie = async (movieId, rating, review = '') => {
-    if (!isAuthenticated) return;
-    try {
-      setRatingLoading((prev) => ({ ...prev, [movieId]: true }));
-      const response = await fetch(`/api/movies/${movieId}/rate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ rating, review })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        setUserRatings((prev) => ({
-          ...prev,
-          [movieId]: { movieId, rating, review, hasRated: true }
-        }));
-        setMovies((prev) =>
-          prev.map((movie) =>
-            movie._id === movieId
-              ? {
-                  ...movie,
-                  averageRating: result.data.movie.averageRating,
-                  totalRatings: result.data.movie.totalRatings
-                }
-              : movie
-          )
-        );
-        showNotification(result.message || 'Rating submitted successfully!', 'success');
-      } else {
-        const errorData = await response.json();
-        showNotification(errorData.message || 'Failed to rate movie', 'error');
-      }
-    } catch (err) {
-      console.error('Error rating movie:', err);
-      showNotification('Failed to rate movie. Please try again.', 'error');
-    } finally {
-      setRatingLoading((prev) => ({ ...prev, [movieId]: false }));
-    }
-  };
-
-  useEffect(() => {
-    if (movies.length > 0 && isAuthenticated && !isDiscoveryMode) {
-      fetchUserRatings();
-    }
-  }, [movies, isAuthenticated, token, fetchUserRatings, isDiscoveryMode]);
 
   const catalogItems = contentType === 'tvshows' ? tvShows : movies;
   const catalogCount = catalogTotal;
@@ -700,7 +572,7 @@ const Home = () => {
     topRatedMovies.length > 0 ||
     trendingTVShows.length > 0;
 
-  const openBrowseMovies = () => navigate('/?browse=1');
+  const openBrowseMovies = () => navigate('/?browse=1&sort=popular');
 
   const renderDiscovery = () => (
     <div className="home-discovery">
@@ -835,7 +707,11 @@ const Home = () => {
             {(comingSoonLoading || comingSoonItems.length > 0) && (
               <ContentRow
                 title="Coming Soon"
-                subtitle="Upcoming releases — nearest first"
+                subtitle={
+                  comingSoonRefreshing
+                    ? 'Upcoming releases — refreshing…'
+                    : 'Upcoming releases — nearest first'
+                }
                 onViewAll={openComingSoonCategory}
               >
                 {comingSoonLoading && comingSoonItems.length === 0 ? (
@@ -866,8 +742,14 @@ const Home = () => {
               </div>
             ) : (
               <>
-                {discoveryRefreshing && hasDiscoveryContent && (
-                  <p className="home-row-refresh-note">Updating trending picks…</p>
+                {(discoveryRefreshing || comingSoonRefreshing) && hasDiscoveryContent && (
+                  <p className="home-row-refresh-note">
+                    {discoveryRefreshing && comingSoonRefreshing
+                      ? 'Updating home picks…'
+                      : discoveryRefreshing
+                        ? 'Updating trending picks…'
+                        : 'Updating upcoming releases…'}
+                  </p>
                 )}
                 {trendingNow.length > 0 && (
                   <ContentRow
@@ -949,7 +831,9 @@ const Home = () => {
   );
 
   const renderBrowse = () => {
-    const filterCount = [selectedGenre, selectedYear, comingSoonOnly || null].filter(Boolean).length;
+    const selectedLanguageLabel = selectedLanguage
+      ? selectedLanguage.charAt(0).toUpperCase() + selectedLanguage.slice(1)
+      : '';
 
     return (
     <div className="browse-shelf">
@@ -965,6 +849,7 @@ const Home = () => {
               </>
             )}
             {comingSoonOnly ? ' · Coming Soon' : ''}
+            {selectedLanguageLabel ? ` · ${selectedLanguageLabel}` : ''}
             {selectedGenre ? ` · ${selectedGenre}` : ''}
             {selectedYear ? ` · ${selectedYear}` : ''}
             {searchTerm ? ` · “${searchTerm}”` : ''}
@@ -972,28 +857,9 @@ const Home = () => {
         </div>
 
         <div className="browse-shelf-actions">
-          <button
-            type="button"
-            className={`browse-filters-btn${filtersOpen ? ' is-open' : ''}${filterCount ? ' has-active' : ''}`}
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((open) => !open)}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M4 6h16M7 12h10M10 18h4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
-            Filters
-            {filterCount > 0 && <span className="browse-filters-count">{filterCount}</span>}
-          </button>
-
-          {(searchTerm || selectedGenre || selectedYear || comingSoonOnly) && (
+          {(searchTerm || selectedGenre || selectedYear || selectedLanguage || comingSoonOnly) && (
             <button type="button" className="browse-shelf-clear" onClick={clearFilters}>
-              Reset
+              Reset filters
             </button>
           )}
         </div>
@@ -1020,99 +886,17 @@ const Home = () => {
         </button>
       </div>
 
-      <div className="browse-sort-row" aria-label="Sort catalog">
-        <span className="browse-sort-label">Sort</span>
-        {[
-          { id: 'popular', label: 'Popular' },
-          { id: 'latest', label: 'Newest' },
-          { id: 'rated', label: 'Top rated' },
-          { id: 'az', label: 'A – Z' }
-        ].map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            className={`browse-sort-chip${sortBy === option.id ? ' is-active' : ''}`}
-            onClick={() => {
-              setSortBy(option.id);
-              setCurrentPage(1);
-            }}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <BrowseCatalogToolbar
+        contentType={contentType}
+        totalCount={catalogCount}
+        loading={loading || catalogWaitingForBatch}
+      />
 
-      <div className={`browse-filters-panel${filtersOpen ? ' is-open' : ''}`}>
-        <div className="browse-filters-grid">
-          <div className="browse-filters-block">
-            <h3 className="browse-filters-heading">Categories</h3>
-            <div className="browse-filters-chips">
-              <button
-                type="button"
-                className={`browse-chip${comingSoonOnly ? ' is-active' : ''}`}
-                onClick={() => handleComingSoonSelect(true)}
-              >
-                Coming Soon
-              </button>
-            </div>
-          </div>
-
-          <div className="browse-filters-block">
-            <h3 className="browse-filters-heading">Genres</h3>
-            <div className="browse-filters-chips">
-              <button
-                type="button"
-                className={`browse-chip${!selectedGenre ? ' is-active' : ''}`}
-                onClick={() => handleGenreSelect('')}
-              >
-                All
-              </button>
-              {filtersLoading ? (
-                <span className="browse-chip">Loading…</span>
-              ) : (
-                availableGenres.map((genre) => (
-                  <button
-                    key={genre}
-                    type="button"
-                    className={`browse-chip${selectedGenre === genre ? ' is-active' : ''}`}
-                    onClick={() => handleGenreSelect(genre)}
-                  >
-                    {genre}
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="browse-filters-block">
-            <h3 className="browse-filters-heading">Year</h3>
-            <div className="browse-filters-chips">
-              <button
-                type="button"
-                className={`browse-chip${!selectedYear ? ' is-active' : ''}`}
-                onClick={() => handleYearSelect(null)}
-              >
-                Any
-              </button>
-              {availableYears.map((year) => (
-                <button
-                  key={year}
-                  type="button"
-                  className={`browse-chip${selectedYear === year.toString() ? ' is-active' : ''}`}
-                  onClick={() => handleYearSelect(year)}
-                >
-                  {year}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {(searchTerm || selectedGenre || selectedYear || comingSoonOnly) && (
+      {(searchTerm || selectedGenre || selectedYear || selectedLanguage || comingSoonOnly) && (
         <div className="browse-active-note">
           {searchTerm && <span>Search: {searchTerm}</span>}
           {comingSoonOnly && <span>Category: Coming Soon</span>}
+          {selectedLanguageLabel && <span>Language: {selectedLanguageLabel}</span>}
           {selectedGenre && <span>Genre: {selectedGenre}</span>}
           {selectedYear && <span>Year: {selectedYear}</span>}
         </div>
@@ -1145,6 +929,7 @@ const Home = () => {
             searchTerm={searchTerm}
             selectedGenre={selectedGenre}
             selectedYear={selectedYear}
+            selectedLanguage={selectedLanguage}
           />
         ) : (
           <MovieGrid
@@ -1152,6 +937,7 @@ const Home = () => {
             searchTerm={searchTerm}
             selectedGenre={selectedGenre}
             selectedYear={selectedYear}
+            selectedLanguage={selectedLanguage}
           />
         )}
 

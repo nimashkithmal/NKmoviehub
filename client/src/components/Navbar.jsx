@@ -9,9 +9,13 @@ const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const searchInputRef = useRef(null);
+  const searchPanelRef = useRef(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchSuggestions, setSearchSuggestions] = useState([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [isScrolled, setIsScrolled] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -21,6 +25,7 @@ const Navbar = () => {
   const [replyDrafts, setReplyDrafts] = useState({});
   const [replyingId, setReplyingId] = useState(null);
   const [expandedNotifId, setExpandedNotifId] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isAdmin = Boolean(isAuthenticated && user?.role === 'admin');
 
@@ -28,7 +33,12 @@ const Navbar = () => {
   const typeParam = params.get('type');
   const browseParam = params.get('browse');
   const hasBrowseFilters = Boolean(
-    params.get('search') || params.get('genre') || params.get('year') || browseParam === '1'
+    params.get('search') ||
+      params.get('genre') ||
+      params.get('year') ||
+      params.get('language') ||
+      params.get('category') ||
+      browseParam === '1'
   );
 
   const isHomeActive =
@@ -40,6 +50,7 @@ const Navbar = () => {
     location.pathname.startsWith('/tvshow') ||
     (location.pathname === '/' && typeParam === 'tvshows');
   const isCollectionsActive = location.pathname.startsWith('/collections');
+  const isCastCollectionActive = location.pathname.startsWith('/cast-collection');
 
   const isHomePage = location.pathname === '/';
 
@@ -84,10 +95,67 @@ const Navbar = () => {
   }, []);
 
   useEffect(() => {
+    document.body.style.overflow = mobileMenuOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setSearchOpen(false);
+    setAccountOpen(false);
+    setNotifOpen(false);
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
     const searchParam = params.get('search') || '';
     setSearchTerm(searchParam);
     if (searchParam) setSearchOpen(true);
   }, [location.search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!searchOpen) {
+      setSearchSuggestions([]);
+      setActiveSuggestion(-1);
+      return undefined;
+    }
+
+    const query = searchTerm.trim();
+    if (query.length < 2) {
+      setSearchSuggestions([]);
+      setActiveSuggestion(-1);
+      setSuggestionsLoading(false);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSuggestionsLoading(true);
+      try {
+        const response = await fetch(
+          `/api/search/suggest?q=${encodeURIComponent(query)}`,
+          { signal: controller.signal }
+        );
+        const result = await response.json();
+        if (result.success) {
+          setSearchSuggestions(result.data.suggestions || []);
+          setActiveSuggestion(-1);
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Search suggestions error:', err);
+        }
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [searchTerm, searchOpen]);
 
   useEffect(() => {
     if (searchOpen) {
@@ -134,7 +202,47 @@ const Navbar = () => {
     next.set('search', value);
     if (typeParam === 'tvshows') next.set('type', 'tvshows');
     navigate(`/?${next.toString()}`);
+    setSearchSuggestions([]);
+    setActiveSuggestion(-1);
   }, [searchTerm, navigate, typeParam]);
+
+  const openSuggestion = useCallback((item) => {
+    if (!item?._id) return;
+    setSearchOpen(false);
+    setSearchSuggestions([]);
+    setActiveSuggestion(-1);
+    navigate(item.type === 'tvshow' ? `/tvshow/${item._id}` : `/movie/${item._id}`);
+  }, [navigate]);
+
+  const handleSearchKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      setSearchOpen(false);
+      setSearchSuggestions([]);
+      setActiveSuggestion(-1);
+      return;
+    }
+
+    if (!searchSuggestions.length) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveSuggestion((prev) => (prev + 1) % searchSuggestions.length);
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveSuggestion((prev) =>
+        prev <= 0 ? searchSuggestions.length - 1 : prev - 1
+      );
+      return;
+    }
+
+    if (event.key === 'Enter' && activeSuggestion >= 0) {
+      event.preventDefault();
+      openSuggestion(searchSuggestions[activeSuggestion]);
+    }
+  };
 
   const goHome = () => {
     navigate('/');
@@ -142,16 +250,28 @@ const Navbar = () => {
   };
 
   const goMovies = () => {
-    navigate('/?browse=1');
+    navigate('/?browse=1&sort=popular');
   };
 
   const goTVShows = () => {
-    navigate('/?type=tvshows');
+    navigate('/?type=tvshows&sort=popular');
   };
 
   const goCollections = () => {
     navigate('/collections');
   };
+
+  const goCastCollection = () => {
+    navigate('/cast-collection');
+  };
+
+  const navItems = [
+    { label: 'Home', active: isHomeActive, onClick: goHome },
+    { label: 'Movies', active: isMoviesActive, onClick: goMovies },
+    { label: 'TV Shows', active: isTVShowsActive, onClick: goTVShows },
+    { label: 'Collections', active: isCollectionsActive, onClick: goCollections },
+    { label: 'Cast Collection', active: isCastCollectionActive, onClick: goCastCollection }
+  ];
 
   const handleLogout = () => {
     logout();
@@ -299,37 +419,40 @@ const Navbar = () => {
         </div>
 
         <div className="nav-center" role="navigation" aria-label="Primary">
-          <button
-            type="button"
-            className={`nav-link ${isHomeActive ? 'is-active' : ''}`}
-            onClick={goHome}
-          >
-            Home
-          </button>
-          <button
-            type="button"
-            className={`nav-link ${isMoviesActive ? 'is-active' : ''}`}
-            onClick={goMovies}
-          >
-            Movies
-          </button>
-          <button
-            type="button"
-            className={`nav-link ${isTVShowsActive ? 'is-active' : ''}`}
-            onClick={goTVShows}
-          >
-            TV Shows
-          </button>
-          <button
-            type="button"
-            className={`nav-link ${isCollectionsActive ? 'is-active' : ''}`}
-            onClick={goCollections}
-          >
-            Collections
-          </button>
+          {navItems.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className={`nav-link ${item.active ? 'is-active' : ''}`}
+              onClick={item.onClick}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
 
         <div className="nav-right">
+          <button
+            type="button"
+            className={`nav-mobile-toggle${mobileMenuOpen ? ' is-open' : ''}`}
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileMenuOpen}
+            onClick={() => {
+              setMobileMenuOpen((open) => !open);
+              setAccountOpen(false);
+              setNotifOpen(false);
+            }}
+          >
+            {mobileMenuOpen ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
           <div className={`nav-search ${searchOpen ? 'is-open' : ''}`}>
             <button
               type="button"
@@ -346,26 +469,69 @@ const Navbar = () => {
 
             {searchOpen && (
               <form
+                ref={searchPanelRef}
                 className="nav-search-panel"
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (activeSuggestion >= 0 && searchSuggestions[activeSuggestion]) {
+                    openSuggestion(searchSuggestions[activeSuggestion]);
+                    return;
+                  }
                   submitSearch();
                 }}
               >
-                <input
-                  ref={searchInputRef}
-                  type="search"
-                  className="nav-search-input"
-                  placeholder="Search movies and TV shows..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') setSearchOpen(false);
-                  }}
-                />
-                <button type="submit" className="nav-search-go" aria-label="Search">
-                  Go
-                </button>
+                <div className="nav-search-row">
+                  <input
+                    ref={searchInputRef}
+                    type="search"
+                    className="nav-search-input"
+                    placeholder="Search movies and TV shows..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={handleSearchKeyDown}
+                    autoComplete="off"
+                    aria-autocomplete="list"
+                    aria-controls="nav-search-suggestions"
+                  />
+                  <button type="submit" className="nav-search-go" aria-label="Search">
+                    Go
+                  </button>
+                </div>
+
+                {(suggestionsLoading || searchSuggestions.length > 0) && searchTerm.trim().length >= 2 && (
+                  <ul
+                    id="nav-search-suggestions"
+                    className="nav-search-suggestions"
+                    role="listbox"
+                  >
+                    {suggestionsLoading && searchSuggestions.length === 0 && (
+                      <li className="nav-search-suggestion is-status">Searching…</li>
+                    )}
+                    {searchSuggestions.map((item, index) => (
+                      <li key={`${item.type}-${item._id}`} role="option" aria-selected={activeSuggestion === index}>
+                        <button
+                          type="button"
+                          className={`nav-search-suggestion${activeSuggestion === index ? ' is-active' : ''}`}
+                          onMouseEnter={() => setActiveSuggestion(index)}
+                          onClick={() => openSuggestion(item)}
+                        >
+                          {item.imageUrl ? (
+                            <img src={item.imageUrl} alt="" className="nav-search-suggestion-thumb" />
+                          ) : (
+                            <span className="nav-search-suggestion-thumb is-empty" aria-hidden="true">🎬</span>
+                          )}
+                          <span className="nav-search-suggestion-copy">
+                            <span className="nav-search-suggestion-title">{item.title}</span>
+                            <span className="nav-search-suggestion-meta">
+                              {item.type === 'tvshow' ? 'TV Show' : 'Movie'}
+                              {item.year ? ` · ${item.year}` : ''}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </form>
             )}
           </div>
@@ -522,6 +688,36 @@ const Navbar = () => {
           )}
         </div>
       </div>
+
+      {mobileMenuOpen && (
+        <div
+          className="nav-mobile-overlay"
+          role="presentation"
+          onClick={() => setMobileMenuOpen(false)}
+        >
+          <div
+            className="nav-mobile-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Site navigation"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {navItems.map((item) => (
+              <button
+                key={`mobile-${item.label}`}
+                type="button"
+                className={`nav-mobile-link ${item.active ? 'is-active' : ''}`}
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  item.onClick();
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </nav>
   );
 };
