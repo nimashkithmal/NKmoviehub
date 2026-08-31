@@ -22,6 +22,24 @@ const {
   evaluateContentPolicy,
   isPubliclyAccessible
 } = require('../utils/contentPolicy');
+const { normalizeEpisodeRecord, extractTmdbId } = require('../utils/tvEpisodeUrls');
+
+const processEpisodeList = (episodes = [], tmdbId = '') =>
+  episodes
+    .filter((ep) => ep && ep.episodeUrl && String(ep.episodeUrl).trim() !== '')
+    .map((ep, index) =>
+      normalizeEpisodeRecord(
+        {
+          ...ep,
+          episodeNumber:
+            ep.episodeNumber && Number(ep.episodeNumber) > 0
+              ? Number(ep.episodeNumber)
+              : index + 1
+        },
+        tmdbId
+      )
+    )
+    .sort((a, b) => a.episodeNumber - b.episodeNumber);
 
 const router = express.Router();
 
@@ -69,6 +87,7 @@ const pickMetaFields = (body = {}) => {
   if (body.budget !== undefined) meta.budget = parseMoneyInput(body.budget);
   if (body.revenue !== undefined) meta.revenue = parseMoneyInput(body.revenue);
   if (body.matureContent !== undefined) meta.matureContent = body.matureContent === true || body.matureContent === 'true';
+  if (body.tmdbId !== undefined) meta.tmdbId = String(body.tmdbId || '').trim().slice(0, 20);
   return meta;
 };
 
@@ -343,6 +362,45 @@ router.get('/coming-soon', async (req, res) => {
   }
 });
 
+// @route   GET /api/tvshows/:id/watch
+// @desc    Lightweight TV show payload for the watch player
+// @access  Public
+router.get('/:id/watch', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({
+        success: false,
+        message: 'TV Show not found'
+      });
+    }
+
+    const tvShow = await TVShow.findById(req.params.id)
+      .select(
+        'title year description imageUrl bannerUrl images showUrl tmdbId imdbRating numberOfSeasons episodeCount status episodes'
+      )
+      .lean();
+
+    if (!tvShow || !isPubliclyAccessible(tvShow)) {
+      return res.status(404).json({
+        success: false,
+        message: 'TV Show not found'
+      });
+    }
+
+    res.set('Cache-Control', 'public, max-age=120');
+    res.json({
+      success: true,
+      data: { tvShow }
+    });
+  } catch (error) {
+    console.error('Get TV show watch payload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching TV show'
+    });
+  }
+});
+
 // @route   GET /api/tvshows/:id
 // @desc    Get TV show by ID (public)
 // @access  Public
@@ -508,26 +566,8 @@ router.post('/', protect, restrictToAdmin, [
         console.log('✅ Valid episodes after filter:', validEpisodes.length);
         
         if (validEpisodes.length > 0) {
-          processedEpisodes = validEpisodes.map((ep, index) => {
-            // Ensure episodeNumber is a valid number, defaulting to index + 1 if missing or invalid
-            const epNum = (ep.episodeNumber && !isNaN(parseInt(ep.episodeNumber)) && parseInt(ep.episodeNumber) > 0) 
-              ? parseInt(ep.episodeNumber) 
-              : (index + 1);
-            
-            const processed = {
-              episodeNumber: epNum,
-              episodeUrl: ep.episodeUrl.trim(),
-              episodeTitle: (ep.episodeTitle && typeof ep.episodeTitle === 'string' && ep.episodeTitle.trim()) 
-                ? ep.episodeTitle.trim() 
-                : `Episode ${epNum}`
-            };
-            
-            console.log(`✅ Processed episode ${index + 1}:`, JSON.stringify(processed, null, 2));
-            return processed;
-          });
-          
-          // Sort by episode number
-          processedEpisodes.sort((a, b) => a.episodeNumber - b.episodeNumber);
+          const tmdbId = String(req.body.tmdbId || '').trim();
+          processedEpisodes = processEpisodeList(validEpisodes, tmdbId);
           
           console.log('✅ Final processed episodes array:', JSON.stringify(processedEpisodes, null, 2));
           console.log('✅ Processed episodes count:', processedEpisodes.length);
@@ -683,14 +723,11 @@ router.put('/:id', protect, restrictToAdmin, [
     
     // Handle episodes if provided
     if (episodes && Array.isArray(episodes)) {
-      const processedEpisodes = episodes
-        .filter(ep => ep && ep.episodeUrl && ep.episodeUrl.trim() !== '')
-        .map((ep, index) => ({
-          episodeNumber: ep.episodeNumber || (index + 1),
-          episodeUrl: ep.episodeUrl.trim(),
-          episodeTitle: ep.episodeTitle || `Episode ${ep.episodeNumber || (index + 1)}`
-        }))
-        .sort((a, b) => a.episodeNumber - b.episodeNumber);
+      const tmdbId =
+        String(req.body.tmdbId || updateData.tmdbId || '').trim() ||
+        extractTmdbId(req.body.showUrl) ||
+        extractTmdbId(updateData.showUrl);
+      const processedEpisodes = processEpisodeList(episodes, tmdbId);
       
       if (processedEpisodes.length > 0) {
         updateData.episodes = processedEpisodes;

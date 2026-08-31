@@ -8,6 +8,7 @@ import ContentRow from './ContentRow';
 import PosterCard from './PosterCard';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 import { buildMoviesUrl, buildTVShowsUrl } from '../utils/fetchAllPaged';
+import { withReturnPath } from '../utils/navigation';
 import './MovieGrid.css';
 import './HomeDiscovery.css';
 import './BrowseShelf.css';
@@ -15,6 +16,57 @@ import './BrowseShelf.css';
 const PAGE_SIZE = 20;
 /** Server batch size — UI still shows PAGE_SIZE; next batch loads when you leave this window. */
 const BATCH_SIZE = 500;
+const DISCOVERY_CACHE_KEY = 'nk-home-discovery-v1';
+const DISCOVERY_CACHE_TTL_MS = 15 * 60 * 1000;
+
+const readDiscoveryCache = () => {
+  try {
+    const raw = sessionStorage.getItem(DISCOVERY_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.data || Date.now() - parsed.at > DISCOVERY_CACHE_TTL_MS) return null;
+    return parsed.data;
+  } catch {
+    return null;
+  }
+};
+
+const writeDiscoveryCache = (data) => {
+  try {
+    sessionStorage.setItem(
+      DISCOVERY_CACHE_KEY,
+      JSON.stringify({ at: Date.now(), data })
+    );
+  } catch {
+    // Ignore quota / private mode errors
+  }
+};
+
+const applyDiscoveryRows = (data, setters) => {
+  const {
+    setTrendingNow,
+    setNowPlaying,
+    setTopRatedMovies,
+    setTrendingTVShows,
+    setMovies,
+    setTVShows
+  } = setters;
+  setTrendingNow(data.trendingNow || []);
+  setNowPlaying(data.nowPlaying || []);
+  setTopRatedMovies(data.topRatedMovies || []);
+  setTrendingTVShows(data.trendingTVShows || []);
+  setMovies(data.trendingNow || []);
+  setTVShows(data.trendingTVShows || []);
+};
+
+const hasDiscoveryRows = (data) =>
+  Boolean(
+    data &&
+      ((data.trendingNow && data.trendingNow.length > 0) ||
+        (data.nowPlaying && data.nowPlaying.length > 0) ||
+        (data.topRatedMovies && data.topRatedMovies.length > 0) ||
+        (data.trendingTVShows && data.trendingTVShows.length > 0))
+  );
 
 const getItemImage = (item) => {
   if (item?.images?.length) return item.images[0];
@@ -58,6 +110,7 @@ const Home = () => {
   const [trendingNow, setTrendingNow] = useState([]);
   const [nowPlaying, setNowPlaying] = useState([]);
   const [trendingTVShows, setTrendingTVShows] = useState([]);
+  const [discoveryRefreshing, setDiscoveryRefreshing] = useState(false);
   const [loadedBatchIndex, setLoadedBatchIndex] = useState(-1);
   const batchCacheRef = useRef(new Map());
   const catalogQueryKeyRef = useRef('');
@@ -324,44 +377,80 @@ const Home = () => {
     ]
   );
 
-  // Discovery: live home rows matched to local catalog; refresh periodically
+  // Discovery: show cached/local rows immediately, then refresh live trending in background
   useEffect(() => {
     if (!isDiscoveryMode) return undefined;
 
     let cancelled = false;
     const controller = new AbortController();
+    const setters = {
+      setTrendingNow,
+      setNowPlaying,
+      setTopRatedMovies,
+      setTrendingTVShows,
+      setMovies,
+      setTVShows
+    };
 
-    const loadDiscovery = async () => {
+    const cached = readDiscoveryCache();
+    if (hasDiscoveryRows(cached)) {
+      applyDiscoveryRows(cached, setters);
+      setLoading(false);
+    } else {
       setLoading(true);
-      setError(null);
+    }
+
+    const loadFastDiscovery = async () => {
       try {
-        const response = await fetch('/api/discovery/home?limit=20', {
+        const response = await fetch('/api/discovery/home?limit=20&fast=1', {
           signal: controller.signal
         });
         const result = await response.json();
-        if (!result.success) {
-          throw new Error(result.message || 'Failed to load home discovery');
-        }
-
-        if (cancelled) return;
-        setTrendingNow(result.data.trendingNow || []);
-        setNowPlaying(result.data.nowPlaying || []);
-        setTrendingTVShows(result.data.trendingTVShows || []);
-        setTopRatedMovies(result.data.topRatedMovies || []);
-        // Keep legacy state in sync for any leftover references
-        setMovies(result.data.trendingNow || []);
-        setTVShows(result.data.trendingTVShows || []);
+        if (!result.success || cancelled) return;
+        if (!hasDiscoveryRows(result.data)) return;
+        applyDiscoveryRows(result.data, setters);
+        writeDiscoveryCache(result.data);
       } catch (err) {
         if (err.name === 'AbortError' || cancelled) return;
-        console.error('Error loading discovery catalog:', err);
-        setError('Failed to load the catalog.');
+        console.error('Error loading fast discovery catalog:', err);
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
 
-    loadDiscovery();
-    const refreshId = setInterval(loadDiscovery, 10 * 60 * 1000);
+    const loadLiveDiscovery = async ({ showRefresh = false } = {}) => {
+      if (showRefresh) setDiscoveryRefreshing(true);
+      try {
+        const response = await fetch('/api/discovery/home?limit=20', {
+          signal: controller.signal
+        });
+        const result = await response.json();
+        if (!result.success || cancelled) return;
+        applyDiscoveryRows(result.data, setters);
+        writeDiscoveryCache(result.data);
+      } catch (err) {
+        if (err.name === 'AbortError' || cancelled) return;
+        console.error('Error loading live discovery catalog:', err);
+        if (!hasDiscoveryRows(cached)) {
+          setError('Failed to load the catalog.');
+        }
+      } finally {
+        if (!cancelled) {
+          setDiscoveryRefreshing(false);
+          setLoading(false);
+        }
+      }
+    };
+
+    const bootstrapDiscovery = async () => {
+      await loadFastDiscovery();
+      if (!cancelled) {
+        await loadLiveDiscovery({ showRefresh: hasDiscoveryRows(readDiscoveryCache()) });
+      }
+    };
+
+    bootstrapDiscovery();
+    const refreshId = setInterval(() => loadLiveDiscovery({ showRefresh: true }), 10 * 60 * 1000);
 
     return () => {
       cancelled = true;
@@ -597,8 +686,19 @@ const Home = () => {
       openBrowseMovies();
       return;
     }
-    navigate(heroIsTV ? `/tvshow/${heroContentId}` : `/movie/${heroContentId}`);
+    navigate(
+      heroIsTV
+        ? `/tvshow/${heroContentId}`
+        : `/movie/${heroContentId}`,
+      heroIsTV ? withReturnPath(location) : undefined
+    );
   };
+
+  const hasDiscoveryContent =
+    trendingNow.length > 0 ||
+    nowPlaying.length > 0 ||
+    topRatedMovies.length > 0 ||
+    trendingTVShows.length > 0;
 
   const openBrowseMovies = () => navigate('/?browse=1');
 
@@ -748,7 +848,8 @@ const Home = () => {
                       badge="Coming Soon"
                       onClick={() =>
                         navigate(
-                          item._kind === 'tvshow' ? `/tvshow/${item._id}` : `/movie/${item._id}`
+                          item._kind === 'tvshow' ? `/tvshow/${item._id}` : `/movie/${item._id}`,
+                          item._kind === 'tvshow' ? withReturnPath(location) : undefined
                         )
                       }
                     />
@@ -757,12 +858,17 @@ const Home = () => {
               </ContentRow>
             )}
 
-            {loading && trendingNow.length === 0 && nowPlaying.length === 0 ? (
-              <div className="home-row-loading home-row-loading-block">
-                Loading live titles…
+            {loading && !hasDiscoveryContent ? (
+              <div className="home-row-skeletons" aria-hidden="true">
+                {Array.from({ length: 8 }).map((_, index) => (
+                  <div key={`discovery-skeleton-${index}`} className="home-row-skeleton-card" />
+                ))}
               </div>
             ) : (
               <>
+                {discoveryRefreshing && hasDiscoveryContent && (
+                  <p className="home-row-refresh-note">Updating trending picks…</p>
+                )}
                 {trendingNow.length > 0 && (
                   <ContentRow
                     title="Trending Now"
@@ -806,7 +912,9 @@ const Home = () => {
                         key={show._id}
                         item={show}
                         kind="tvshow"
-                        onClick={() => navigate(`/tvshow/${show._id}`)}
+                        onClick={() =>
+                          navigate(`/tvshow/${show._id}`, withReturnPath(location))
+                        }
                       />
                     ))}
                   </ContentRow>

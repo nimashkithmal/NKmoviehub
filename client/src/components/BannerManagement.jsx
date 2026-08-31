@@ -6,14 +6,15 @@ const BANNER_WIDTH = 1920;
 const BANNER_HEIGHT = 800;
 
 /**
- * Admin: add a home banner image and link it to a movie or TV show.
- * Uploaded image = hero artwork; linked title supplies the details.
+ * Admin: link a home banner to a movie or TV show.
+ * Selecting a title auto-fills the wide banner (bannerUrl) from that title.
  */
 const BannerManagement = ({ token, showNotification }) => {
   const [banners, setBanners] = useState([]);
   const [movies, setMovies] = useState([]);
   const [tvShows, setTVShows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [editingBanner, setEditingBanner] = useState(null);
@@ -23,6 +24,7 @@ const BannerManagement = ({ token, showNotification }) => {
   const [imageFile, setImageFile] = useState('');
   const [imagePreview, setImagePreview] = useState('');
   const [cropSource, setCropSource] = useState(null);
+  const [cropLoading, setCropLoading] = useState(false);
 
   const authHeaders = useCallback(() => ({
     'Content-Type': 'application/json',
@@ -46,19 +48,69 @@ const BannerManagement = ({ token, showNotification }) => {
   }, [authHeaders]);
 
   const fetchCatalog = useCallback(async () => {
+    const fetchAllPaginated = async (baseUrl, dataKey, pageLimit) => {
+      const all = [];
+      let page = 1;
+      let totalPages = 1;
+
+      while (page <= totalPages) {
+        const response = await fetch(
+          `${baseUrl}?page=${page}&limit=${pageLimit}`,
+          { headers: authHeaders() }
+        );
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || `Failed to load ${dataKey}`);
+        }
+        all.push(...(result.data[dataKey] || []));
+        totalPages = result.data.pagination?.totalPages || 1;
+        page += 1;
+      }
+
+      return all;
+    };
+
+    const toPickerItem = (item) => ({
+      _id: item._id,
+      title: item.title,
+      year: item.year,
+      genre: item.genre,
+      bannerUrl: item.bannerUrl,
+      status: item.status,
+      imdbRating: item.imdbRating
+    });
+
     try {
-      const [moviesRes, tvRes] = await Promise.all([
-        fetch('/api/movies?limit=20000', { headers: authHeaders() }),
-        fetch('/api/tvshows?limit=20000', { headers: authHeaders() })
+      setCatalogLoading(true);
+      const pickerResponse = await fetch(`${API_URL}/picker/catalog`, {
+        headers: authHeaders()
+      });
+
+      if (pickerResponse.ok) {
+        const pickerResult = await pickerResponse.json();
+        if (pickerResult.success) {
+          setMovies(pickerResult.data.movies || []);
+          setTVShows(pickerResult.data.tvShows || []);
+          return;
+        }
+      }
+
+      const [allMovies, allTVShows] = await Promise.all([
+        fetchAllPaginated('/api/movies/admin', 'movies', 100),
+        fetchAllPaginated('/api/tvshows/admin', 'tvShows', 500)
       ]);
-      const moviesJson = await moviesRes.json();
-      const tvJson = await tvRes.json();
-      if (moviesJson.success) setMovies(moviesJson.data.movies || []);
-      if (tvJson.success) setTVShows(tvJson.data.tvShows || []);
+
+      setMovies(allMovies.map(toPickerItem));
+      setTVShows(allTVShows.map(toPickerItem));
     } catch (err) {
       console.error('Error fetching catalog for banners:', err);
+      setMovies([]);
+      setTVShows([]);
+      showNotification('Could not load movies/TV shows for the banner picker', 'error');
+    } finally {
+      setCatalogLoading(false);
     }
-  }, [authHeaders]);
+  }, [authHeaders, showNotification]);
 
   useEffect(() => {
     fetchBanners();
@@ -93,9 +145,36 @@ const BannerManagement = ({ token, showNotification }) => {
   const filteredMovies = useMemo(() => filterByQuery(movies), [movies, catalogQuery]);
   const filteredTVShows = useMemo(() => filterByQuery(tvShows), [tvShows, catalogQuery]);
 
+  const getItemBannerUrl = (item) => {
+    const url = String(item?.bannerUrl || '').trim();
+    return url.startsWith('http') ? url : '';
+  };
+
+  const applyLinkedBanner = (item) => {
+    const bannerUrl = getItemBannerUrl(item);
+    if (bannerUrl) {
+      setImageFile(bannerUrl);
+      setImagePreview(bannerUrl);
+      setCropSource(null);
+      showNotification(`Wide banner loaded from ${item.title}`, 'success');
+      return true;
+    }
+    setImageFile('');
+    setImagePreview('');
+    setCropSource(null);
+    showNotification(
+      `${item.title} has no wide banner yet. Upload one below or add it on the title first.`,
+      'error'
+    );
+    return false;
+  };
+
   const selectLink = (type, id) => {
     setLinkType(type);
     setLinkedId(id);
+    const list = type === 'tvshow' ? tvShows : movies;
+    const item = list.find((entry) => entry._id === id);
+    if (item) applyLinkedBanner(item);
   };
 
   const handleEdit = (banner) => {
@@ -150,13 +229,59 @@ const BannerManagement = ({ token, showNotification }) => {
     );
   };
 
+  const openCropper = async () => {
+    if (!imagePreview || cropLoading) return;
+
+    if (imagePreview.startsWith('data:image/')) {
+      setCropSource(imagePreview);
+      return;
+    }
+
+    if (!imagePreview.startsWith('http')) {
+      setCropSource(imagePreview);
+      return;
+    }
+
+    try {
+      setCropLoading(true);
+      const response = await fetch(
+        `${API_URL}/picker/image?url=${encodeURIComponent(imagePreview)}`,
+        { headers: authHeaders() }
+      );
+      if (!response.ok) {
+        throw new Error('Could not load image');
+      }
+      const blob = await response.blob();
+      const dataUri = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      setCropSource(dataUri);
+    } catch (err) {
+      console.error('Error loading image for crop:', err);
+      showNotification(
+        'Could not load this image for cropping. Upload the banner file instead.',
+        'error'
+      );
+    } finally {
+      setCropLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     const isEditing = Boolean(editingBanner);
 
-    if (!isEditing && !imageFile) {
-      showNotification('Please upload a banner image', 'error');
+    const bannerSource = imageFile || getItemBannerUrl(selectedItem);
+
+    if (!isEditing && !bannerSource) {
+      showNotification(
+        'Select a title with a wide banner, or upload a banner image',
+        'error'
+      );
       return;
     }
     if (!linkedId) {
@@ -176,6 +301,7 @@ const BannerManagement = ({ token, showNotification }) => {
         payload.movieId = linkedId;
       }
       if (imageFile) payload.image = imageFile;
+      else if (bannerSource) payload.image = bannerSource;
 
       const response = await fetch(
         isEditing ? `${API_URL}/${editingBanner._id}` : API_URL,
@@ -283,7 +409,9 @@ const BannerManagement = ({ token, showNotification }) => {
 
   const renderPickerList = (items, type) => (
     <div className="banner-picker-list">
-      {items.length === 0 ? (
+      {catalogLoading ? (
+        <div className="banner-picker-empty">Loading titles…</div>
+      ) : items.length === 0 ? (
         <div className="banner-picker-empty">No matches</div>
       ) : (
         items.map((item) => {
@@ -322,8 +450,8 @@ const BannerManagement = ({ token, showNotification }) => {
       <div className="dashboard-header">
         <h2>Home Banner</h2>
         <p>
-          Upload a banner image, then pick a movie or TV show for the hero details.
-          The poster is never used as the banner.
+          Pick a movie or TV show — its wide banner is selected automatically.
+          You can still upload or crop a custom image if you prefer.
         </p>
       </div>
 
@@ -340,7 +468,7 @@ const BannerManagement = ({ token, showNotification }) => {
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label htmlFor="banner-file">
-            Banner Image {editingBanner ? '(optional)' : '*'}
+            Banner Image {editingBanner ? '(optional)' : '(optional if title has a banner)'}
           </label>
           <input
             type="file"
@@ -350,8 +478,8 @@ const BannerManagement = ({ token, showNotification }) => {
           />
           <small>
             {editingBanner
-              ? 'Leave empty to keep the current banner image.'
-              : `Wide artwork only (${BANNER_WIDTH}×${BANNER_HEIGHT}).`}
+              ? 'Leave empty to keep the current banner, or pick a title to use its wide banner.'
+              : `Select a title first to auto-fill, or upload wide artwork (${BANNER_WIDTH}×${BANNER_HEIGHT}).`}
           </small>
         </div>
 
@@ -364,7 +492,7 @@ const BannerManagement = ({ token, showNotification }) => {
             onChange={(e) => setCatalogQuery(e.target.value)}
             placeholder="Type to search movies or TV shows…"
           />
-          <small>Search both lists, then click one item in either window.</small>
+          <small>Search both lists, then click one item — its wide banner loads automatically.</small>
         </div>
 
         <div className="banner-picker-windows">
@@ -409,6 +537,15 @@ const BannerManagement = ({ token, showNotification }) => {
                   : selectedItem.description}
               </p>
             )}
+            {getItemBannerUrl(selectedItem) ? (
+              <p style={{ margin: '8px 0 0', color: '#86efac', fontSize: '0.85rem' }}>
+                Wide banner ready from this title
+              </p>
+            ) : (
+              <p style={{ margin: '8px 0 0', color: '#fbbf24', fontSize: '0.85rem' }}>
+                No wide banner on this title — upload one below
+              </p>
+            )}
           </div>
         )}
 
@@ -430,10 +567,11 @@ const BannerManagement = ({ token, showNotification }) => {
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => setCropSource(imagePreview)}
+              onClick={openCropper}
+              disabled={cropLoading}
               style={{ marginTop: '10px' }}
             >
-              Crop &amp; adjust
+              {cropLoading ? 'Loading image…' : 'Crop & adjust'}
             </button>
           </div>
         )}

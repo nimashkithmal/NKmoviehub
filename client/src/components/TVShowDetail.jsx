@@ -1,28 +1,46 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import MoviePlayer from './MoviePlayer';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
+import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 import { trackContentView, trackWatchClick } from '../utils/analytics';
 import { setDetailPageMeta } from '../utils/seo';
+import { getTvShowTmdbId } from '../utils/tvEpisodes';
+import { goBackOr, withReturnPath } from '../utils/navigation';
 import './MovieDetail.css';
+
+const formatDate = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
+
+const languageLabel = (code) => {
+  if (!code) return null;
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
+  } catch {
+    return code;
+  }
+};
 
 const TVShowDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, token } = useAuth();
+  const location = useLocation();
   const [tvShow, setTVShow] = useState(null);
+  const [extras, setExtras] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedEpisode, setSelectedEpisode] = useState(null);
-  const [showPlayer, setShowPlayer] = useState(false);
   const [showTrailer, setShowTrailer] = useState(false);
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [activeSeason, setActiveSeason] = useState(1);
 
   useEffect(() => {
     fetchTVShowDetails();
-    setSelectedImageIndex(0); // Reset image index when TV show changes
-    setActiveSeason(1);
+    setExtras(null);
+    setShowTrailer(false);
   }, [id]);
 
   useEffect(() => {
@@ -41,24 +59,39 @@ const TVShowDetail = () => {
     });
   }, [tvShow?._id, tvShow?.title, tvShow?.year, tvShow?.description, tvShow?.bannerUrl, tvShow?.imageUrl, id]);
 
+  useEffect(() => {
+    const tmdbId = tvShow ? getTvShowTmdbId(tvShow) : null;
+    if (!tmdbId) return undefined;
+
+    const controller = new AbortController();
+    const loadExtras = async () => {
+      try {
+        const response = await fetch(`/api/embed/tv?tmdb_id=${tmdbId}`, {
+          signal: controller.signal
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data && !data.error) setExtras(data);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Error fetching TV extras:', err);
+        }
+      }
+    };
+
+    loadExtras();
+    return () => controller.abort();
+  }, [tvShow]);
+
   const fetchTVShowDetails = async () => {
     try {
       setLoading(true);
       setError(null);
-      
       const response = await fetch(`/api/tvshows/${id}`);
-      
-      if (!response.ok) {
-        throw new Error('TV Show not found');
-      }
-
+      if (!response.ok) throw new Error('TV Show not found');
       const result = await response.json();
-      
-      if (result.success) {
-        setTVShow(result.data.tvShow);
-      } else {
-        throw new Error(result.message || 'Failed to fetch TV show');
-      }
+      if (!result.success) throw new Error(result.message || 'Failed to fetch TV show');
+      setTVShow(result.data.tvShow);
     } catch (err) {
       console.error('Error fetching TV show:', err);
       setError(err.message || 'Failed to load TV show. Please try again.');
@@ -67,77 +100,31 @@ const TVShowDetail = () => {
     }
   };
 
-  const handleWatchEpisode = (episode) => {
-    if (tvShow?.status === 'coming_soon') return;
+  const cast = useMemo(() => {
+    const list = extras?.cast || extras?.cast_crew?.cast || [];
+    return list.slice(0, 12);
+  }, [extras]);
 
-    // Create a movie-like object for the player
-    const episodeMovie = {
-      _id: `${tvShow._id}-ep${episode.episodeNumber}`,
-      title: `${tvShow.title} - ${episode.episodeTitle || `Episode ${episode.episodeNumber}`}`,
-      movieUrl: episode.episodeUrl,
-      imageUrl: tvShow.imageUrl
-    };
-    
-    setSelectedEpisode(episodeMovie);
-    setShowPlayer(true);
-    trackWatchClick({
-      contentType: 'tv_episode',
-      itemId: tvShow._id,
-      itemName: episodeMovie.title
-    });
-  };
+  const posterSrc = useMemo(() => {
+    if (!tvShow) return '';
+    if (extras?.poster) return extras.poster;
+    if (tvShow.images?.length) return tvShow.images[0];
+    if (tvShow.imageUrl?.startsWith('http')) return tvShow.imageUrl;
+    return getMoviePlaceholder(tvShow.title || 'TV Show', 400, 600);
+  }, [tvShow, extras]);
 
-  const handleWatchShow = () => {
-    if (tvShow?.status === 'coming_soon') return;
-
-    if (tvShow.showUrl) {
-      const episode = {
-        _id: tvShow._id,
-        title: tvShow.title,
-        movieUrl: tvShow.showUrl,
-        imageUrl: tvShow.imageUrl
-      };
-      setSelectedEpisode(episode);
-      setShowPlayer(true);
-      trackWatchClick({
-        contentType: 'tv_show',
-        itemId: tvShow._id,
-        itemName: tvShow.title
-      });
-    }
-  };
-
-  const showNotification = (message, type = 'info') => {
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.innerHTML = `
-      <div class="notification-content">
-        <span class="notification-message">${message}</span>
-        <button class="notification-close">×</button>
-      </div>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 5000);
-    
-    const closeBtn = notification.querySelector('.notification-close');
-    closeBtn.addEventListener('click', () => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    });
-  };
+  const backdropSrc = useMemo(() => {
+    if (!tvShow) return '';
+    if (tvShow.bannerUrl) return tvShow.bannerUrl;
+    if (extras?.backdrops?.length) return extras.backdrops[0];
+    return posterSrc;
+  }, [tvShow, extras, posterSrc]);
 
   if (loading) {
     return (
       <div className="movie-detail-container">
         <div className="loading-state">
-          <div className="loading-spinner"></div>
+          <div className="loading-spinner" />
           <h3>Loading TV show details...</h3>
         </div>
       </div>
@@ -150,10 +137,7 @@ const TVShowDetail = () => {
         <div className="error-state">
           <h3>Error loading TV show</h3>
           <p>{error || 'TV Show not found'}</p>
-          <button 
-            className="btn btn-primary"
-            onClick={() => navigate('/')}
-          >
+          <button type="button" className="btn btn-primary" onClick={() => navigate('/')}>
             Back to Home
           </button>
         </div>
@@ -161,95 +145,57 @@ const TVShowDetail = () => {
     );
   }
 
-  // Helper function to group episodes by seasons
-  // Try to detect season boundaries from episode URLs (e.g., s01e01, s02e01)
-  const groupEpisodesBySeasons = (episodes, numberOfSeasons) => {
-    if (!episodes || episodes.length === 0 || !numberOfSeasons || numberOfSeasons === 0) {
-      return [];
-    }
+  const tagline = tvShow.tagline || extras?.tagline || '';
+  const overview = extras?.overview || tvShow.description || '';
+  const trailerUrl = tvShow.trailerUrl || extras?.trailer || '';
+  const ratingValue = Number(tvShow.imdbRating) || Number(extras?.vote_average) || 0;
+  const releaseLabel = formatDate(tvShow.releaseDate) || tvShow.year || null;
+  const language =
+    (tvShow.language && String(tvShow.language).trim()) ||
+    languageLabel(extras?.original_language);
+  const statusLabel =
+    tvShow.status === 'coming_soon'
+      ? 'Coming Soon'
+      : tvShow.releaseStatus ||
+        extras?.status ||
+        (tvShow.status === 'active' ? 'Returning Series' : tvShow.status);
+  const genreList = (tvShow.genre || '')
+    .split(',')
+    .map((g) => g.trim())
+    .filter(Boolean);
+  const canWatch =
+    tvShow.status !== 'coming_soon' &&
+    (tvShow.showUrl || (tvShow.episodes && tvShow.episodes.length > 0));
 
-    const sortedEpisodes = [...episodes].sort((a, b) => a.episodeNumber - b.episodeNumber);
-    
-    // Try to detect season number from episode URLs
-    const episodesBySeason = {};
-    
-    for (let i = 0; i < sortedEpisodes.length; i++) {
-      const episode = sortedEpisodes[i];
-      const url = episode.episodeUrl || '';
-      
-      // Try to extract season number from URL
-      // Supports: s01e01, &s=2&e=1, /s01/, season01, embedtv/ID&s=2
-      const seasonMatch = url.match(/[?&]s=(\d{1,2})(?:&|$)/i) ||
-                          url.match(/embedtv\/\d+&s=(\d{1,2})/i) ||
-                          url.match(/[sS](\d{1,2})[eE]/) || 
-                          url.match(/season[_\s-]?(\d{1,2})/i) ||
-                          url.match(/\/s(\d{1,2})\//);
-      
-      let seasonNum = 1; // Default to season 1
-      
-      if (seasonMatch) {
-        const detectedSeason = parseInt(seasonMatch[1]);
-        if (detectedSeason >= 1 && detectedSeason <= numberOfSeasons) {
-          seasonNum = detectedSeason;
-        }
-      }
-      
-      // If no season found in URL, try to calculate based on position
-      // This is a fallback for evenly distributed episodes
-      if (!seasonMatch && numberOfSeasons > 1) {
-        const episodesPerSeason = Math.ceil(sortedEpisodes.length / numberOfSeasons);
-        seasonNum = Math.floor(i / episodesPerSeason) + 1;
-        if (seasonNum > numberOfSeasons) seasonNum = numberOfSeasons;
-      }
-      
-      if (!episodesBySeason[seasonNum]) {
-        episodesBySeason[seasonNum] = [];
-      }
-      episodesBySeason[seasonNum].push(episode);
-    }
-    
-    // Convert to array format sorted by season number
-    const seasons = [];
-    for (let seasonNum = 1; seasonNum <= numberOfSeasons; seasonNum++) {
-      if (episodesBySeason[seasonNum] && episodesBySeason[seasonNum].length > 0) {
-        seasons.push({
-          seasonNumber: seasonNum,
-          episodes: episodesBySeason[seasonNum]
-        });
-      }
-    }
+  const metaPills = [
+    tvShow.numberOfSeasons > 0 ? `${tvShow.numberOfSeasons} Season${tvShow.numberOfSeasons !== 1 ? 's' : ''}` : null,
+    tvShow.episodeCount > 0 ? `${tvShow.episodeCount} Episodes` : null,
+    statusLabel,
+    ...genreList
+  ].filter(Boolean);
 
-    return seasons;
+  const detailItems = [
+    tvShow.director ? { label: 'Created By', value: tvShow.director } : null,
+    statusLabel ? { label: 'Status', value: statusLabel } : null,
+    language ? { label: 'Language', value: language } : null,
+    releaseLabel ? { label: 'First Aired', value: releaseLabel } : null
+  ].filter(Boolean);
+
+  const handleWatchNow = () => {
+    trackWatchClick({
+      contentType: 'tv_show',
+      itemId: tvShow._id,
+      itemName: tvShow.title
+    });
+    navigate(`/watch/tv/${id}?season=1&episode=1`, withReturnPath(location));
   };
 
-  // Group episodes by seasons
-  const numberOfSeasons = tvShow.numberOfSeasons || (tvShow.episodes && tvShow.episodes.length > 0 ? 1 : 0);
-  const sortedEpisodes = tvShow.episodes && tvShow.episodes.length > 0 
-    ? [...tvShow.episodes].sort((a, b) => a.episodeNumber - b.episodeNumber)
-    : [];
-  
-  // Always group by seasons if we have episodes and numberOfSeasons is set
-  const seasons = numberOfSeasons > 0 && sortedEpisodes.length > 0 
-    ? groupEpisodesBySeasons(sortedEpisodes, numberOfSeasons)
-    : [];
-
-  // Falling back to the first season keeps the list valid when a show has
-  // fewer seasons than the one last selected
-  const currentSeason = seasons.find((s) => s.seasonNumber === activeSeason) || seasons[0];
-  const trailerUrl = tvShow?.trailerUrl || '';
+  const handleBack = () => {
+    goBackOr(navigate, location, '/?type=tvshows');
+  };
 
   return (
     <>
-      {showPlayer && selectedEpisode && (
-        <MoviePlayer 
-          movie={selectedEpisode} 
-          onClose={() => {
-            setShowPlayer(false);
-            setSelectedEpisode(null);
-          }} 
-        />
-      )}
-
       {showTrailer && trailerUrl && (
         <div className="md-trailer-overlay" onClick={() => setShowTrailer(false)}>
           <div className="md-trailer-modal" onClick={(e) => e.stopPropagation()}>
@@ -270,375 +216,157 @@ const TVShowDetail = () => {
           </div>
         </div>
       )}
-      
-      <div className="movie-detail-container">
-        <button 
-          className="back-button"
-          onClick={() => navigate(-1)}
-        >
-          ← Back
-        </button>
 
-        <div className="movie-detail-content">
-          <div className="movie-detail-poster">
-            {/* Image Gallery */}
-            {tvShow.images && tvShow.images.length > 0 ? (
-              <div className="movie-image-gallery">
-                <div className="movie-main-image">
-                  <img 
-                    src={tvShow.images[selectedImageIndex] || tvShow.images[0]} 
-                    alt={tvShow.title}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      const placeholder = e.target.parentElement.querySelector('.movie-placeholder-large') || document.createElement('div');
-                      placeholder.className = 'movie-placeholder-large';
-                      placeholder.innerHTML = '<span>📺</span>';
-                      if (!e.target.parentElement.querySelector('.movie-placeholder-large')) {
-                        e.target.parentElement.appendChild(placeholder);
-                      } else {
-                        e.target.parentElement.querySelector('.movie-placeholder-large').style.display = 'flex';
-                      }
-                    }}
-                  />
-                </div>
-                {tvShow.images.length > 1 && (
-                  <div className="movie-image-thumbnails">
-                    {tvShow.images.map((imageUrl, index) => (
-                      <div 
-                        key={index}
-                        className={`thumbnail-item ${index === selectedImageIndex ? 'active' : ''}`}
-                        onClick={() => setSelectedImageIndex(index)}
-                      >
-                        <img 
-                          src={imageUrl} 
-                          alt={`${tvShow.title} ${index + 1}`}
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="150"%3E%3Crect width="100" height="150" fill="%231a1a1a"/%3E%3Ctext x="50" y="75" font-size="20" fill="white" text-anchor="middle" dominant-baseline="middle"%3E📺%3C/text%3E%3C/svg%3E';
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
+      <div className="md-page">
+        <section className="md-hero" aria-hidden="true">
+          <img className="md-hero-img" src={backdropSrc} alt="" />
+          <div className="md-hero-fade" />
+        </section>
+
+        <header className="md-topbar">
+          <button
+            type="button"
+            className="md-icon-btn"
+            onClick={handleBack}
+            aria-label="Go back"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+            </svg>
+          </button>
+
+          <Link to="/" className="md-brand" aria-label="NK Movie Hub home">
+            NK Movie Hub
+          </Link>
+
+          <div className="md-topbar-actions" />
+        </header>
+
+        <section className="md-body">
+          <div className="md-body-inner">
+            <div className="md-poster-col">
+              <div className="md-poster md-poster-tv">
+                <span className="md-poster-badge">TV SHOW</span>
+                <img
+                  src={posterSrc}
+                  alt={tvShow.title}
+                  onError={(e) => handleImageError(e, tvShow.title)}
+                />
+              </div>
+            </div>
+
+            <div className="md-copy">
+              <h1 className="md-title">
+                {tvShow.title}
+                {tvShow.matureContent && (
+                  <span className="mature-badge" title="Mature content — 18+">18+</span>
+                )}
+              </h1>
+              {tagline && <p className="md-tagline">{tagline}</p>}
+
+              <div className="md-meta-row">
+                {ratingValue > 0 && (
+                  <span className="md-meta-item">
+                    <svg className="md-meta-star" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 2l2.9 6.9L22 9.2l-5.5 4.8L18.2 22 12 18.3 5.8 22l1.7-8L2 9.2l7.1-.3L12 2z" />
+                    </svg>
+                    {Number(ratingValue).toFixed(1)}
+                    {tvShow.totalRatings > 0 ? ` (${tvShow.totalRatings.toLocaleString()})` : ''}
+                  </span>
+                )}
+                {releaseLabel && (
+                  <span className="md-meta-item">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
+                    </svg>
+                    {releaseLabel}
+                  </span>
                 )}
               </div>
-            ) : tvShow.imageUrl ? (
-              <img 
-                src={tvShow.imageUrl} 
-                alt={tvShow.title}
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  const placeholder = e.target.parentElement.querySelector('.movie-placeholder-large') || document.createElement('div');
-                  placeholder.className = 'movie-placeholder-large';
-                  placeholder.innerHTML = '<span>📺</span>';
-                  if (!e.target.parentElement.querySelector('.movie-placeholder-large')) {
-                    e.target.parentElement.appendChild(placeholder);
-                  } else {
-                    e.target.parentElement.querySelector('.movie-placeholder-large').style.display = 'flex';
-                  }
-                }}
-              />
-            ) : (
-              <div className="movie-placeholder-large">
-                <span>📺</span>
-              </div>
-            )}
-          </div>
 
-          <div className="movie-detail-info">
-            <h1 className="movie-detail-title">
-              {tvShow.title}
-              {tvShow.matureContent && (
-                <span className="mature-badge" title="Mature content — 18+">18+</span>
-              )}
-            </h1>
-            
-            <div className="movie-detail-meta">
-              <div className="meta-item">
-                <span className="meta-label">Year:</span>
-                <span className="meta-value">{tvShow.year}</span>
-              </div>
-              {tvShow.genre && (
-                <div className="meta-item">
-                  <span className="meta-label">Genre:</span>
-                  <span className="meta-value">{tvShow.genre}</span>
-                </div>
-              )}
-              {tvShow.numberOfSeasons > 0 && (
-                <div className="meta-item">
-                  <span className="meta-label">Seasons:</span>
-                  <span className="meta-value">{tvShow.numberOfSeasons}</span>
-                </div>
-              )}
-              {tvShow.episodeCount > 0 && (
-                <div className="meta-item">
-                  <span className="meta-label">Episodes:</span>
-                  <span className="meta-value">{tvShow.episodeCount}</span>
-                </div>
-              )}
-            </div>
-
-            {tvShow.description && (
-              <div className="movie-detail-description">
-                <h3>Description</h3>
-                <p>{tvShow.description}</p>
-              </div>
-            )}
-
-            {(() => {
-              const formatMoney = (value) => {
-                const n = Number(value) || 0;
-                if (n <= 0) return null;
-                if (n >= 1e6) return `$${Math.round(n / 1e6)}M`;
-                if (n >= 1e3) return `$${Math.round(n / 1e3)}K`;
-                return `$${n}`;
-              };
-              const statusLabel =
-                tvShow.status === 'coming_soon'
-                  ? 'Coming Soon'
-                  : tvShow.releaseStatus ||
-                    (tvShow.status === 'active' ? 'Released' : tvShow.status);
-              const detailItems = [
-                tvShow.director ? { label: 'Director', value: tvShow.director } : null,
-                tvShow.director ? { label: '', value: '', spacer: true } : null,
-                statusLabel ? { label: 'Status', value: statusLabel } : null,
-                tvShow.language ? { label: 'Language', value: tvShow.language } : null,
-                formatMoney(tvShow.budget) ? { label: 'Budget', value: formatMoney(tvShow.budget) } : null,
-                formatMoney(tvShow.revenue) ? { label: 'Revenue', value: formatMoney(tvShow.revenue) } : null
-              ].filter((item) => item && (item.spacer || item.value));
-
-              if (detailItems.length === 0) return null;
-
-              return (
-                <div className="md-facts" style={{ marginTop: '1.5rem', maxWidth: '100%' }}>
-                  {detailItems.map((item, index) =>
-                    item.spacer ? (
-                      <div key={`spacer-${index}`} className="md-fact md-fact-spacer" aria-hidden="true" />
-                    ) : (
-                      <div key={item.label} className="md-fact">
-                        <span className="md-fact-label">{item.label}</span>
-                        <span className="md-fact-value">{item.value}</span>
-                      </div>
-                    )
-                  )}
-                </div>
-              );
-            })()}
-
-            <div className="movie-detail-ratings">
-              <div className="rating-item">
-                <span className="rating-label">📺 IMDB Rating:</span>
-                <span className="rating-value">
-                  {tvShow.imdbRating ? tvShow.imdbRating.toFixed(1) : 'N/A'}/10
-                </span>
-              </div>
-            </div>
-
-            {trailerUrl && (
-              <div className="movie-detail-actions" style={{ marginTop: '1rem' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-large"
-                  onClick={() => setShowTrailer(true)}
-                >
-                  Watch Trailer
-                </button>
-              </div>
-            )}
-
-          </div>
-
-          {/* Episodes, outside the info column so they span the poster width too */}
-          <div style={{ gridColumn: '1 / -1', minWidth: 0 }}>
-            {seasons.length > 0 ? (
-              <div className="episodes-section" style={{ marginTop: '30px' }}>
-                <h3 style={{ marginBottom: '16px', color: '#f5f5f5' }}>
-                  Episodes
-                  <span style={{ color: '#8a8a8a', fontWeight: 'normal', fontSize: '16px', marginLeft: '10px' }}>
-                    ({sortedEpisodes.length} across {seasons.length} season{seasons.length !== 1 ? 's' : ''})
-                  </span>
-                </h3>
-
-                {/* One tab per season - only the chosen season's episodes are listed */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '22px' }}>
-                  {seasons.map((season) => {
-                    const isActive = season.seasonNumber === currentSeason.seasonNumber;
-
-                    return (
-                      <button
-                        key={season.seasonNumber}
-                        type="button"
-                        onClick={() => setActiveSeason(season.seasonNumber)}
-                        title={`${season.episodes.length} episodes`}
-                        style={{
-                          padding: '9px 18px',
-                          borderRadius: '999px',
-                          border: `1px solid ${isActive ? '#c9314a' : '#2f2f2f'}`,
-                          background: isActive ? '#c9314a' : '#1c1c1c',
-                          color: isActive ? '#fff' : '#c9c9c9',
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!isActive) e.currentTarget.style.background = '#2a2a2a';
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!isActive) e.currentTarget.style.background = '#1c1c1c';
-                        }}
-                      >
-                        Season {String(season.seasonNumber).padStart(2, '0')}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div style={{
-                  border: '1px solid #262626',
-                  borderRadius: '10px',
-                  overflow: 'hidden',
-                  overflowX: 'auto'
-                }}>
-                  {currentSeason.episodes.map((episode, episodeIndex) => {
-                    // Numbering restarts at 1 inside each season
-                    const seasonEpisodeNumber = episodeIndex + 1;
-
-                    return (
-                      <div
-                        key={episode._id || episodeIndex}
-                        onClick={() => handleWatchEpisode(episode)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '16px',
-                          padding: '12px 16px',
-                          background: '#141414',
-                          borderBottom: episodeIndex === currentSeason.episodes.length - 1
-                            ? 'none'
-                            : '1px solid #232323',
-                          cursor: 'pointer',
-                          transition: 'background 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = '#c9314a'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = '#141414'; }}
-                      >
-                        <span style={{
-                          minWidth: '28px',
-                          textAlign: 'center',
-                          color: '#8a8a8a',
-                          fontSize: '15px',
-                          fontWeight: 600
-                        }}>
-                          {seasonEpisodeNumber}
-                        </span>
-
-                        <img
-                          src={tvShow.imageUrl}
-                          alt=""
-                          style={{
-                            width: '68px',
-                            height: '42px',
-                            objectFit: 'cover',
-                            borderRadius: '4px',
-                            background: '#222',
-                            flexShrink: 0
-                          }}
-                        />
-
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{
-                            color: '#f5f5f5',
-                            fontWeight: 700,
-                            fontSize: '14px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap'
-                          }}>
-                            {episode.episodeTitle || `Episode ${seasonEpisodeNumber}`}
-                          </div>
-                          <div style={{ color: '#8a8a8a', fontSize: '12px', marginTop: '3px' }}>
-                            Season {String(currentSeason.seasonNumber).padStart(2, '0')} · Episode {String(seasonEpisodeNumber).padStart(2, '0')}
-                          </div>
-                        </div>
-
-                        <span style={{ color: '#8a8a8a', fontSize: '13px', flexShrink: 0 }}>▶</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : sortedEpisodes.length > 0 ? (
-              <div className="episodes-section" style={{ marginTop: '30px' }}>
-                <h3 style={{ marginBottom: '20px' }}>Episodes ({sortedEpisodes.length})</h3>
-                <div className="episodes-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
-                  {sortedEpisodes.map((episode, index) => (
-                    <div 
-                      key={index} 
-                      className="episode-card"
-                      style={{
-                        padding: '15px',
-                        border: '1px solid #ddd',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        backgroundColor: '#f9f9f9',
-                        transition: 'all 0.3s ease'
-                      }}
-                      onClick={() => handleWatchEpisode(episode)}
-                      onMouseEnter={(e) => {
-                        if (isAuthenticated) {
-                          e.currentTarget.style.backgroundColor = '#e9e9e9';
-                          e.currentTarget.style.transform = 'translateY(-2px)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#f9f9f9';
-                        e.currentTarget.style.transform = 'translateY(0)';
-                      }}
-                    >
-                      <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#333' }}>
-                        Episode {episode.episodeNumber}
-                      </div>
-                      {episode.episodeTitle && (
-                        <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>
-                          {episode.episodeTitle}
-                        </div>
-                      )}
-                      <div style={{ fontSize: '12px', color: '#999' }}>
-                        Click to watch →
-                      </div>
-                    </div>
+              {metaPills.length > 0 && (
+                <div className="md-genres">
+                  {metaPills.map((pill) => (
+                    <span key={pill} className="md-genre-pill">
+                      {pill}
+                    </span>
                   ))}
                 </div>
-              </div>
-            ) : tvShow.showUrl || tvShow.status === 'coming_soon' ? (
-              <div className="movie-detail-actions" style={{ marginTop: '30px' }}>
+              )}
+
+              <div className="md-actions">
                 {tvShow.status === 'coming_soon' ? (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-large"
-                    disabled
-                    aria-disabled="true"
-                  >
+                  <button type="button" className="md-btn md-btn-coming-soon" disabled>
                     Coming Soon
                   </button>
                 ) : (
+                  canWatch && (
+                    <button type="button" className="md-btn md-btn-primary" onClick={handleWatchNow}>
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                      Watch Now
+                    </button>
+                  )
+                )}
+                {trailerUrl && (
                   <button
                     type="button"
-                    className="btn btn-primary btn-large"
-                    onClick={handleWatchShow}
+                    className="md-btn md-btn-secondary"
+                    onClick={() => setShowTrailer(true)}
                   >
-                    Watch TV Show
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                    Watch Trailer
                   </button>
                 )}
               </div>
-            ) : null}
+            </div>
           </div>
-        </div>
+
+          {overview && (
+            <div className="md-overview">
+              <h2 className="md-section-title">Overview</h2>
+              <p>{overview}</p>
+            </div>
+          )}
+
+          {detailItems.length > 0 && (
+            <div className="md-facts">
+              {detailItems.map((item) => (
+                <div key={item.label} className="md-fact">
+                  <span className="md-fact-label">{item.label}</span>
+                  <span className="md-fact-value">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {cast.length > 0 && (
+            <div className="md-cast">
+              <h2 className="md-section-title">Cast</h2>
+              <div className="md-cast-grid">
+                {cast.map((person) => (
+                  <article key={`${person.name}-${person.character}`} className="md-cast-card">
+                    <div className="md-cast-photo">
+                      {person.profile ? (
+                        <img src={person.profile} alt={person.name} loading="lazy" />
+                      ) : (
+                        <span aria-hidden="true">👤</span>
+                      )}
+                    </div>
+                    <h3 className="md-cast-name">{person.name}</h3>
+                    {person.character && <p className="md-cast-role">{person.character}</p>}
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
       </div>
     </>
   );
 };
 
 export default TVShowDetail;
-

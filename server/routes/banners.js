@@ -1,4 +1,5 @@
 const express = require('express');
+const fetch = require('node-fetch');
 const { body, validationResult } = require('express-validator');
 const Banner = require('../models/Banner');
 const Movie = require('../models/Movie');
@@ -11,6 +12,22 @@ const { isPubliclyAccessible } = require('../utils/contentPolicy');
 const router = express.Router();
 
 const DETAIL_FIELDS = 'title year description genre imdbRating averageRating imageUrl images';
+const PICKER_FIELDS = 'title year genre bannerUrl status imdbRating';
+
+const buildPickerFilter = (search = '') => {
+  const q = String(search || '').trim();
+  if (!q) return {};
+  const filter = {
+    $or: [
+      { title: { $regex: q, $options: 'i' } },
+      { genre: { $regex: q, $options: 'i' } }
+    ]
+  };
+  if (/^\d{4}$/.test(q)) {
+    filter.$or.push({ year: parseInt(q, 10) });
+  }
+  return filter;
+};
 
 const destroyImage = async (publicId) => {
   if (!publicId) return;
@@ -74,25 +91,120 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
   }
 });
 
+// @route   GET /api/banners/picker/catalog
+// @desc    Lean movie/TV lists for the home banner picker (no 2000 cap)
+// @access  Private/Admin
+router.get('/picker/catalog', protect, restrictToAdmin, async (req, res) => {
+  try {
+    const filter = buildPickerFilter(req.query.search);
+
+    const [movies, tvShows] = await Promise.all([
+      Movie.find(filter).select(PICKER_FIELDS).sort({ title: 1 }).lean(),
+      TVShow.find(filter).select(PICKER_FIELDS).sort({ title: 1 }).lean()
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        movies,
+        tvShows,
+        counts: { movies: movies.length, tvShows: tvShows.length }
+      }
+    });
+  } catch (error) {
+    console.error('Get banner picker catalog error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching catalog for banner picker'
+    });
+  }
+});
+
+// @route   GET /api/banners/picker/image
+// @desc    Proxy external banner images for admin cropping (avoids browser CORS)
+// @access  Private/Admin
+router.get('/picker/image', protect, restrictToAdmin, async (req, res) => {
+  const rawUrl = String(req.query.url || '').trim();
+
+  if (!isHttpUrl(rawUrl)) {
+    return res.status(400).json({
+      success: false,
+      message: 'A valid image URL is required'
+    });
+  }
+
+  try {
+    const response = await fetch(rawUrl);
+    if (!response.ok) {
+      return res.status(502).json({
+        success: false,
+        message: 'Could not fetch the image'
+      });
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.startsWith('image/')) {
+      return res.status(400).json({
+        success: false,
+        message: 'URL does not point to an image'
+      });
+    }
+
+    const buffer = await response.buffer();
+    if (buffer.length > 10 * 1024 * 1024) {
+      return res.status(400).json({
+        success: false,
+        message: 'Image is too large to crop (max 10MB)'
+      });
+    }
+
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'private, max-age=3600');
+    return res.send(buffer);
+  } catch (error) {
+    console.error('Banner image proxy error:', error);
+    return res.status(502).json({
+      success: false,
+      message: 'Could not fetch the image for cropping'
+    });
+  }
+});
+
 const resolveLink = async ({ movieId, tvShowId }) => {
   if (movieId) {
-    const movie = await Movie.findById(movieId).select('_id title');
+    const movie = await Movie.findById(movieId).select('_id title bannerUrl');
     if (!movie) return { error: 'Selected movie was not found' };
-    return { movie: movie._id, tvShow: null, title: movie.title };
+    return {
+      movie: movie._id,
+      tvShow: null,
+      title: movie.title,
+      bannerUrl: movie.bannerUrl || ''
+    };
   }
   if (tvShowId) {
-    const tvShow = await TVShow.findById(tvShowId).select('_id title');
+    const tvShow = await TVShow.findById(tvShowId).select('_id title bannerUrl');
     if (!tvShow) return { error: 'Selected TV show was not found' };
-    return { movie: null, tvShow: tvShow._id, title: tvShow.title };
+    return {
+      movie: null,
+      tvShow: tvShow._id,
+      title: tvShow.title,
+      bannerUrl: tvShow.bannerUrl || ''
+    };
   }
   return { error: 'Please select a movie or a TV show' };
 };
 
+const isHttpUrl = (value) =>
+  typeof value === 'string' && value.trim().startsWith('http');
+
+const isBannerImage = (value) =>
+  typeof value === 'string' &&
+  (value.trim().startsWith('http') || value.startsWith('data:image/'));
+
 // @route   POST /api/banners
 router.post('/', protect, restrictToAdmin, [
   body('image')
-    .notEmpty()
-    .withMessage('An image file or image URL is required'),
+    .optional({ checkFalsy: true }),
   body('movieId')
     .optional({ checkFalsy: true })
     .isMongoId()
@@ -136,9 +248,20 @@ router.post('/', protect, restrictToAdmin, [
       return res.status(400).json({ success: false, message: link.error });
     }
 
+    const imageSource = isBannerImage(image)
+      ? image
+      : (isHttpUrl(link.bannerUrl) ? link.bannerUrl : '');
+
+    if (!imageSource) {
+      return res.status(400).json({
+        success: false,
+        message: 'Selected title has no wide banner. Upload an image or add a banner to that title first.'
+      });
+    }
+
     let uploaded;
     try {
-      uploaded = await uploadImage(image, { type: 'banner' });
+      uploaded = await uploadImage(imageSource, { type: 'banner' });
     } catch (uploadError) {
       console.error('Banner upload error:', uploadError);
       return res.status(400).json({
@@ -197,6 +320,9 @@ router.put('/:id', protect, restrictToAdmin, async (req, res) => {
     const cleanMovieId = movieId && String(movieId).trim() ? String(movieId).trim() : null;
     const cleanTvShowId = tvShowId && String(tvShowId).trim() ? String(tvShowId).trim() : null;
 
+    let linkedBannerUrl = '';
+    let linkChanged = false;
+
     if (cleanMovieId || cleanTvShowId) {
       if (cleanMovieId && cleanTvShowId) {
         return res.status(400).json({
@@ -213,7 +339,11 @@ router.put('/:id', protect, restrictToAdmin, async (req, res) => {
         return res.status(400).json({ success: false, message: link.error });
       }
 
-      // Explicitly clear the other link so old "movie required" docs migrate cleanly
+      linkChanged =
+        (link.movie && String(banner.movie || '') !== String(link.movie)) ||
+        (link.tvShow && String(banner.tvShow || '') !== String(link.tvShow));
+      linkedBannerUrl = link.bannerUrl || '';
+
       banner.movie = link.movie || null;
       banner.tvShow = link.tvShow || null;
       if (title === undefined || title === null || title === '') {
@@ -221,10 +351,14 @@ router.put('/:id', protect, restrictToAdmin, async (req, res) => {
       }
     }
 
-    if (image && image !== banner.imageUrl) {
+    const imageToApply = isBannerImage(image)
+      ? image
+      : (linkChanged && isHttpUrl(linkedBannerUrl) ? linkedBannerUrl : '');
+
+    if (imageToApply && imageToApply !== banner.imageUrl) {
       let uploaded;
       try {
-        uploaded = await uploadImage(image, { type: 'banner' });
+        uploaded = await uploadImage(imageToApply, { type: 'banner' });
       } catch (uploadError) {
         console.error('Banner upload error:', uploadError);
         return res.status(400).json({

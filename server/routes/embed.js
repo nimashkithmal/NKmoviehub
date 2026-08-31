@@ -45,4 +45,46 @@ const proxyEmbed = async (req, res, path) => {
 router.get('/movie', (req, res) => proxyEmbed(req, res, 'movie'));
 router.get('/tv', (req, res) => proxyEmbed(req, res, 'tv'));
 
+router.get('/season', async (req, res) => {
+  const { tmdb_id, season } = req.query;
+  const tmdbId = String(tmdb_id || '').trim();
+  const seasonNum = Math.max(1, parseInt(season, 10) || 1);
+
+  if (!tmdbId) {
+    return res.status(400).json({
+      success: false,
+      message: 'tmdb_id is required'
+    });
+  }
+
+  try {
+    const response = await fetch(
+      `${EMBED_API}/season?tmdb_id=${encodeURIComponent(tmdbId)}&season=${seasonNum}`,
+      { headers: { Accept: 'application/json' } }
+    );
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        success: false,
+        message: 'Season metadata unavailable'
+      });
+    }
+
+    const data = await response.json();
+    const episodes = (data.episodes || []).map((ep) => ({
+      episodeNumber: Number(ep.episode_number) || 0,
+      still: ep.still || ''
+    }));
+
+    res.set('Cache-Control', 'public, max-age=3600');
+    return res.json({ success: true, data: { season: seasonNum, episodes } });
+  } catch (err) {
+    console.error('Embed season proxy error:', err.message);
+    return res.status(502).json({
+      success: false,
+      message: 'Failed to fetch season metadata'
+    });
+  }
+});
+
 module.exports = router;

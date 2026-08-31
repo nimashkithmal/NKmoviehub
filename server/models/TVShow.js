@@ -61,6 +61,16 @@ const tvShowSchema = new mongoose.Schema({
       required: true,
       min: [1, 'Episode number must be at least 1']
     },
+    seasonNumber: {
+      type: Number,
+      min: [1, 'Season number must be at least 1'],
+      default: null
+    },
+    seasonEpisodeNumber: {
+      type: Number,
+      min: [1, 'Season episode number must be at least 1'],
+      default: null
+    },
     episodeUrl: {
       type: String,
       required: true,
@@ -162,6 +172,11 @@ const tvShowSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
     index: true
+  },
+  tmdbId: {
+    type: String,
+    trim: true,
+    default: ''
   }
 }, {
   timestamps: true

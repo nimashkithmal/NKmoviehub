@@ -10,6 +10,7 @@ import AddMovie from './components/AddMovie';
 import AddTVShow from './components/AddTVShow';
 import MovieDetail from './components/MovieDetail';
 import TVShowDetail from './components/TVShowDetail';
+import TVWatchPage from './components/TVWatchPage';
 import Collections from './components/Collections';
 import LegalPage, { ContactPage } from './components/LegalPage';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -36,7 +37,9 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
 const AppShell = () => {
   const location = useLocation();
   const isDetailPage =
-    location.pathname.startsWith('/movie/') || location.pathname.startsWith('/tvshow/');
+    location.pathname.startsWith('/movie/') ||
+    location.pathname.startsWith('/tvshow/') ||
+    location.pathname.startsWith('/watch/');
   const isFullBleedMain =
     isDetailPage || location.pathname === '/collections';
 
@@ -59,6 +62,7 @@ const AppShell = () => {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/movie/:id" element={<MovieDetail />} />
           <Route path="/tvshow/:id" element={<TVShowDetail />} />
+          <Route path="/watch/tv/:id" element={<TVWatchPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route
