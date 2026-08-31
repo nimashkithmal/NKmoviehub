@@ -4,14 +4,21 @@ import CatalogCard from './CatalogCard';
 import { withReturnPath } from '../utils/navigation';
 import './CatalogGrid.css';
 
-const TVShowGrid = ({ tvShows, searchTerm = '', selectedGenre = '', selectedYear = '' }) => {
+const TVShowGrid = ({
+  tvShows,
+  searchTerm = '',
+  selectedGenre = '',
+  selectedYear = '',
+  selectedLanguage = ''
+}) => {
   const navigate = useNavigate();
   const location = useLocation();
 
   const hasSearchTerm = searchTerm && searchTerm.trim().length > 0;
   const hasGenreFilter = selectedGenre && selectedGenre.trim().length > 0;
   const hasYearFilter = selectedYear && selectedYear.trim().length > 0;
-  const hasActiveFilters = hasSearchTerm || hasGenreFilter || hasYearFilter;
+  const hasLanguageFilter = selectedLanguage && selectedLanguage.trim().length > 0;
+  const hasActiveFilters = hasSearchTerm || hasGenreFilter || hasYearFilter || hasLanguageFilter;
   const hasTVShows = tvShows && tvShows.length > 0;
 
   return (
@@ -21,7 +28,7 @@ const TVShowGrid = ({ tvShows, searchTerm = '', selectedGenre = '', selectedYear
           <h3>No TV Shows Available</h3>
           <p>
             {hasActiveFilters
-              ? 'Nothing matched these filters. Try another genre or year.'
+              ? 'Nothing matched these filters. Try another language, genre, or year.'
               : 'No TV shows in the catalog yet.'}
           </p>
         </div>

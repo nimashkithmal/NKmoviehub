@@ -6,6 +6,7 @@ import AdminManagement from './AdminManagement';
 import BannerManagement from './BannerManagement';
 import CollectionManagement from './CollectionManagement';
 import AnalyticsDashboard from './AnalyticsDashboard';
+import PendingTitlesManagement from './PendingTitlesManagement';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -1133,6 +1134,12 @@ const AdminDashboard = () => {
           TV Show Management
         </button>
         <button
+          className={`tab-button ${activeTab === 'new' ? 'active' : ''}`}
+          onClick={() => setActiveTab('new')}
+        >
+          New
+        </button>
+        <button
           className={`tab-button ${activeTab === 'banners' ? 'active' : ''}`}
           onClick={() => setActiveTab('banners')}
         >
@@ -1159,7 +1166,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Statistics Cards */}
-      {activeTab !== 'banners' && activeTab !== 'admins' && activeTab !== 'contacts' && activeTab !== 'collections' && activeTab !== 'analytics' && (
+      {activeTab !== 'banners' && activeTab !== 'admins' && activeTab !== 'contacts' && activeTab !== 'collections' && activeTab !== 'analytics' && activeTab !== 'new' && (
       <div className="dashboard-stats">
         {activeTab === 'tvshows' ? (
           <>
@@ -2392,6 +2399,11 @@ const AdminDashboard = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* New titles from 2embed */}
+      {activeTab === 'new' && (
+        <PendingTitlesManagement token={token} showNotification={showNotification} />
       )}
 
       {/* Admin Management Section */}

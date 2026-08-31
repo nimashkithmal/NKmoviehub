@@ -47,9 +47,14 @@ const bannerRoutes = require('./routes/banners');
 const collectionRoutes = require('./routes/collections');
 const notificationRoutes = require('./routes/notifications');
 const discoveryRoutes = require('./routes/discovery');
+const searchRoutes = require('./routes/search');
 const analyticsRoutes = require('./routes/analytics');
 const embedRoutes = require('./routes/embed');
 const seoRoutes = require('./routes/seo');
+const castRoutes = require('./routes/cast');
+const syncRoutes = require('./routes/sync');
+const { startCastIndexer } = require('./utils/castIndexer');
+const { startEmbedSyncIndexer } = require('./utils/embedSyncIndexer');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -67,6 +72,8 @@ mongoose.connect(process.env.MONGODB_URI, {
 .then(() => {
   console.log('✅ Connected to MongoDB successfully');
   console.log(`📊 Database: ${process.env.MONGODB_URI}`);
+  startCastIndexer();
+  startEmbedSyncIndexer();
 })
 .catch((err) => {
   console.error('❌ MongoDB connection error:', err);
@@ -83,9 +90,12 @@ app.use('/api/banners', bannerRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/discovery', discoveryRoutes);
+app.use('/api/search', searchRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/embed', embedRoutes);
 app.use('/api/seo', seoRoutes);
+app.use('/api/cast', castRoutes);
+app.use('/api/sync', syncRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

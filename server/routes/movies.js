@@ -25,6 +25,11 @@ const fetch = require('node-fetch');
 // Cloudinary is configured once in utils/cloudinaryUpload; every poster that
 // reaches the database is uploaded there first
 const { cloudinary, uploadPoster, uploadPosters } = require('../utils/cloudinaryUpload');
+const {
+  applyLanguageFilter,
+  collectLanguageOptions
+} = require('../utils/languageFilter');
+const { findExistingMovieDuplicate } = require('../utils/deduplicateMovies');
 
 const router = express.Router();
 
@@ -79,7 +84,16 @@ const pickMetaFields = (body = {}) => {
 // @access  Public
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 1000, search = '', genre = '', year = '', status = 'active', sort = 'latest' } = req.query;
+    const {
+      page = 1,
+      limit = 1000,
+      search = '',
+      genre = '',
+      year = '',
+      language = '',
+      status = 'active',
+      sort = 'popular'
+    } = req.query;
     
     // Public catalog: active by default; Coming Soon category uses status=coming_soon
     // Search should also find Coming Soon titles (e.g. Avengers: Doomsday)
@@ -118,6 +132,8 @@ router.get('/', async (req, res) => {
     if (year) {
       filter.year = parseInt(year);
     }
+
+    applyLanguageFilter(filter, language);
 
     // Calculate pagination
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -309,12 +325,16 @@ router.get('/filters', async (req, res) => {
     // Get unique years, sorted descending
     const years = await Movie.distinct('year', applyPublicCatalogFilter({ status: 'active' }));
     const sortedYears = years.sort((a, b) => b - a);
+
+    const rawLanguages = await Movie.distinct('language', applyPublicCatalogFilter({ status: 'active' }));
+    const languages = collectLanguageOptions(rawLanguages);
     
     res.json({
       success: true,
       data: {
         genres,
-        years: sortedYears
+        years: sortedYears,
+        languages
       }
     });
   } catch (error) {
@@ -639,6 +659,18 @@ router.post('/', protect, restrictToAdmin, [
       return res.status(400).json({
         success: false,
         message: 'Movie URL cannot be empty'
+      });
+    }
+
+    const existingMovie = await findExistingMovieDuplicate({
+      title,
+      year,
+      movieUrl
+    });
+    if (existingMovie) {
+      return res.status(409).json({
+        success: false,
+        message: `A movie with this title and year already exists (${existingMovie.title}, ${existingMovie.year})`
       });
     }
     

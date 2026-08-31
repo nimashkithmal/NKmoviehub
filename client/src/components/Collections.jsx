@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import './Collections.css';
 
 const COLLECTION_CATEGORIES = [
@@ -164,6 +164,7 @@ const ArrowIcon = () => (
 
 const Collections = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const panelRef = useRef(null);
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -196,6 +197,13 @@ const Collections = () => {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    const pick = new URLSearchParams(location.search).get('pick');
+    if (pick && collections.some((item) => item._id === pick)) {
+      setActiveId(pick);
+    }
+  }, [location.search, collections]);
 
   const activeCollection = collections.find((item) => item._id === activeId) || null;
   const activeMovies = (activeCollection?.movies || []).filter(Boolean);

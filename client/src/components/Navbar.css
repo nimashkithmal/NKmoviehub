@@ -3,12 +3,13 @@
 /* Minimal MovieAI-style top nav: Home / Movies / TV Shows + search */
 
 .navbar {
-  position: fixed;
+  position: fixed !important;
   top: 0;
   left: 0;
   right: 0;
   z-index: 1000;
   height: 72px;
+  padding: 0 !important;
   background: rgba(17, 17, 17, 0.92);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
@@ -257,7 +258,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(1.25rem, 4vw, 2.75rem);
+  gap: clamp(1rem, 3vw, 2rem);
 }
 
 .nav-link {
@@ -266,12 +267,13 @@
   padding: 0.35rem 0.15rem;
   color: rgba(255, 255, 255, 0.62);
   font-family: inherit;
-  font-size: 0.98rem;
+  font-size: 0.92rem;
   font-weight: 500;
   letter-spacing: 0.01em;
   cursor: pointer;
   transition: color 0.2s ease;
   position: relative;
+  white-space: nowrap;
 }
 
 .nav-link:hover {
@@ -517,9 +519,9 @@
   right: 0;
   top: calc(100% + 0.55rem);
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  width: min(320px, calc(100vw - 2rem));
+  flex-direction: column;
+  gap: 0.35rem;
+  width: min(360px, calc(100vw - 2rem));
   padding: 0.45rem;
   background: rgba(24, 24, 27, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -527,6 +529,86 @@
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
   animation: nav-pop 0.18s ease-out;
   z-index: 20;
+}
+
+.nav-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.nav-search-suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.25rem;
+}
+
+.nav-search-suggestion {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 0.5rem 0.45rem;
+  border-radius: 0.55rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.nav-search-suggestion:hover,
+.nav-search-suggestion.is-active {
+  background: rgba(229, 9, 20, 0.14);
+}
+
+.nav-search-suggestion.is-status {
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.82rem;
+  cursor: default;
+}
+
+.nav-search-suggestion-thumb {
+  width: 34px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 0.3rem;
+  flex-shrink: 0;
+  background: #27272a;
+}
+
+.nav-search-suggestion-thumb.is-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+}
+
+.nav-search-suggestion-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.nav-search-suggestion-title {
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-search-suggestion-meta {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.74rem;
 }
 
 @keyframes nav-pop {
@@ -630,23 +712,277 @@
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-@media (max-width: 640px) {
-  .nav-center {
-    gap: 0.85rem;
-  }
-
-  .nav-link {
-    font-size: 0.88rem;
-  }
-
-  .nav-account-toggle,
-  .nav-notif-toggle {
-    width: 2.25rem;
-    height: 2.25rem;
-  }
-}
-
 /* Legacy category bar no longer used on the public home */
 .movie-header {
   display: none;
+}
+
+/* Filter dropdowns in main nav */
+.nav-filter-dropdown {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(320px, calc(100vw - 2rem));
+  background: rgba(18, 18, 18, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  z-index: 30;
+  animation: nav-pop 0.18s ease-out;
+  overflow: hidden;
+}
+
+.nav-filter-dropdown--wide {
+  width: min(420px, calc(100vw - 2rem));
+}
+
+.nav-filter-dropdown--compact {
+  width: min(280px, calc(100vw - 2rem));
+}
+
+.nav-filter-dropdown-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.82rem;
+}
+
+.nav-filter-dropdown-head strong {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  color: #9ca3af;
+}
+
+.nav-filter-dropdown-head span {
+  color: #fecaca;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.nav-filter-link-btn {
+  border: none;
+  background: transparent;
+  color: #e50914;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.nav-filter-dropdown-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.8rem 0.9rem 0.95rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.nav-filter-dropdown-grid--years {
+  max-height: 240px;
+}
+
+.nav-filter-option {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: #e5e5e5;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.42rem 0.75rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.nav-filter-option em {
+  font-style: normal;
+  font-size: 0.68rem;
+  color: #9ca3af;
+  font-weight: 700;
+}
+
+.nav-filter-option:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.nav-filter-option.is-active {
+  background: rgba(229, 9, 20, 0.18);
+  border-color: rgba(229, 9, 20, 0.65);
+  color: #fff;
+}
+
+.nav-filter-dropdown-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 0.35rem 0;
+}
+
+.nav-filter-list-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #f5f5f5;
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.65rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.nav-filter-list-option em {
+  font-style: normal;
+  font-size: 0.72rem;
+  color: #9ca3af;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.nav-filter-list-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nav-filter-status,
+.nav-filter-coming-soon {
+  display: block;
+  padding: 0.85rem 0.9rem 1rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.nav-mobile-toggle {
+  display: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.nav-mobile-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.nav-mobile-toggle svg {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.nav-mobile-overlay {
+  position: fixed;
+  inset: 72px 0 0;
+  z-index: 999;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.nav-mobile-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.85rem;
+  background: rgba(17, 17, 17, 0.98);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.nav-mobile-link {
+  width: 100%;
+  border: none;
+  border-radius: 0.65rem;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.85rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-mobile-link:hover,
+.nav-mobile-link.is-active {
+  background: rgba(229, 9, 20, 0.12);
+  color: #fff;
+}
+
+.nav-mobile-link.is-active {
+  font-weight: 700;
+}
+
+@media (max-width: 1024px) {
+  .navbar-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 0.85rem;
+  }
+
+  .nav-left {
+    flex: 1 1 auto;
+    min-width: 0;
+    z-index: 2;
+  }
+
+  .nav-center {
+    display: none !important;
+  }
+
+  .nav-right {
+    flex: 0 0 auto;
+    gap: 0.15rem;
+    z-index: 2;
+  }
+
+  .nav-mobile-toggle {
+    display: inline-flex !important;
+  }
+}
+
+@media (min-width: 1025px) {
+  .nav-mobile-overlay {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .nav-account-toggle,
+  .nav-notif-toggle,
+  .nav-search-toggle,
+  .nav-mobile-toggle {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
 }

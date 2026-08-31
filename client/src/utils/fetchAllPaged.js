@@ -45,7 +45,8 @@ export function buildMoviesUrl({
   search = '',
   genre = '',
   year = '',
-  sort = 'latest',
+  language = '',
+  sort = 'popular',
   status = ''
 } = {}) {
   const params = new URLSearchParams();
@@ -54,7 +55,8 @@ export function buildMoviesUrl({
   if (search) params.set('search', search);
   if (genre) params.set('genre', genre);
   if (year) params.set('year', String(year));
-  if (sort && sort !== 'latest') params.set('sort', sort);
+  if (language) params.set('language', language);
+  if (sort) params.set('sort', sort);
   if (status === 'coming_soon') params.set('status', 'coming_soon');
   return `/api/movies?${params.toString()}`;
 }
@@ -65,7 +67,8 @@ export function buildTVShowsUrl({
   search = '',
   genre = '',
   year = '',
-  sort = 'latest',
+  language = '',
+  sort = 'popular',
   status = ''
 } = {}) {
   const params = new URLSearchParams();
@@ -74,7 +77,8 @@ export function buildTVShowsUrl({
   if (search) params.set('search', search);
   if (genre) params.set('genre', genre);
   if (year) params.set('year', String(year));
-  if (sort && sort !== 'latest') params.set('sort', sort);
+  if (language) params.set('language', language);
+  if (sort) params.set('sort', sort);
   if (status === 'coming_soon') params.set('status', 'coming_soon');
   return `/api/tvshows?${params.toString()}`;
 }

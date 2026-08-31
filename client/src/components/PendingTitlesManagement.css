@@ -1,0 +1,288 @@
+.pending-titles-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.pending-titles-sub {
+  margin: 0.35rem 0 0;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.92rem;
+}
+
+.pending-titles-sub a {
+  color: #7eb8ff;
+}
+
+.pending-titles-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  min-width: 280px;
+}
+
+.pending-search-inline {
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 320px;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.pending-search-inline::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.pending-sync-status {
+  padding: 0.65rem 0.9rem;
+  border-radius: 8px;
+  background: rgba(126, 184, 255, 0.12);
+  color: #b8d9ff;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.pending-sync-status--done {
+  background: rgba(120, 220, 140, 0.1);
+  color: #b8f0c4;
+}
+
+.pending-sync-status--info {
+  background: rgba(255, 196, 86, 0.12);
+  color: #ffd98a;
+}
+
+.pending-sync-status--warn {
+  background: rgba(255, 120, 120, 0.12);
+  color: #ffb4b4;
+}
+
+.pending-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.pending-filter-chip {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+}
+
+.pending-filter-chip.active {
+  background: #e50914;
+  border-color: #e50914;
+  color: #fff;
+}
+
+.pending-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.pending-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  padding: 0.85rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pending-card--review {
+  grid-column: 1 / -1;
+  border-color: rgba(126, 184, 255, 0.35);
+  background: rgba(126, 184, 255, 0.06);
+}
+
+.pending-card-poster {
+  position: relative;
+  flex: 0 0 88px;
+}
+
+.pending-card-poster img {
+  width: 88px;
+  height: 132px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+
+.pending-type-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+}
+
+.pending-type-badge--tvshow {
+  background: rgba(80, 120, 255, 0.9);
+}
+
+.pending-coming-soon-badge {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  right: 4px;
+  text-align: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.2rem 0.25rem;
+  border-radius: 4px;
+  background: rgba(229, 9, 20, 0.92);
+  color: #fff;
+}
+
+.pending-card-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.pending-card-body h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.pending-card-meta {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.pending-card-desc {
+  margin: 0 0 0.65rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.72);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pending-card-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pending-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.pending-approval-panel {
+  flex: 1 1 100%;
+  margin-top: 0.25rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pending-approval-panel h4 {
+  margin: 0 0 0.85rem;
+  font-size: 0.95rem;
+  color: #b8d9ff;
+}
+
+.pending-approval-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 0.85rem;
+}
+
+.pending-approval-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.pending-approval-span2 {
+  grid-column: span 2;
+}
+
+.pending-approval-full {
+  grid-column: 1 / -1;
+}
+
+.pending-approval-grid input,
+.pending-approval-grid select,
+.pending-approval-grid textarea {
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+  font-size: 0.88rem;
+}
+
+.pending-approval-grid textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.pending-approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .pending-titles-actions {
+    width: 100%;
+  }
+
+  .pending-search-inline {
+    max-width: none;
+    flex-basis: 100%;
+  }
+
+  .pending-card {
+    flex-direction: column;
+  }
+
+  .pending-card-poster {
+    flex-basis: auto;
+  }
+
+  .pending-card-poster img {
+    width: 100%;
+    height: auto;
+    max-height: 220px;
+  }
+
+  .pending-approval-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pending-approval-span2,
+  .pending-approval-full {
+    grid-column: auto;
+  }
+}

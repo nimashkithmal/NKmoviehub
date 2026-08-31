@@ -629,8 +629,8 @@ const MoviePlayer = ({ movie, onClose }) => {
               {showEmbedQualityTip && (
                 <div className="movie-player-quality-tip">
                   Use the settings icon inside the video player to change quality
-                  (Auto / 1080p / 720p). Different servers may also offer different
-                  stream quality.
+                  (Auto / 1080p / 720p). If one server says no video, try Server 2–6.
+                  New releases may take a few days to appear on all servers.
                 </div>
               )}
             </div>

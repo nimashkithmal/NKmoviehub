@@ -7,14 +7,16 @@ const MovieGrid = ({
   movies,
   searchTerm = '',
   selectedGenre = '',
-  selectedYear = ''
+  selectedYear = '',
+  selectedLanguage = ''
 }) => {
   const navigate = useNavigate();
 
   const hasSearchTerm = searchTerm && searchTerm.trim().length > 0;
   const hasGenreFilter = selectedGenre && selectedGenre.trim().length > 0;
   const hasYearFilter = selectedYear && selectedYear.trim().length > 0;
-  const hasActiveFilters = hasSearchTerm || hasGenreFilter || hasYearFilter;
+  const hasLanguageFilter = selectedLanguage && selectedLanguage.trim().length > 0;
+  const hasActiveFilters = hasSearchTerm || hasGenreFilter || hasYearFilter || hasLanguageFilter;
   const hasMovies = movies && movies.length > 0;
 
   return (
@@ -24,7 +26,7 @@ const MovieGrid = ({
           <h3>No Movies Available</h3>
           <p>
             {hasActiveFilters
-              ? 'Nothing matched these filters. Try another genre or year.'
+              ? 'Nothing matched these filters. Try another language, genre, or year.'
               : 'No movies in the catalog yet.'}
           </p>
         </div>

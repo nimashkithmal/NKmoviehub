@@ -15,6 +15,7 @@ const DEFAULT_TITLE = 'NK Movie Hub — Movies & TV Series';
 const ROUTE_TITLES = {
   '/': DEFAULT_TITLE,
   '/collections': 'Collections | NK Movie Hub',
+  '/cast-collection': 'Cast Collection | NK Movie Hub',
   '/about': 'About Us | NK Movie Hub',
   '/contact': 'Contact Us | NK Movie Hub',
   '/privacy': 'Privacy Policy | NK Movie Hub',

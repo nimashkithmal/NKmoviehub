@@ -4,6 +4,7 @@ import MoviePlayer from './MoviePlayer';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 import { trackContentView, trackWatchClick } from '../utils/analytics';
 import { setDetailPageMeta } from '../utils/seo';
+import { toTrailerEmbedUrl } from '../utils/trailerUrl';
 import './MovieDetail.css';
 
 const FAV_KEY = 'nk_favorite_movies';
@@ -415,7 +416,7 @@ const MovieDetail = () => {
             </button>
             <iframe
               title={`${movie.title} trailer`}
-              src={`${trailerUrl}${trailerUrl.includes('?') ? '&' : '?'}autoplay=1`}
+              src={toTrailerEmbedUrl(trailerUrl)}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
