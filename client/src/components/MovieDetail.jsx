@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
-import MoviePlayer from './MoviePlayer';
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
-import { trackContentView, trackWatchClick } from '../utils/analytics';
+import { trackContentView } from '../utils/analytics';
 import { setDetailPageMeta } from '../utils/seo';
+import { withReturnPath, goBackOr } from '../utils/navigation';
 import { toTrailerEmbedUrl } from '../utils/trailerUrl';
 import './MovieDetail.css';
 
@@ -79,11 +79,11 @@ const languageLabel = (code) => {
 const MovieDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [movie, setMovie] = useState(null);
   const [extras, setExtras] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showPlayer, setShowPlayer] = useState(false);
   const [showTrailer, setShowTrailer] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [questions, setQuestions] = useState([]);
@@ -359,6 +359,10 @@ const MovieDetail = () => {
     }
   };
 
+  const handleBack = () => {
+    goBackOr(navigate, location, '/');
+  };
+
   if (loading) {
     return (
       <div className="movie-detail-container">
@@ -399,10 +403,6 @@ const MovieDetail = () => {
 
   return (
     <>
-      {showPlayer && movie && (
-        <MoviePlayer movie={movie} onClose={() => setShowPlayer(false)} />
-      )}
-
       {showTrailer && trailerUrl && (
         <div className="md-trailer-overlay" onClick={() => setShowTrailer(false)}>
           <div className="md-trailer-modal" onClick={(e) => e.stopPropagation()}>
@@ -434,7 +434,7 @@ const MovieDetail = () => {
           <button
             type="button"
             className="md-icon-btn"
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
             aria-label="Go back"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -547,12 +547,7 @@ const MovieDetail = () => {
                       type="button"
                       className="md-btn md-btn-primary"
                       onClick={() => {
-                        trackWatchClick({
-                          contentType: 'movie',
-                          itemId: movie._id,
-                          itemName: movie.title
-                        });
-                        setShowPlayer(true);
+                        navigate(`/watch/movie/${id}`, withReturnPath(location));
                       }}
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true">

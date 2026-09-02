@@ -1,0 +1,18 @@
+.movie-watch-page .movie-watch-main {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.movie-watch-page .tv-watch-player-shell {
+  aspect-ratio: 16 / 9;
+}
+
+.movie-watch-info-card {
+  margin-top: 1rem;
+}
+
+@media (min-width: 900px) {
+  .movie-watch-page {
+    padding: 0.85rem 1.5rem 2rem;
+  }
+}

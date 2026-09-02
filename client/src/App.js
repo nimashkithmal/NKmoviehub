@@ -11,6 +11,7 @@ import AddTVShow from './components/AddTVShow';
 import MovieDetail from './components/MovieDetail';
 import TVShowDetail from './components/TVShowDetail';
 import TVWatchPage from './components/TVWatchPage';
+import MovieWatchPage from './components/MovieWatchPage';
 import Collections from './components/Collections';
 import CastCollection from './components/CastCollection';
 import LegalPage, { ContactPage } from './components/LegalPage';
@@ -65,6 +66,7 @@ const AppShell = () => {
           <Route path="/movie/:id" element={<MovieDetail />} />
           <Route path="/tvshow/:id" element={<TVShowDetail />} />
           <Route path="/watch/tv/:id" element={<TVWatchPage />} />
+          <Route path="/watch/movie/:id" element={<MovieWatchPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route

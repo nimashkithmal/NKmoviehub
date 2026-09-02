@@ -14,8 +14,9 @@
   align-items: center;
   gap: 1rem;
   margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
+  padding: 0.65rem 0 0.75rem;
   border-bottom: 1px solid #1f1f28;
+  background: #0a0a0c;
 }
 
 .tv-watch-back-btn {
@@ -26,6 +27,8 @@
   padding: 0.45rem 0.9rem;
   font-size: 0.88rem;
   cursor: pointer;
+  position: relative;
+  z-index: 21;
 }
 
 .tv-watch-back-btn:hover {

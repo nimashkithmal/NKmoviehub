@@ -8,15 +8,19 @@ const { extractTmdbId, extractTvTmdbId } = require('./trendingPopular');
 
 const EMBED_API = 'https://api.2embed.cc';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const FAILED_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const CONCURRENCY = 6;
 const FETCH_TIMEOUT_MS = 20000;
+const FETCH_RETRIES = 2;
 const REQUEST_GAP_MS = 80;
+const MIN_SEARCH_SCORE = 50;
 
 const state = {
   running: false,
   total: 0,
   processed: 0,
   failed: 0,
+  skippedTitles: [],
   startedAt: null,
   finishedAt: null,
   currentTitle: ''
@@ -52,19 +56,47 @@ async function ensureUniqueSlug(baseSlug, excludeId = null) {
   }
 }
 
-async function fetchEmbedCast(type, tmdbId) {
-  const path = type === 'tvshow' ? 'tv' : 'movie';
+const normalizeTitle = (value = '') =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/^the\s+/, '');
+
+const titleMatchScore = (query, candidate, yearHint, candidateYear) => {
+  const q = normalizeTitle(query);
+  const t = normalizeTitle(candidate);
+  if (!q || !t) return 0;
+
+  let score = 0;
+  if (t === q) score = 100;
+  else if (t.startsWith(q) || q.startsWith(t)) score = 85;
+  else if (t.includes(q) || q.includes(t)) score = 70;
+  else score = 20;
+
+  if (yearHint && candidateYear && Number(yearHint) === Number(candidateYear)) score += 20;
+  if (yearHint && candidateYear && Number(yearHint) !== Number(candidateYear)) score -= 25;
+  return score;
+};
+
+const searchRowYear = (row, type) => {
+  if (type === 'tvshow') {
+    const raw = row.first_air_date || row.year;
+    const year = parseInt(String(raw || '').slice(0, 4), 10);
+    return Number.isFinite(year) ? year : null;
+  }
+  const year = parseInt(String(row.year || row.release_date || '').slice(0, 4), 10);
+  return Number.isFinite(year) ? year : null;
+};
+
+async function fetchEmbedJson(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const response = await fetch(
-      `${EMBED_API}/${path}?tmdb_id=${encodeURIComponent(tmdbId)}`,
-      {
-        headers: { Accept: 'application/json' },
-        signal: controller.signal
-      }
-    );
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal
+    });
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -74,6 +106,97 @@ async function fetchEmbedCast(type, tmdbId) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function fetchEmbedCast(type, tmdbId) {
+  const path = type === 'tvshow' ? 'tv' : 'movie';
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= FETCH_RETRIES; attempt += 1) {
+    try {
+      return await fetchEmbedJson(
+        `${EMBED_API}/${path}?tmdb_id=${encodeURIComponent(tmdbId)}`
+      );
+    } catch (err) {
+      lastError = err;
+      if (attempt < FETCH_RETRIES) {
+        await sleep(400 * (attempt + 1));
+      }
+    }
+  }
+
+  throw lastError || new Error('fetch failed');
+}
+
+async function searchEmbedCast(type, title, year, tmdbId) {
+  const path = type === 'tvshow' ? 'searchtv' : 'search';
+  const data = await fetchEmbedJson(
+    `${EMBED_API}/${path}?q=${encodeURIComponent(title)}&page=1`
+  );
+  const rows = data.results || [];
+  if (!rows.length) return null;
+
+  let best = null;
+  let bestScore = 0;
+
+  rows.forEach((row) => {
+    const rowTitle = type === 'tvshow' ? row.name : row.title;
+    const score = titleMatchScore(title, rowTitle, year, searchRowYear(row, type));
+    if (score > bestScore) {
+      bestScore = score;
+      best = row;
+    }
+  });
+
+  if (!best || bestScore < MIN_SEARCH_SCORE) return null;
+
+  const castCrew = best.cast_crew;
+  if (castCrew && (castCrew.cast?.length || castCrew.crew?.length)) {
+    return {
+      cast: castCrew.cast || [],
+      crew: castCrew.crew || [],
+      resolvedTmdbId: String(best.tmdb_id || tmdbId || '')
+    };
+  }
+
+  const resolvedTmdbId = best.tmdb_id != null ? String(best.tmdb_id) : '';
+  if (resolvedTmdbId && resolvedTmdbId !== String(tmdbId)) {
+    return fetchEmbedCast(type, resolvedTmdbId);
+  }
+
+  return null;
+}
+
+async function resolveCastData(title) {
+  try {
+    return await fetchEmbedCast(title.type, title.tmdbId);
+  } catch (primaryErr) {
+    const searchData = await searchEmbedCast(
+      title.type,
+      title.title,
+      title.year,
+      title.tmdbId
+    ).catch(() => null);
+    if (searchData) return searchData;
+    throw primaryErr;
+  }
+}
+
+async function writeTitleCache(title, people, tmdbId = title.tmdbId) {
+  await CastTitleCache.findOneAndUpdate(
+    { entityId: title.entityId, type: title.type },
+    {
+      entityId: title.entityId,
+      type: title.type,
+      tmdbId: String(tmdbId || title.tmdbId),
+      title: title.title,
+      year: title.year || null,
+      imageUrl: title.imageUrl || '',
+      cast: people,
+      fetchedAt: new Date()
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
 }
 
 function buildPeopleFromEmbed(data = {}) {
@@ -231,36 +354,27 @@ async function indexTitle(title) {
     type: title.type
   }).lean();
 
-  const isFresh = cached && Date.now() - new Date(cached.fetchedAt).getTime() < CACHE_TTL_MS;
+  const isFresh =
+    cached &&
+    Date.now() - new Date(cached.fetchedAt).getTime() <
+      ((cached.cast || []).length ? CACHE_TTL_MS : FAILED_CACHE_TTL_MS);
   let people = [];
 
   if (isFresh) {
     people = cached.cast || [];
   } else {
     try {
-      const data = await fetchEmbedCast(title.type, title.tmdbId);
+      const data = await resolveCastData(title);
       people = buildPeopleFromEmbed(data);
-
-      await CastTitleCache.findOneAndUpdate(
-        { entityId: title.entityId, type: title.type },
-        {
-          entityId: title.entityId,
-          type: title.type,
-          tmdbId: title.tmdbId,
-          title: title.title,
-          year: title.year || null,
-          imageUrl: title.imageUrl || '',
-          cast: people,
-          fetchedAt: new Date()
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
+      await writeTitleCache(title, people, data.resolvedTmdbId || title.tmdbId);
     } catch (err) {
-      if (cached) {
-        people = cached.cast || [];
+      if (cached?.cast?.length) {
+        people = cached.cast;
       } else {
+        await writeTitleCache(title, []);
         state.failed += 1;
-        throw err;
+        state.skippedTitles.push(title.title);
+        people = [];
       }
     }
   }
@@ -352,6 +466,7 @@ async function runIndexer() {
   state.finishedAt = null;
   state.processed = 0;
   state.failed = 0;
+  state.skippedTitles = [];
   state.currentTitle = '';
 
   try {
@@ -398,6 +513,14 @@ async function runIndexer() {
     await Promise.all(workers);
 
     state.processed = catalogTitles.length;
+
+    if (state.skippedTitles.length) {
+      const preview = state.skippedTitles.slice(0, 5).join(', ');
+      const suffix = state.skippedTitles.length > 5 ? '…' : '';
+      console.warn(
+        `Cast indexer: ${state.skippedTitles.length} title(s) skipped — 2embed has no cast metadata (${preview}${suffix})`
+      );
+    }
 
     await CastPerson.updateMany({}, [{ $set: { creditCount: { $size: '$credits' } } }]);
     await CastPerson.deleteMany({ creditCount: { $lte: 0 } });
