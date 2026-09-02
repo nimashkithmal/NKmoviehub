@@ -35,6 +35,10 @@ const userSchema = new mongoose.Schema({
   lastLogin: {
     type: Date,
     default: null
+  },
+  mustChangePassword: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true, // Adds createdAt and updatedAt fields

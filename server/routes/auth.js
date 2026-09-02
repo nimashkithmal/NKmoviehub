@@ -90,6 +90,43 @@ router.post('/login', [
       });
     }
 
+    if (user.mustChangePassword) {
+      const latest = await PasswordResetOtp.findLatestForEmail(user.email);
+      if (latest && !latest.consumedAt && latest.cooldownRemaining() > 0) {
+        return res.json({
+          success: true,
+          requiresPasswordSetup: true,
+          message: 'A verification code was already sent to your email.',
+          data: {
+            email: user.email,
+            expiresInMinutes: OTP_EXPIRY_MINUTES,
+            resendAfterSeconds: latest.cooldownRemaining()
+          }
+        });
+      }
+
+      const { record, otp } = await PasswordResetOtp.issueForUser(user);
+      const emailResult = await emailService.sendPasswordResetOtp(user, otp, OTP_EXPIRY_MINUTES);
+      if (!emailResult.success) {
+        await PasswordResetOtp.deleteOne({ _id: record._id });
+        return res.status(503).json({
+          success: false,
+          message: 'Unable to send the verification code right now. Please try again later.'
+        });
+      }
+
+      return res.json({
+        success: true,
+        requiresPasswordSetup: true,
+        message: 'A verification code was sent to your email. Enter it to set your new password.',
+        data: {
+          email: user.email,
+          expiresInMinutes: OTP_EXPIRY_MINUTES,
+          resendAfterSeconds: RESEND_COOLDOWN_SECONDS
+        }
+      });
+    }
+
     // Update last login
     await user.updateLastLogin();
 
@@ -381,13 +418,38 @@ router.post('/reset-password', [
       });
     }
 
+    const wasFirstSetup = Boolean(user.mustChangePassword);
+
     // Assigning the plain value is safe - the User model hashes on save
     user.password = newPassword;
+    user.mustChangePassword = false;
     await user.save();
 
     // Burn the code so the same session cannot reset the password twice
     record.consumedAt = new Date();
     await record.save();
+
+    if (wasFirstSetup) {
+      await user.updateLastLogin();
+      const token = generateToken(user._id);
+      return res.json({
+        success: true,
+        message: 'Password set successfully. You are now logged in.',
+        data: {
+          user: {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            status: user.status,
+            createdAt: user.createdAt,
+            lastLogin: user.lastLogin
+          },
+          token,
+          redirectTo: user.role === 'admin' ? 'admin' : 'home'
+        }
+      });
+    }
 
     res.json({
       success: true,

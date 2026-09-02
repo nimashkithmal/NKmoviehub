@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const { body, validationResult } = require('express-validator');
 const Movie = require('../models/Movie');
+const PendingTitle = require('../models/PendingTitle');
 const Rating = require('../models/Rating');
 const Notification = require('../models/Notification');
 const MovieQuestion = require('../models/MovieQuestion');
@@ -1257,6 +1258,14 @@ router.delete('/:id', protect, restrictToAdmin, async (req, res) => {
     }
 
     await Movie.findByIdAndDelete(req.params.id);
+
+    const tmdbId = extractTmdbId(movie.movieUrl);
+    await PendingTitle.deleteMany({
+      $or: [
+        { addedCatalogId: movie._id },
+        ...(tmdbId ? [{ type: 'movie', tmdbId: String(tmdbId) }] : [])
+      ]
+    });
 
     res.json({
       success: true,

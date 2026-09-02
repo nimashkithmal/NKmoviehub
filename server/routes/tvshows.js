@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 const TVShow = require('../models/TVShow');
+const PendingTitle = require('../models/PendingTitle');
 const { protect, restrictToAdmin } = require('../middleware/auth');
 // Cloudinary is configured once in utils/cloudinaryUpload; every poster that
 // reaches the database is uploaded there first
@@ -888,6 +889,14 @@ router.delete('/:id', protect, restrictToAdmin, async (req, res) => {
     }
 
     await TVShow.findByIdAndDelete(req.params.id);
+
+    const tmdbId = extractTvTmdbId(tvShow) || tvShow.tmdbId;
+    await PendingTitle.deleteMany({
+      $or: [
+        { addedCatalogId: tvShow._id },
+        ...(tmdbId ? [{ type: 'tvshow', tmdbId: String(tmdbId) }] : [])
+      ]
+    });
 
     res.json({
       success: true,

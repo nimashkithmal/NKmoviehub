@@ -9,6 +9,7 @@ const {
 } = require('./trendingPopular');
 const { evaluateContentPolicy } = require('./contentPolicy');
 const { isUpcomingDoc } = require('./comingSoon');
+const { buildAllSeasonEpisodes } = require('./tvSeasonEpisodes');
 
 const EMBED_API = 'https://api.2embed.cc';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
@@ -240,31 +241,61 @@ function mapEmbedToPending(type, tmdbId, data = {}, source = 'trending') {
   };
 }
 
-async function upsertPending(doc) {
+async function upsertPending(doc, { requeueDismissed = false } = {}) {
   const existing = await PendingTitle.findOne({
     type: doc.type,
     tmdbId: doc.tmdbId
   })
-    .select('status')
+    .select('status addedCatalogId title')
     .lean();
 
-  if (existing?.status === 'dismissed' || existing?.status === 'approved') {
+  if (existing?.status === 'approved') {
+    const CatalogModel = doc.type === 'movie' ? Movie : TVShow;
+    const stillExists = existing.addedCatalogId
+      ? Boolean(await CatalogModel.exists({ _id: existing.addedCatalogId }))
+      : false;
+    if (stillExists) {
+      state.skipped += 1;
+      return false;
+    }
+  }
+
+  if (existing?.status === 'dismissed' && !requeueDismissed) {
     state.skipped += 1;
+    state.lastSkipReason = 'dismissed';
+    state.lastSkipMessage = `"${existing.title || doc.title || 'This title'}" is dismissed. Search by name and Sync Now to bring it back.`;
     return false;
   }
 
   const isNew = !existing;
+  const wasRequeued =
+    existing?.status === 'approved' ||
+    (existing?.status === 'dismissed' && requeueDismissed);
+
+  const setFields = { ...doc };
+  if (wasRequeued) {
+    Object.assign(setFields, {
+      status: 'pending',
+      approvedAt: null,
+      addedCatalogId: null,
+      dismissedAt: null
+    });
+  }
+
+  const update = wasRequeued || !isNew
+    ? { $set: setFields }
+    : {
+        $set: setFields,
+        $setOnInsert: { status: 'pending', discoveredAt: new Date() }
+      };
 
   await PendingTitle.findOneAndUpdate(
     { type: doc.type, tmdbId: doc.tmdbId },
-    {
-      $set: doc,
-      $setOnInsert: { status: 'pending', discoveredAt: new Date() }
-    },
+    update,
     { upsert: true, new: true }
   );
 
-  if (isNew) state.added += 1;
+  if (isNew || wasRequeued) state.added += 1;
   return true;
 }
 
@@ -394,6 +425,53 @@ const titleMatchScore = (query, title, yearHint, rowYear) => {
   return score;
 };
 
+const querySuggestsTvShow = (query = '') =>
+  /\b(tv\s*(series|show)|\bseries\b|\bseasons?\b)/i.test(String(query));
+
+const querySuggestsMovie = (query = '') => /\b(movie|film)\b/i.test(String(query));
+
+const adjustSearchPickScore = (pick, query) => {
+  let score = pick.score;
+  const row = pick.searchRow;
+
+  if (pick.type === 'tvshow') {
+    if (querySuggestsTvShow(query)) score += 15;
+    if (row?.embed_tmdb && String(row.embed_tmdb).includes('/embedtv/')) score += 5;
+  }
+
+  if (pick.type === 'movie' && row) {
+    if (querySuggestsMovie(query)) score += 15;
+    const plot = String(row.plot || '').toLowerCase();
+    if (/big-screen|compilation|showing of cartoon|episode compilation/.test(plot)) {
+      score -= 35;
+    }
+    const votes = Number(row.vote_count);
+    if (Number.isFinite(votes) && votes <= 10) score -= 10;
+  }
+
+  return score;
+};
+
+const pickBestSearchCandidate = (picks, query, typeFilter = '') => {
+  const ranked = picks
+    .map((pick) => ({ ...pick, finalScore: adjustSearchPickScore(pick, query) }))
+    .sort((a, b) => {
+      if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
+      if (typeFilter === 'tvshow') return a.type === 'tvshow' ? -1 : 1;
+      if (typeFilter === 'movie') return a.type === 'movie' ? -1 : 1;
+      if (querySuggestsMovie(query)) return a.type === 'movie' ? -1 : 1;
+      return a.type === 'tvshow' ? -1 : 1;
+    });
+
+  const best = ranked[0];
+  return {
+    type: best.type,
+    tmdbId: best.tmdbId,
+    source: best.source,
+    searchRow: best.searchRow
+  };
+};
+
 async function fetchSearchPage(itemType, query) {
   const path = itemType === 'tvshow' ? 'searchtv' : 'search';
   const data = await fetchEmbedJson(
@@ -470,16 +548,7 @@ async function collectSearchCandidates(query, typeFilter = '') {
 
   if (!picks.length) return [];
 
-  picks.sort((a, b) => b.score - a.score);
-  const best = picks[0];
-  return [
-    {
-      type: best.type,
-      tmdbId: best.tmdbId,
-      source: best.source,
-      searchRow: best.searchRow
-    }
-  ];
+  return [pickBestSearchCandidate(picks, normalized, typeFilter)];
 }
 
 async function runIndexer(options = {}) {
@@ -557,7 +626,18 @@ async function runIndexer(options = {}) {
 
       state.currentTitle = pending.title;
       if (query) state.lastSyncedTitle = pending.title;
-      await upsertPending(pending);
+
+      if (pending.type === 'tvshow' && query) {
+        try {
+          const { episodes, numberOfSeasons } = await buildAllSeasonEpisodes(pending.tmdbId);
+          pending.numberOfSeasons = numberOfSeasons;
+          pending.episodeCount = episodes.length;
+        } catch (err) {
+          console.warn(`TV episode enrich failed for ${pending.tmdbId}:`, err.message);
+        }
+      }
+
+      await upsertPending(pending, { requeueDismissed: Boolean(query) });
     });
 
     console.log(

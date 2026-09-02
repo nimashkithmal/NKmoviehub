@@ -1,261 +1,147 @@
-# NKMovieHUB 🎬
+# NKMovieHUB
 
-A full-stack movie rating and review application built with React.js frontend and Node.js backend.
+Full-stack movie and TV streaming catalog for **NK Movie Hub** — React frontend, Node.js/Express API, MongoDB, Cloudinary, and 2embed discovery.
 
-## 🏠 Home Page
+## Live site
 
-![NKMovieHUB Home Page](Screenshot%202025-10-15%20at%2016.37.15.png)
+**[https://nkmoviehub.vercel.app](https://nkmoviehub.vercel.app)** — open this to see the current home page and public catalog. No screenshots are kept in the repo; the live site is always the source of truth.
 
-## 🚀 Features
+| Area | URL |
+|------|-----|
+| Home | [nkmoviehub.vercel.app](https://nkmoviehub.vercel.app) |
+| Admin login | [nkmoviehub.vercel.app/login](https://nkmoviehub.vercel.app/login) |
 
-- **User Authentication**: Secure login and registration system with JWT tokens
-- **Movie Management**: Add, view, and manage movies with admin controls
-- **TV Show Management**: Complete TV show library with episodes, seasons, and admin controls
-- **Rating System**: Rate movies and TV shows with 5-star ratings and user feedback
-- **Advanced Search & Filters**: Search by title, filter by genre and year with real-time results
-- **Dynamic Slideshow**: Auto-rotating movie wallpapers with manual navigation controls
-- **Contact System**: User contact form with email notifications and admin management
-- **Email Integration**: Automated email confirmations and admin replies via Gmail SMTP
-- **Cloudinary Integration**: Professional image hosting and optimization for posters and thumbnails
-- **Admin Dashboard**: Comprehensive administrative interface for managing users, movies, TV shows, and contacts
-- **Contact Management**: Admin panel for viewing, replying to, and managing user inquiries
-- **Responsive Design**: Modern UI that works seamlessly on all devices
-- **Real-time Updates**: Live search results and dynamic content updates
-- **Episode Management**: Add and manage episodes for TV shows with individual URLs
+## What it does
 
-## 🛠️ Tech Stack
+### Public site
+- Browse **movies** and **TV shows** with search, filters, genres, and language options
+- Movie detail pages, TV watch pages with **seasons and episodes**
+- Ratings, collections, coming soon, banners, and SEO-friendly pages
+- Contact form with email notifications
 
-### Frontend
-- React.js
-- CSS3
-- Context API for state management
+### Admin dashboard (`/admin`)
+- **Movies & TV shows** — add, edit, delete, active / inactive / coming soon
+- **2embed sync** — search by title, queue new titles, review seasons/episodes, approve to catalog
+- TV shows: all seasons/episodes fetched from 2embed on approve (not only season 1)
+- **Banners**, **collections**, **contacts**, **analytics**
+- **Cast** indexing from 2embed metadata
 
-### Backend
-- Node.js
-- Express.js
-- MongoDB with Mongoose
-- JWT Authentication
-- Nodemailer (Email Service)
-- Cloudinary (Image Hosting & Optimization)
-- Express Validator (Input Validation)
-- bcrypt (Password Hashing)
-- bcryptjs
-- CORS Support
+### Admin accounts
+- **Super admin** (`SUPER_ADMIN_EMAIL`, default `qwe730375@gmail.com`) can **invite new admins**
+- Invite flow: enter name + email → system emails a **temporary password** → new admin logs in at `/login` → **OTP** to their email → set a **permanent password** → full admin access
+- Other admins see the admin list but **cannot** invite new admins
+- Admin login is separate from the public site (`/login` is admin-only)
 
-## 📁 Project Structure
+## Tech stack
+
+| Layer | Tools |
+|-------|--------|
+| Frontend | React, React Router, Context API, CSS |
+| Backend | Node.js, Express, Mongoose |
+| Database | MongoDB |
+| Auth | JWT, bcrypt |
+| Email | Nodemailer (Gmail SMTP) |
+| Images | Cloudinary |
+| Catalog source | [2embed API](https://api.2embed.cc) (trending + search) |
+
+## Project structure
 
 ```
 NKMovieHUB/
-├── client/                 # React frontend
-│   ├── src/
-│   │   ├── components/    # React components
-│   │   │   ├── ContactForm.jsx      # Contact form component
-│   │   │   ├── ContactManagement.jsx # Admin contact management
-│   │   │   ├── ContactSection.jsx   # Contact page section
-│   │   │   ├── Home.jsx             # Home page with slideshow
-│   │   │   ├── MovieGrid.jsx        # Movie display grid
-│   │   │   ├── TVShowGrid.jsx       # TV Show display grid
-│   │   │   ├── MovieDetail.jsx      # Movie detail page
-│   │   │   ├── TVShowDetail.jsx     # TV Show detail page
-│   │   │   ├── MoviePlayer.jsx      # Video player component
-│   │   │   ├── AdminDashboard.jsx   # Admin panel
-│   │   │   ├── AddMovie.jsx         # Add movie form
-│   │   │   ├── AddTVShow.jsx        # Add TV show form
-│   │   │   └── ...
-│   │   ├── context/       # Authentication context
-│   │   └── ...
-├── server/                 # Node.js backend
-│   ├── models/            # MongoDB models
-│   │   ├── Contact.js     # Contact message model
-│   │   ├── Movie.js       # Movie model
-│   │   ├── TVShow.js      # TV Show model
-│   │   ├── User.js        # User model
-│   │   └── Rating.js      # Rating model
-│   ├── routes/            # API routes
-│   │   ├── contacts.js    # Contact management routes
-│   │   ├── movies.js      # Movie management routes
-│   │   ├── tvshows.js     # TV Show management routes
-│   │   ├── auth.js        # Authentication routes
-│   │   └── users.js       # User management routes
-│   ├── services/          # External services
-│   │   └── emailService.js # Email notification service
-│   ├── middleware/        # Authentication middleware
-│   ├── seedDatabase.js    # Database seeding script
-│   ├── seedMovies.js      # Movie seeding script
-│   └── ...
-└── ...
+├── client/                 # React app (Vercel)
+│   └── src/components/     # Home, grids, watch pages, AdminDashboard, etc.
+├── server/                 # Express API
+│   ├── models/             # Movie, TVShow, User, PendingTitle, …
+│   ├── routes/             # movies, tvshows, sync, auth, users, …
+│   ├── utils/              # embedSyncIndexer, tvSeasonEpisodes, castIndexer, …
+│   ├── services/           # emailService
+│   └── constants/          # adminAccess (super admin email)
+└── README.md
 ```
 
-## 🚀 Getting Started
+## Local setup
 
 ### Prerequisites
-- Node.js (v14 or higher)
-- MongoDB
-- npm or yarn
+- Node.js 18+
+- MongoDB (local or Atlas)
+- Gmail app password (for admin invite / password reset emails)
+- Cloudinary account (posters and banners)
 
-### Installation
+### Install
 
-1. **Clone the repository**
-   ```bash
-   # When the repository is published, use:
-   # git clone https://github.com/nimashkithmal/NKMovieHUB.git
-   # cd NKMovieHUB
-   
-   # For now, if you have access to the repository:
-   git clone <repository-url>
-   cd NKMovieHUB
-   ```
+```bash
+git clone https://github.com/nimashkithmal/NKMovieHUB.git
+cd NKMovieHUB
 
-2. **Install backend dependencies**
-   ```bash
-   cd server
-   npm install
-   ```
+cd server && npm install
+cd ../client && npm install
+```
 
-3. **Install frontend dependencies**
-   ```bash
-   cd ../client
-   npm install
-   ```
+### Environment (`server/config.env`)
 
-4. **Environment Setup**
-   - Copy `server/config.env.example` to `server/config.env` or edit existing `server/config.env`
-   - Update the MongoDB connection string and JWT secret
-   - Configure email settings (optional):
-     ```env
-     EMAIL_USER=your-gmail@gmail.com
-     EMAIL_PASS=your-16-character-app-password
-     ```
-   - Configure Cloudinary settings (optional, fallback values provided):
-     ```env
-     CLOUDINARY_CLOUD_NAME=your-cloud-name
-     CLOUDINARY_API_KEY=your-api-key
-     CLOUDINARY_API_SECRET=your-api-secret
-     ```
-   - Note: Email and Cloudinary services are optional. The app includes fallback configurations.
-
-5. **Start the application**
-
-   **Option 1: Using startup scripts (Recommended)**
-   ```bash
-   # For Unix/Linux/macOS
-   ./start.sh
-   
-   # For Windows
-   start.bat
-   ```
-
-   **Option 2: Manual startup**
-   ```bash
-   # Terminal 1 - Start backend (from server directory)
-   cd server
-   npm start
-   
-   # Terminal 2 - Start frontend (from client directory)
-   cd client
-   npm start
-   ```
-
-   The application will be available at:
-   - **Frontend**: http://localhost:3000
-   - **Backend API**: http://localhost:5001
-
-6. **Seed the database (Optional)**
-   ```bash
-   cd server
-   npm run seed
-   ```
-   This creates default admin and user accounts:
-   - **Admin**: admin@gmail.com / 12345
-   - **User**: user@gmail.com / 123456
-
-## 📱 Usage
-
-### For Users
-- **Register/Login**: Create an account or sign in to access full features
-- **Browse Movies**: View all available movies with advanced search and filters
-- **Browse TV Shows**: Explore TV shows with episode management
-- **Search & Filter**: Search by title, filter by genre and year for movies/TV shows
-- **Rate Content**: Give 1-5 star ratings and leave reviews for movies and TV shows
-- **Watch Content**: Access movie players and TV show episodes
-- **Contact Support**: Send inquiries and messages through the contact form
-
-### For Admins
-- **Admin Dashboard**: Access comprehensive admin panel at `/admin`
-- **User Management**: View and manage all registered users
-- **Movie Management**: Add, edit, and remove movies from the database
-- **TV Show Management**: Add, edit, and remove TV shows with episode management
-- **Content Upload**: Upload images for movies and TV shows via Cloudinary
-- **Contact Management**: View, reply to, and manage user inquiries
-- **Email Integration**: Send automated replies to user contacts
-- **Statistics**: View contact statistics and system metrics
-
-## 🔧 Configuration
-
-The application uses environment variables for configuration. See `server/config.env` for required variables.
-
-### Required Environment Variables
 ```env
 PORT=5001
-MONGODB_URI=mongodb://localhost:27017/NKmovie
-JWT_SECRET=your_jwt_secret_key
-NODE_ENV=development
-```
+MONGODB_URI=your_mongodb_uri
+JWT_SECRET=your_secret
 
-### Optional Email Configuration
-```env
 EMAIL_USER=your-gmail@gmail.com
-EMAIL_PASS=your-16-character-app-password
+EMAIL_PASS=your-gmail-app-password
+
+SUPER_ADMIN_EMAIL=qwe730375@gmail.com
+CLIENT_URL=http://localhost:3000
+SITE_URL=http://localhost:3000
+
+CLOUDINARY_CLOUD_NAME=...
+CLOUDINARY_API_KEY=...
+CLOUDINARY_API_SECRET=...
 ```
 
-## 🎬 Movie Features
+### Run
 
-### Dynamic Slideshow
-- **Auto-rotating Wallpapers**: Beautiful movie-themed background images
-- **Manual Navigation**: Click arrows or indicators to manually navigate
-- **Responsive Design**: Adapts to different screen sizes
-- **Smooth Transitions**: CSS transitions for seamless slide changes
-- **Welcome Content**: Overlay text with app branding and features
+```bash
+# Terminal 1
+cd server && npm start
 
-### Movie Rating System
-- **Star Ratings**: 1-5 star rating system
-- **User Reviews**: Leave written reviews alongside ratings
-- **Rating History**: Track your rating history
-- **Average Ratings**: Display average ratings from all users
-- **Real-time Updates**: Ratings update immediately after submission
+# Terminal 2
+cd client && npm start
+```
 
-## 📺 TV Show Features
+- Frontend: http://localhost:3000  
+- API: http://localhost:5001  
+- Health: http://localhost:5001/api/health  
 
-### TV Show Management
-- **Episode Management**: Add and manage individual episodes with titles and URLs
-- **Seasons Support**: Organize shows by number of seasons
-- **Episode Count**: Track total number of episodes
-- **Complete Library**: Browse TV shows with full metadata
+## Admin workflows (summary)
 
-### TV Show Rating System
-- **Unified Rating System**: Same 1-5 star rating as movies
-- **Show-specific Ratings**: Track ratings per TV show
-- **Average Ratings**: Display average ratings from all users
-- **User Reviews**: Leave written reviews for TV shows
+### Add content from 2embed
+1. Admin → **New from 2embed**
+2. Type title (for TV: use **TV Series** filter), click **Sync Now**
+3. Open **Add to Site** — for TV shows, seasons and episode counts load automatically
+4. **Approve** — all seasons/episodes are added to the catalog
 
-## 📄 License
+### Invite a new admin (super admin only)
+1. Administration → **Add New Admin**
+2. Full name + email → **Send Admin Invite**
+3. New admin receives a **temporary password** by email
+4. They log in at `/login`, complete **OTP** + **new password** setup
 
-This project is currently in development. Once published, contributions will be welcome.
+## API overview
 
-## 🎯 Key Highlights
+| Prefix | Purpose |
+|--------|---------|
+| `/api/auth` | Login, forgot password, OTP, reset password |
+| `/api/users` | Admin list, invite (super admin), status toggle |
+| `/api/movies` | Public + admin movie CRUD |
+| `/api/tvshows` | Public + admin TV CRUD |
+| `/api/sync` | 2embed sync, pending titles, approve/dismiss |
+| `/api/contacts` | Contact form + admin replies |
+| `/api/embed` | Season/episode proxy for 2embed |
 
-- **Full-Stack Application**: Complete React frontend with Node.js/Express backend
-- **MongoDB Integration**: Robust database with Mongoose ODM
-- **Cloud Storage**: Professional image hosting with Cloudinary
-- **Email Services**: Automated email notifications via Nodemailer
-- **Role-Based Access**: Admin and user roles with proper authorization
-- **Real-Time Features**: Live search, filtering, and content updates
-- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile
-- **Secure Authentication**: JWT-based authentication with password hashing
-- **RESTful API**: Well-structured API endpoints with proper HTTP methods
-- **Production Ready**: Environment-based configuration and error handling
+## Deployment notes
 
-## 👨‍💻 Author
+- **Frontend**: Vercel (`client/`, `vercel.json` proxies SEO prerender to API)
+- **Backend**: separate host (API URL configured in Vercel rewrites / env)
+- Set `CLIENT_URL` and `SITE_URL` to the production frontend URL in production
 
-**Nimash Kithmal**
-- GitHub: [@nimashkithmal](https://github.com/nimashkithmal)
+## Author
+
+**Nimash Kithmal** — [GitHub](https://github.com/nimashkithmal)

@@ -48,6 +48,16 @@ export const AuthProvider = ({ children }) => {
 
       const data = await response.json();
 
+      if (data.success && data.requiresPasswordSetup) {
+        return {
+          success: true,
+          requiresPasswordSetup: true,
+          message: data.message,
+          resendAfterSeconds: data.data?.resendAfterSeconds || 60,
+          email: data.data?.email
+        };
+      }
+
       if (data.success) {
         const { user, token, redirectTo } = data.data;
         
@@ -78,6 +88,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const completeSession = (user, sessionToken) => {
+    localStorage.setItem('token', sessionToken);
+    localStorage.setItem('user', JSON.stringify(user));
+    setUser(user);
+    setToken(sessionToken);
+    setIsAuthenticated(true);
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -96,6 +114,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     loading,
     login,
+    completeSession,
     logout,
     updateUser,
     token

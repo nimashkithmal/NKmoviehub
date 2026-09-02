@@ -50,6 +50,9 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
   const [actionId, setActionId] = useState(null);
   const [approvingId, setApprovingId] = useState(null);
   const [approvalForm, setApprovalForm] = useState(null);
+  const [episodePreview, setEpisodePreview] = useState(null);
+  const [episodePreviewLoading, setEpisodePreviewLoading] = useState(false);
+  const [episodePreviewError, setEpisodePreviewError] = useState('');
 
   const authHeaders = useCallback(
     () => ({
@@ -125,13 +128,11 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
     const query = searchTerm.trim();
     const detectedType = detectTypeFromQuery(query);
     const type =
-      typeFilter === 'all'
-        ? detectedType
-        : typeFilter === 'tvshow'
-          ? 'tvshow'
-          : typeFilter === 'movie'
-            ? 'movie'
-            : '';
+      typeFilter === 'tvshow'
+        ? 'tvshow'
+        : typeFilter === 'movie'
+          ? 'movie'
+          : detectedType;
 
     try {
       const response = await fetch(`${API_URL}/run`, {
@@ -148,7 +149,7 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
             setTypeFilter('tvshow');
           }
           showNotification?.(
-            detectedType === 'tvshow'
+            type === 'tvshow' || typeFilter === 'tvshow'
               ? `Searching TV series "${query}" on 2embed…`
               : `Syncing "${query}" from 2embed…`,
             'success'
@@ -174,14 +175,45 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
     setPage(1);
   };
 
+  const fetchEpisodePreview = useCallback(async (pendingId) => {
+    setEpisodePreviewLoading(true);
+    setEpisodePreviewError('');
+    try {
+      const response = await fetch(`${API_URL}/pending/${pendingId}/episodes-preview`, {
+        headers: authHeaders()
+      });
+      const result = await response.json();
+      if (result.success) {
+        setEpisodePreview(result.data);
+      } else {
+        setEpisodePreview(null);
+        setEpisodePreviewError(result.message || 'Failed to sync episodes from 2embed');
+      }
+    } catch (err) {
+      console.error('Episode preview error:', err);
+      setEpisodePreview(null);
+      setEpisodePreviewError('Failed to sync episodes from 2embed');
+    } finally {
+      setEpisodePreviewLoading(false);
+    }
+  }, [authHeaders]);
+
   const openApproval = (item) => {
     setApprovingId(item._id);
     setApprovalForm(buildApprovalForm(item));
+    setEpisodePreview(null);
+    setEpisodePreviewError('');
+    if (item.type === 'tvshow') {
+      fetchEpisodePreview(item._id);
+    }
   };
 
   const closeApproval = () => {
     setApprovingId(null);
     setApprovalForm(null);
+    setEpisodePreview(null);
+    setEpisodePreviewError('');
+    setEpisodePreviewLoading(false);
   };
 
   const handleApprovalChange = (field, value) => {
@@ -244,7 +276,7 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
         <div>
           <h2>New from 2embed</h2>
           <p className="pending-titles-sub">
-            Type a movie or TV series name, then Sync Now. Tip: add “TV Series” in the name or click the TV Series filter.
+            Type a TV series name, click the <strong>TV Series</strong> filter, then Sync Now. Seasons and episodes load automatically.
           </p>
         </div>
         <div className="pending-titles-actions">
@@ -290,9 +322,11 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
               ? 'pending-sync-status--done'
               : syncStatus.lastSkipReason === 'already_in_catalog'
                 ? 'pending-sync-status--info'
-                : syncStatus.lastSkipReason === 'not_found'
-                  ? 'pending-sync-status--warn'
-                  : 'pending-sync-status--done'
+                : syncStatus.lastSkipReason === 'dismissed'
+                  ? 'pending-sync-status--info'
+                  : syncStatus.lastSkipReason === 'not_found'
+                    ? 'pending-sync-status--warn'
+                    : 'pending-sync-status--done'
           }`}
         >
           {syncStatus.lastSkipMessage ? (
@@ -375,6 +409,14 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
                 <h3>{item.title}</h3>
                 <p className="pending-card-meta">
                   {item.year} · {item.genre} · ★ {Number(item.imdbRating || 0).toFixed(1)}
+                  {item.type === 'tvshow' && item.episodeCount > 0 && (
+                    <>
+                      {' '}
+                      · {item.numberOfSeasons || 1} season
+                      {(item.numberOfSeasons || 1) !== 1 ? 's' : ''} · {item.episodeCount} ep
+                      {item.episodeCount !== 1 ? 's' : ''}
+                    </>
+                  )}
                 </p>
                 <p className="pending-card-desc">{item.description}</p>
                 {approvingId !== item._id && (
@@ -402,6 +444,53 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
               {approvingId === item._id && approvalForm && (
                 <div className="pending-approval-panel">
                   <h4>Review &amp; approve — edit if needed, then add to site</h4>
+                  {item.type === 'tvshow' && (
+                    <div className="pending-episodes-preview pending-approval-full">
+                      <div className="pending-episodes-preview-header">
+                        <div>
+                          <h5>Episodes from 2embed</h5>
+                          <p className="pending-episodes-preview-hint">
+                            All seasons and episodes sync here before you add to site.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          disabled={episodePreviewLoading}
+                          onClick={() => fetchEpisodePreview(item._id)}
+                        >
+                          {episodePreviewLoading ? 'Syncing…' : 'Sync Episodes'}
+                        </button>
+                      </div>
+
+                      {episodePreviewLoading && (
+                        <p className="pending-episodes-status">Fetching seasons &amp; episodes from 2embed…</p>
+                      )}
+
+                      {episodePreviewError && !episodePreviewLoading && (
+                        <p className="pending-episodes-error">{episodePreviewError}</p>
+                      )}
+
+                      {episodePreview && !episodePreviewLoading && (
+                        <>
+                          <p className="pending-episodes-summary">
+                            <strong>{episodePreview.numberOfSeasons}</strong> season
+                            {episodePreview.numberOfSeasons !== 1 ? 's' : ''} ·{' '}
+                            <strong>{episodePreview.episodeCount}</strong> episode
+                            {episodePreview.episodeCount !== 1 ? 's' : ''}
+                          </p>
+                          <ul className="pending-episodes-seasons">
+                            {(episodePreview.seasons || []).map((season) => (
+                              <li key={season.seasonNumber}>
+                                <span>Season {season.seasonNumber}</span>
+                                <span>{season.episodeCount} ep{season.episodeCount !== 1 ? 's' : ''}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div className="pending-approval-grid">
                     <label>
                       Title
@@ -530,10 +619,17 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
                     <button
                       type="button"
                       className="btn btn-primary"
-                      disabled={actionId === item._id}
+                      disabled={
+                        actionId === item._id ||
+                        (item.type === 'tvshow' && (episodePreviewLoading || !episodePreview))
+                      }
                       onClick={() => submitApproval(item._id)}
                     >
-                      {actionId === item._id ? 'Approving…' : 'Approve & Add to Site'}
+                      {actionId === item._id
+                        ? 'Approving…'
+                        : item.type === 'tvshow' && episodePreview
+                          ? `Approve — ${episodePreview.numberOfSeasons} seasons, ${episodePreview.episodeCount} eps`
+                          : 'Approve & Add to Site'}
                     </button>
                     <button
                       type="button"

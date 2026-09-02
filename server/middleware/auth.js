@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { isSuperAdmin } = require('../constants/adminAccess');
 
 // Middleware to protect routes
 const protect = async (req, res, next) => {
@@ -73,6 +74,16 @@ const restrictToAdmin = (req, res, next) => {
   }
 };
 
+const restrictToSuperAdmin = (req, res, next) => {
+  if (req.user && req.user.role === 'admin' && isSuperAdmin(req.user)) {
+    return next();
+  }
+  return res.status(403).json({
+    success: false,
+    message: 'Only the primary administrator can invite new admins.'
+  });
+};
+
 // Middleware to check if user is active
 const checkUserStatus = (req, res, next) => {
   if (req.user && req.user.status === 'active') {
@@ -88,5 +99,6 @@ const checkUserStatus = (req, res, next) => {
 module.exports = {
   protect,
   restrictToAdmin,
+  restrictToSuperAdmin,
   checkUserStatus
 }; 

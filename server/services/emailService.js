@@ -119,10 +119,15 @@ class EmailService {
     }
   }
 
-  async sendAdminInviteOtp(pendingAdmin, otp, expiryMinutes, invitedByName = 'An administrator') {
+  async sendAdminWelcomeEmail(user, tempPassword, invitedByName = 'An administrator') {
     if (!this.transporter) {
-      console.log('⚠️  Email service disabled - Admin verification code not sent');
+      console.log('⚠️  Email service disabled - Admin welcome email not sent');
       return { success: false, error: 'Email service not configured' };
+    }
+
+    const recipient = String(user.email || '').trim().toLowerCase();
+    if (!recipient) {
+      return { success: false, error: 'Recipient email is missing' };
     }
 
     try {
@@ -131,37 +136,54 @@ class EmailService {
           name: 'NK Movie Hub',
           address: process.env.EMAIL_USER
         },
-        to: pendingAdmin.email,
-        subject: 'Verify your NK Movie Hub admin account',
-        html: this.generateAdminInviteOtpTemplate(pendingAdmin, otp, expiryMinutes, invitedByName)
+        to: recipient,
+        subject: 'Your NK Movie Hub admin account',
+        html: this.generateAdminWelcomeEmailTemplate(user, tempPassword, invitedByName)
       };
 
       const result = await this.transporter.sendMail(mailOptions);
-      console.log('📧 Admin verification code sent successfully:', result.messageId);
-      return { success: true, messageId: result.messageId };
+
+      if (result.rejected?.length) {
+        return {
+          success: false,
+          error: `Could not deliver email to ${recipient}. Check the address and try again.`
+        };
+      }
+
+      console.log(`📧 Admin welcome email sent to ${recipient}`);
+      return { success: true, messageId: result.messageId, recipient };
     } catch (error) {
-      console.error('❌ Error sending admin verification code:', error);
-      return { success: false, error: error.message };
+      console.error('❌ Error sending admin welcome email:', error);
+      const detail = String(error.message || '');
+      if (
+        error.responseCode === 550 ||
+        /does not exist|NoSuchUser|550 5\.1\.1|Invalid recipient/i.test(detail)
+      ) {
+        return {
+          success: false,
+          error: `Could not deliver to ${recipient}. That email address does not exist or cannot receive mail.`
+        };
+      }
+      return { success: false, error: error.message || 'Failed to send welcome email' };
     }
   }
 
-  generateAdminInviteOtpTemplate(pendingAdmin, otp, expiryMinutes, invitedByName) {
+  generateAdminWelcomeEmailTemplate(user, tempPassword, invitedByName) {
+    const loginUrl = process.env.CLIENT_URL || 'http://localhost:3000/login';
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Verify Your Admin Account - NK Movie Hub</title>
+        <title>Admin Account - NK Movie Hub</title>
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #f4f4f4; }
           .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
           .header { text-align: center; border-bottom: 3px solid #e74c3c; padding-bottom: 20px; margin-bottom: 30px; }
           .logo { font-size: 28px; font-weight: bold; color: #e74c3c; margin-bottom: 10px; }
-          .tagline { color: #666; font-size: 14px; }
-          .content { margin-bottom: 30px; }
-          .otp-code { font-size: 34px; font-weight: bold; letter-spacing: 10px; color: #e74c3c; text-align: center; background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 25px 0; }
-          .warning { background: #fff4e5; padding: 20px; border-left: 4px solid #f39c12; margin: 20px 0; border-radius: 0 5px 5px 0; }
+          .credentials { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          .temp-password { font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #e74c3c; }
           .footer { text-align: center; color: #666; font-size: 12px; border-top: 1px solid #eee; padding-top: 20px; }
         </style>
       </head>
@@ -169,27 +191,24 @@ class EmailService {
         <div class="container">
           <div class="header">
             <div class="logo">🎬 NK Movie Hub</div>
-            <div class="tagline">Your Ultimate Movie Experience</div>
           </div>
-
-          <div class="content">
-            <h2>Welcome, ${pendingAdmin.name}!</h2>
-
-            <p>${invitedByName} is setting up an NK Movie Hub administrator account for this email address. Share the verification code below with them to confirm it:</p>
-
-            <div class="otp-code">${otp}</div>
-
-            <p style="text-align: center; color: #666;">This code expires in ${expiryMinutes} minutes.</p>
-
-            <div class="warning">
-              <h4>Not expecting this?</h4>
-              <p>If you were not expecting an NK Movie Hub admin account, ignore this email and do not share the code - no account is created until the code is entered.</p>
-            </div>
+          <p>Hello ${user.name},</p>
+          <p>${invitedByName} has added you as an NK Movie Hub administrator.</p>
+          <div class="credentials">
+            <p><strong>Email:</strong> ${user.email}</p>
+            <p><strong>Temporary password:</strong></p>
+            <p class="temp-password">${tempPassword}</p>
           </div>
-
+          <p><strong>Next steps:</strong></p>
+          <ol>
+            <li>Go to the <a href="${loginUrl}">admin login page</a></li>
+            <li>Sign in with the email and temporary password above</li>
+            <li>Enter the verification code we email you</li>
+            <li>Set your own permanent password</li>
+          </ol>
+          <p>For security, you must change this temporary password the first time you log in.</p>
           <div class="footer">
-            <p>This is an automated verification email from NK Movie Hub</p>
-            <p>© 2024 NK Movie Hub. All rights reserved.</p>
+            <p>© NK Movie Hub</p>
           </div>
         </div>
       </body>

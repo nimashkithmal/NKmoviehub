@@ -1,5 +1,4 @@
 const express = require('express');
-const fetch = require('node-fetch');
 const Movie = require('../models/Movie');
 const TVShow = require('../models/TVShow');
 const PendingTitle = require('../models/PendingTitle');
@@ -8,6 +7,7 @@ const { findExistingMovieDuplicate } = require('../utils/deduplicateMovies');
 const { uploadPoster } = require('../utils/cloudinaryUpload');
 const { evaluateContentPolicy } = require('../utils/contentPolicy');
 const { buildEpisodeUrl } = require('../utils/tvEpisodeUrls');
+const { buildAllSeasonEpisodes, summarizeEpisodes } = require('../utils/tvSeasonEpisodes');
 const {
   triggerEmbedSync,
   getEmbedSyncStatus,
@@ -15,41 +15,9 @@ const {
 } = require('../utils/embedSyncIndexer');
 
 const router = express.Router();
-const EMBED_API = 'https://api.2embed.cc';
 
 const escapeRegex = (value = '') =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-async function buildSeasonOneEpisodes(tmdbId) {
-  const response = await fetch(
-    `${EMBED_API}/season?tmdb_id=${encodeURIComponent(tmdbId)}&season=1`,
-    { headers: { Accept: 'application/json' } }
-  );
-
-  if (response.ok) {
-    const data = await response.json();
-    const episodes = (data.episodes || []).filter((ep) => Number(ep.episode_number) > 0);
-    if (episodes.length) {
-      return episodes.map((ep, index) => ({
-        episodeNumber: index + 1,
-        seasonNumber: 1,
-        seasonEpisodeNumber: Number(ep.episode_number),
-        episodeUrl: buildEpisodeUrl(tmdbId, 1, ep.episode_number),
-        episodeTitle: String(ep.name || '').trim()
-      }));
-    }
-  }
-
-  return [
-    {
-      episodeNumber: 1,
-      seasonNumber: 1,
-      seasonEpisodeNumber: 1,
-      episodeUrl: buildEpisodeUrl(tmdbId, 1, 1),
-      episodeTitle: ''
-    }
-  ];
-}
 
 async function findExistingTVShowDuplicate({ title, year, tmdbId }) {
   const clauses = [];
@@ -138,7 +106,7 @@ async function approvePendingTitle(pending, userId, payload = {}) {
   }
 
   const imageUrl = await uploadPoster(posterUrl, { type: 'tvshow' });
-  const episodes = await buildSeasonOneEpisodes(tmdbId);
+  const { episodes, numberOfSeasons: resolvedSeasons } = await buildAllSeasonEpisodes(tmdbId);
 
   const tvShow = await TVShow.create({
     title,
@@ -148,7 +116,7 @@ async function approvePendingTitle(pending, userId, payload = {}) {
     showUrl: episodes[0]?.episodeUrl || buildEpisodeUrl(tmdbId, 1, 1),
     episodes,
     episodeCount: episodes.length,
-    numberOfSeasons: parseInt(payload.numberOfSeasons ?? pending.numberOfSeasons, 10) || 1,
+    numberOfSeasons: resolvedSeasons,
     imdbRating,
     imageUrl,
     images: [imageUrl],
@@ -165,7 +133,7 @@ async function approvePendingTitle(pending, userId, payload = {}) {
     status: siteStatus
   });
 
-  return { kind: 'tvshow', id: tvShow._id };
+  return { kind: 'tvshow', id: tvShow._id, numberOfSeasons: resolvedSeasons, episodeCount: episodes.length };
 }
 
 // @route   GET /api/sync/status
@@ -244,6 +212,39 @@ router.get('/pending/:id', protect, restrictToAdmin, async (req, res) => {
   }
 });
 
+// @route   GET /api/sync/pending/:id/episodes-preview
+router.get('/pending/:id/episodes-preview', protect, restrictToAdmin, async (req, res) => {
+  try {
+    const pending = await PendingTitle.findById(req.params.id).lean();
+    if (!pending) {
+      return res.status(404).json({ success: false, message: 'Pending title not found' });
+    }
+    if (pending.type !== 'tvshow') {
+      return res.status(400).json({ success: false, message: 'Episode preview is only for TV series' });
+    }
+
+    const tmdbId = String(pending.tmdbId || '').trim();
+    if (!tmdbId) {
+      return res.status(400).json({ success: false, message: 'Missing TMDB ID for this title' });
+    }
+
+    const { episodes } = await buildAllSeasonEpisodes(tmdbId);
+    const summary = summarizeEpisodes(episodes);
+
+    res.json({
+      success: true,
+      data: {
+        tmdbId,
+        title: pending.title,
+        ...summary
+      }
+    });
+  } catch (err) {
+    console.error('Episodes preview error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch episodes from 2embed' });
+  }
+});
+
 // @route   POST /api/sync/pending/:id/approve
 router.post('/pending/:id/approve', protect, restrictToAdmin, async (req, res) => {
   try {
@@ -269,9 +270,14 @@ router.post('/pending/:id/approve', protect, restrictToAdmin, async (req, res) =
     pending.addedCatalogId = created.id;
     await pending.save();
 
+    const addedLabel =
+      created.kind === 'tvshow'
+        ? `TV show added — ${created.numberOfSeasons} season(s), ${created.episodeCount} episode(s)`
+        : `${pending.type === 'movie' ? 'Movie' : 'TV show'} added to catalog`;
+
     res.json({
       success: true,
-      message: `${pending.type === 'movie' ? 'Movie' : 'TV show'} added to catalog`,
+      message: addedLabel,
       data: { pending, created }
     });
   } catch (err) {
