@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { body, validationResult } = require('express-validator');
 const Movie = require('../models/Movie');
 const Rating = require('../models/Rating');
@@ -24,7 +25,7 @@ const {
 const fetch = require('node-fetch');
 // Cloudinary is configured once in utils/cloudinaryUpload; every poster that
 // reaches the database is uploaded there first
-const { cloudinary, uploadPoster, uploadPosters } = require('../utils/cloudinaryUpload');
+const { cloudinary, uploadPoster, uploadPosters, isCloudinaryUrl } = require('../utils/cloudinaryUpload');
 const {
   applyLanguageFilter,
   collectLanguageOptions
@@ -549,6 +550,45 @@ router.get('/:id/download', async (req, res) => {
   }
 });
 
+// @route   GET /api/movies/:id/watch
+// @desc    Lightweight movie payload for the watch player
+// @access  Public
+router.get('/:id/watch', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Movie not found'
+      });
+    }
+
+    const movie = await Movie.findById(req.params.id)
+      .select(
+        'title year description imageUrl bannerUrl images movieUrl trailerUrl imdbRating genre runtime status language'
+      )
+      .lean();
+
+    if (!movie || !isPubliclyAccessible(movie)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Movie not found'
+      });
+    }
+
+    res.set('Cache-Control', 'public, max-age=120');
+    res.json({
+      success: true,
+      data: { movie }
+    });
+  } catch (error) {
+    console.error('Get movie watch payload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching movie'
+    });
+  }
+});
+
 // @route   GET /api/movies/:id
 // @desc    Get movie by ID (public)
 // @access  Public
@@ -905,14 +945,16 @@ router.put('/:id', protect, restrictToAdmin, [
     
     // Determine final images array
     if (images && Array.isArray(images)) {
-      // If images array is provided, use it (filtered existing URLs).
-      // Anything not already on Cloudinary is pulled in so the database only
-      // ever holds our own URLs.
-      const keptImages = await uploadPosters(
-        images.filter(img => !uploadedImages.includes(img)),
-        { type: 'movie' }
+      const remoteToUpload = images.filter(
+        (img) => !uploadedImages.includes(img) && !isCloudinaryUrl(img)
       );
-      updateData.images = [...uploadedImages, ...keptImages];
+      const alreadyHosted = images.filter(
+        (img) => !uploadedImages.includes(img) && isCloudinaryUrl(img)
+      );
+      const uploadedKept = remoteToUpload.length
+        ? await uploadPosters(remoteToUpload, { type: 'movie' })
+        : [];
+      updateData.images = [...uploadedImages, ...alreadyHosted, ...uploadedKept];
     } else if (uploadedImages.length > 0) {
       // If only new images were uploaded, merge with existing
       updateData.images = [...uploadedImages, ...existingImages.filter(img => !uploadedImages.includes(img))];

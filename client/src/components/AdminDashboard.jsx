@@ -51,6 +51,7 @@ const AdminDashboard = () => {
   const [movieBannerFile, setMovieBannerFile] = useState(null);
   const [movieBannerPreview, setMovieBannerPreview] = useState('');
   const [movieClearBanner, setMovieClearBanner] = useState(false);
+  const [movieSaving, setMovieSaving] = useState(false);
   const [tvShowFormData, setTVShowFormData] = useState({
     title: '',
     year: new Date().getFullYear(),
@@ -290,12 +291,14 @@ const AdminDashboard = () => {
   };
 
   const handleUpdateMovie = async () => {
+    if (movieSaving) return;
     if (!movieFormData.title || !movieFormData.description || !movieFormData.genre || !movieFormData.movieUrl) {
       showNotification('Please fill in all required fields', 'error');
       return;
     }
 
     try {
+      setMovieSaving(true);
       const updateData = {
         title: movieFormData.title,
         year: movieFormData.year,
@@ -424,6 +427,8 @@ const AdminDashboard = () => {
     } catch (err) {
       console.error('Error updating movie:', err);
       showNotification(`Error updating movie: ${err.message}`, 'error');
+    } finally {
+      setMovieSaving(false);
     }
   };
 
@@ -1929,10 +1934,12 @@ const AdminDashboard = () => {
             )}
             <div className="form-actions">
               <button 
+                type="button"
                 className="btn btn-primary"
                 onClick={handleUpdateMovie}
+                disabled={movieSaving}
               >
-                Update Movie
+                {movieSaving ? 'Saving…' : 'Update Movie'}
               </button>
               <button 
                 className="btn btn-secondary"

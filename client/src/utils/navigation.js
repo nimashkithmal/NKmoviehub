@@ -9,10 +9,16 @@ export const withReturnPath = (location, extraState = {}) => ({
 });
 
 export const goBackOr = (navigate, location, fallback) => {
+  const current = currentPath(location);
   const from = location.state?.from;
-  if (typeof from === 'string' && from && from !== location.pathname) {
-    navigate(from);
+  if (typeof from === 'string' && from && from !== current) {
+    navigate(from, { replace: true });
     return;
   }
-  navigate(fallback);
+  const historyIdx = window.history.state?.idx;
+  if (typeof historyIdx === 'number' && historyIdx > 0) {
+    navigate(-1);
+    return;
+  }
+  navigate(fallback, { replace: true });
 };
