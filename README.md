@@ -4,7 +4,11 @@ Full-stack movie and TV streaming catalog for **NK Movie Hub** — React fronten
 
 ## Live site
 
-**[https://nkmoviehub.vercel.app](https://nkmoviehub.vercel.app)** — open this to see the current home page and public catalog. No screenshots are kept in the repo; the live site is always the source of truth.
+[![NKMovieHUB — live home page](https://image.thum.io/get/width/1200/crop/675/noanimate/https://nkmoviehub.vercel.app)](https://nkmoviehub.vercel.app)
+
+**[Open live site →](https://nkmoviehub.vercel.app)** · **[Admin login →](https://nkmoviehub.vercel.app/login)**
+
+The preview above is pulled from the live URL when you view this README (no screenshot files in the repo). GitHub does not allow a full interactive embed inside markdown — click the image or links to use the site.
 
 | Area | URL |
 |------|-----|
