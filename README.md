@@ -116,12 +116,6 @@ cd client && npm start
 
 ## Admin workflows (summary)
 
-### Add content from 2embed
-1. Admin → **New from 2embed**
-2. Type title (for TV: use **TV Series** filter), click **Sync Now**
-3. Open **Add to Site** — for TV shows, seasons and episode counts load automatically
-4. **Approve** — all seasons/episodes are added to the catalog
-
 ### Invite a new admin (super admin only)
 1. Administration → **Add New Admin**
 2. Full name + email → **Send Admin Invite**
