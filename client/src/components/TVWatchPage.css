@@ -100,6 +100,33 @@
   border: 1px solid #23232b;
 }
 
+.tv-watch-click-gate {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: transparent;
+  font-size: 0;
+}
+
+.tv-watch-click-gate.is-silent {
+  background: transparent;
+}
+
+.tv-watch-player-shell:focus {
+  outline: none;
+}
+
+.tv-watch-player-shell:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline-offset: 2px;
+}
+
 .tv-watch-iframe {
   width: 100%;
   height: 100%;

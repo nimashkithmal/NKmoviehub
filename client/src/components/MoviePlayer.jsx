@@ -1,5 +1,15 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import Hls from 'hls.js';
+import {
+  useBlockEmbedRedirects,
+  SAFE_EMBED_IFRAME_PROPS,
+  wrapEmbedInShield,
+  usePlayerClickGate,
+  useEmbedFrameGuard,
+  focusPlayerIframe,
+  passThroughClickGate
+} from '../hooks/useBlockEmbedRedirects';
+import { usePlayerKeyboard, useNativeVideoKeyboard } from '../hooks/usePlayerKeyboard';
 import './MoviePlayer.css';
 
 const isHlsUrl = (url = '') => /\.m3u8(\?|$)/i.test(url);
@@ -179,6 +189,65 @@ const MoviePlayer = ({ movie, onClose }) => {
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showEmbedQualityTip, setShowEmbedQualityTip] = useState(false);
 
+  useBlockEmbedRedirects(true);
+  const { unlocked, unlock } = usePlayerClickGate();
+  const shieldedSrc = embedUrl ? wrapEmbedInShield(embedUrl) : '';
+  const videoWrapperRef = useRef(null);
+  useEmbedFrameGuard(iframeRef, shieldedSrc, Boolean(shieldedSrc) && ['youtube', 'vimeo', 'googledrive', 'embed'].includes(videoType));
+
+  const unlockAndFocus = useCallback(() => {
+    unlock();
+    window.requestAnimationFrame(() => focusPlayerIframe(iframeRef));
+  }, [unlock]);
+
+  const handleGatePointerDown = useCallback(
+    (event) => {
+      passThroughClickGate(event, { unlock, iframeRef });
+    },
+    [unlock]
+  );
+
+  const cycleEmbedServer = useCallback((delta) => {
+    if (!embedSources.length) return;
+    const index = Math.max(0, embedSources.findIndex((s) => s.id === activeSourceId));
+    const next = embedSources[(index + delta + embedSources.length) % embedSources.length];
+    if (!next || next.id === activeSourceId) return;
+    setActiveSourceId(next.id);
+    setEmbedUrl(next.url);
+    setIsLoading(true);
+  }, [embedSources, activeSourceId]);
+
+  const selectEmbedServer = useCallback((index) => {
+    const next = embedSources[index];
+    if (!next) return;
+    setActiveSourceId(next.id);
+    setEmbedUrl(next.url);
+    setIsLoading(true);
+  }, [embedSources]);
+
+  const reloadEmbed = useCallback(() => {
+    const current = embedUrl;
+    if (!current) return;
+    setIsLoading(true);
+    setEmbedUrl('');
+    window.requestAnimationFrame(() => setEmbedUrl(current));
+  }, [embedUrl]);
+
+  usePlayerKeyboard({
+    enabled: videoType === 'embed',
+    playerShellRef: videoWrapperRef,
+    playerFrameRef: iframeRef,
+    unlocked,
+    unlock: unlockAndFocus,
+    onReload: reloadEmbed,
+    onPrevServer: () => cycleEmbedServer(-1),
+    onNextServer: () => cycleEmbedServer(1),
+    onSelectServer: selectEmbedServer,
+    onBack: onClose
+  });
+
+  useNativeVideoKeyboard(videoRef, videoWrapperRef, videoType === 'direct');
+
   // Determine video type and prepare embed URL
   useEffect(() => {
     if (!movie || !movie.movieUrl) return;
@@ -297,45 +366,6 @@ const MoviePlayer = ({ movie, onClose }) => {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
-  }, []);
-
-  // Block embed ad popups / redirects while the player is open
-  useEffect(() => {
-    const previousOpen = window.open;
-    window.open = () => null;
-
-    const previousBlur = window.onblur;
-    let blurArmed = false;
-    const onBlur = () => {
-      // Pop-under pattern: blur then try to open — keep focus if possible
-      blurArmed = true;
-      window.focus();
-    };
-    window.addEventListener('blur', onBlur);
-
-    const onVisibility = () => {
-      if (document.hidden && blurArmed) {
-        window.focus();
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-
-    // Stop auxiliary clicks that spawn tabs from our UI chrome
-    const blockAux = (event) => {
-      if (event.button === 1) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    };
-    document.addEventListener('auxclick', blockAux, true);
-
-    return () => {
-      window.open = previousOpen;
-      window.onblur = previousBlur;
-      window.removeEventListener('blur', onBlur);
-      document.removeEventListener('visibilitychange', onVisibility);
-      document.removeEventListener('auxclick', blockAux, true);
-    };
   }, []);
 
   useEffect(() => {
@@ -640,7 +670,7 @@ const MoviePlayer = ({ movie, onClose }) => {
           </button>
         </div>
         
-        <div className="movie-player-video-wrapper">
+        <div className="movie-player-video-wrapper" ref={videoWrapperRef} tabIndex={0}>
           {isLoading && (
             <div className="video-loading-overlay">
               <div className="loading-spinner"></div>
@@ -717,11 +747,9 @@ const MoviePlayer = ({ movie, onClose }) => {
                 key={embedUrl}
                 ref={iframeRef}
                 className="movie-player-video"
-                src={embedUrl}
+                src={shieldedSrc}
                 frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                referrerPolicy="no-referrer"
+                {...SAFE_EMBED_IFRAME_PROPS}
                 loading="eager"
                 title={movie.title}
                 onLoad={() => {
@@ -734,6 +762,14 @@ const MoviePlayer = ({ movie, onClose }) => {
                   setIsLoading(false);
                 }}
               />
+              {!unlocked && videoType === 'embed' && (
+                <button
+                  type="button"
+                  className="movie-player-click-gate"
+                  onPointerDown={handleGatePointerDown}
+                  aria-label="Click to play"
+                />
+              )}
             </>
           ) : (
             <>

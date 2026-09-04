@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 import { trackWatchClick } from '../utils/analytics';
@@ -13,6 +13,16 @@ import { getEmbedPlayableUrl, buildTvEmbedSources } from '../utils/embedSources'
 import { goBackOr } from '../utils/navigation';
 import { readTvWatchCache, writeTvWatchCache } from '../utils/tvWatchCache';
 import { fetchSeasonEpisodeStills, getEpisodeStillUrl } from '../utils/tvEpisodeStills';
+import {
+  useBlockEmbedRedirects,
+  SAFE_EMBED_IFRAME_PROPS,
+  wrapEmbedInShield,
+  usePlayerClickGate,
+  useEmbedFrameGuard,
+  focusPlayerIframe,
+  passThroughClickGate
+} from '../hooks/useBlockEmbedRedirects';
+import { usePlayerKeyboard } from '../hooks/usePlayerKeyboard';
 import './TVWatchPage.css';
 
 const PLAYER_LOADING_TIMEOUT_MS = 10000;
@@ -39,6 +49,11 @@ const TVWatchPage = () => {
   const trackedShowRef = useRef('');
   const preconnectedRef = useRef(false);
   const lastEmbedUrlRef = useRef('');
+  const playerFrameRef = useRef(null);
+  const playerShellRef = useRef(null);
+
+  useBlockEmbedRedirects(true);
+  const { unlocked, unlock } = usePlayerClickGate();
 
   const seasonNumber = Math.max(1, parseInt(searchParams.get('season') || '1', 10) || 1);
   const episodeNumber = Math.max(1, parseInt(searchParams.get('episode') || '1', 10) || 1);
@@ -150,6 +165,8 @@ const TVWatchPage = () => {
   }, [embedSources, activeSourceId]);
 
   const embedUrl = activeSource?.url || '';
+  const shieldedSrc = embedUrl ? wrapEmbedInShield(embedUrl) : '';
+  useEmbedFrameGuard(playerFrameRef, shieldedSrc, Boolean(shieldedSrc));
 
   useEffect(() => {
     if (!embedSources.length) return;
@@ -201,24 +218,84 @@ const TVWatchPage = () => {
     currentEpisode?.episodeTitle
   ]);
 
-  const goToEpisode = (season, episode) => {
+  const goToEpisode = useCallback((season, episode) => {
     setSearchParams({ season: String(season), episode: String(episode) });
-  };
+  }, [setSearchParams]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     goBackOr(navigate, location, `/tvshow/${id}`);
-  };
+  }, [navigate, location, id]);
 
-  const switchSource = (source) => {
+  const switchSource = useCallback((source) => {
     if (!source || source.id === activeSourceId) return;
     setActiveSourceId(source.id);
     setPlayerLoading(true);
-  };
+  }, [activeSourceId]);
 
-  const reloadPlayer = () => {
+  const reloadPlayer = useCallback(() => {
     setPlayerLoading(true);
     setReloadToken((value) => value + 1);
-  };
+  }, []);
+
+  const flatEpisodes = useMemo(
+    () =>
+      seasons.flatMap((season) =>
+        (season.episodes || []).map((episode) => ({
+          seasonNumber: season.seasonNumber,
+          episodeNumber: episode.seasonEpisodeNumber || episode.episodeNumber
+        }))
+      ),
+    [seasons]
+  );
+
+  const shiftEpisode = useCallback((delta) => {
+    if (!flatEpisodes.length) return;
+    const index = flatEpisodes.findIndex(
+      (item) => item.seasonNumber === seasonNumber && item.episodeNumber === episodeNumber
+    );
+    const current = index >= 0 ? index : 0;
+    const next = flatEpisodes[current + delta];
+    if (next) goToEpisode(next.seasonNumber, next.episodeNumber);
+  }, [flatEpisodes, seasonNumber, episodeNumber, goToEpisode]);
+
+  const cycleServer = useCallback((delta) => {
+    if (!embedSources.length) return;
+    const index = Math.max(0, embedSources.findIndex((s) => s.id === activeSourceId));
+    const next = embedSources[(index + delta + embedSources.length) % embedSources.length];
+    switchSource(next);
+  }, [embedSources, activeSourceId, switchSource]);
+
+  const selectServerByIndex = useCallback((index) => {
+    const source = embedSources[index];
+    if (source) switchSource(source);
+  }, [embedSources, switchSource]);
+
+  const unlockAndFocus = useCallback(() => {
+    unlock();
+    window.requestAnimationFrame(() => focusPlayerIframe(playerFrameRef));
+  }, [unlock]);
+
+  const handleGatePointerDown = useCallback(
+    (event) => {
+      passThroughClickGate(event, { unlock, iframeRef: playerFrameRef });
+    },
+    [unlock]
+  );
+
+  usePlayerKeyboard({
+    enabled: Boolean(tvShow && tvShow.status !== 'coming_soon'),
+    playerShellRef,
+    playerFrameRef,
+    unlocked,
+    unlock: unlockAndFocus,
+    onReload: reloadPlayer,
+    onPrevServer: () => cycleServer(-1),
+    onNextServer: () => cycleServer(1),
+    onSelectServer: selectServerByIndex,
+    onPrevEpisode: () => shiftEpisode(-1),
+    onNextEpisode: () => shiftEpisode(1),
+    onBack: handleBack
+  });
 
   if (loading && !tvShow) {
     return (
@@ -308,7 +385,7 @@ const TVWatchPage = () => {
 
       <div className="tv-watch-layout">
         <main className="tv-watch-main">
-          <div className="tv-watch-player-shell">
+          <div className="tv-watch-player-shell" ref={playerShellRef} tabIndex={0}>
             {playerLoading && embedUrl && (
               <div className="tv-watch-player-loading">
                 <div className="loading-spinner" />
@@ -321,15 +398,25 @@ const TVWatchPage = () => {
                 <p>No playable stream found for this episode.</p>
               </div>
             ) : (
-              <iframe
-                key={`${activeSourceId}-${reloadToken}`}
-                title={`${tvShow.title} S${seasonNumber}E${episodeNumber}`}
-                src={embedUrl}
-                className={`tv-watch-iframe${playerLoading ? ' is-loading' : ''}`}
-                allowFullScreen
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                onLoad={() => setPlayerLoading(false)}
-              />
+              <>
+                <iframe
+                  ref={playerFrameRef}
+                  key={`${activeSourceId}-${reloadToken}`}
+                  title={`${tvShow.title} S${seasonNumber}E${episodeNumber}`}
+                  src={shieldedSrc}
+                  className={`tv-watch-iframe${playerLoading ? ' is-loading' : ''}`}
+                  {...SAFE_EMBED_IFRAME_PROPS}
+                  onLoad={() => setPlayerLoading(false)}
+                />
+                {!unlocked && (
+                  <button
+                    type="button"
+                    className="tv-watch-click-gate is-silent"
+                    onPointerDown={handleGatePointerDown}
+                    aria-label="Click to play"
+                  />
+                )}
+              </>
             )}
           </div>
 

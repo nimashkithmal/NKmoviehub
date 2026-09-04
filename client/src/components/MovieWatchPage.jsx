@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 import { trackWatchClick } from '../utils/analytics';
@@ -6,6 +6,16 @@ import { setDetailPageMeta } from '../utils/seo';
 import { buildEmbedSourcesFromUrl, getEmbedPlayableUrl } from '../utils/embedSources';
 import { goBackOr } from '../utils/navigation';
 import { readMovieWatchCache, writeMovieWatchCache } from '../utils/movieWatchCache';
+import {
+  useBlockEmbedRedirects,
+  SAFE_EMBED_IFRAME_PROPS,
+  wrapEmbedInShield,
+  usePlayerClickGate,
+  useEmbedFrameGuard,
+  focusPlayerIframe,
+  passThroughClickGate
+} from '../hooks/useBlockEmbedRedirects';
+import { usePlayerKeyboard } from '../hooks/usePlayerKeyboard';
 import './TVWatchPage.css';
 import './MovieWatchPage.css';
 
@@ -31,6 +41,11 @@ const MovieWatchPage = () => {
   const trackedMovieRef = useRef('');
   const preconnectedRef = useRef(false);
   const lastEmbedUrlRef = useRef('');
+  const playerFrameRef = useRef(null);
+  const playerShellRef = useRef(null);
+
+  useBlockEmbedRedirects(true);
+  const { unlocked, unlock } = usePlayerClickGate();
 
   useEffect(() => {
     if (preconnectedRef.current) return;
@@ -103,6 +118,8 @@ const MovieWatchPage = () => {
   }, [embedSources, activeSourceId]);
 
   const embedUrl = activeSource?.url || '';
+  const shieldedSrc = embedUrl ? wrapEmbedInShield(embedUrl) : '';
+  useEmbedFrameGuard(playerFrameRef, shieldedSrc, Boolean(shieldedSrc));
 
   useEffect(() => {
     if (!embedSources.length) return;
@@ -150,20 +167,57 @@ const MovieWatchPage = () => {
     id
   ]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     goBackOr(navigate, location, `/movie/${id}`);
-  };
+  }, [navigate, location, id]);
 
-  const switchSource = (source) => {
+  const switchSource = useCallback((source) => {
     if (!source || source.id === activeSourceId) return;
     setActiveSourceId(source.id);
     setPlayerLoading(true);
-  };
+  }, [activeSourceId]);
 
-  const reloadPlayer = () => {
+  const reloadPlayer = useCallback(() => {
     setPlayerLoading(true);
     setReloadToken((value) => value + 1);
-  };
+  }, []);
+
+  const cycleServer = useCallback((delta) => {
+    if (!embedSources.length) return;
+    const index = Math.max(0, embedSources.findIndex((s) => s.id === activeSourceId));
+    const next = embedSources[(index + delta + embedSources.length) % embedSources.length];
+    switchSource(next);
+  }, [embedSources, activeSourceId, switchSource]);
+
+  const selectServerByIndex = useCallback((index) => {
+    const source = embedSources[index];
+    if (source) switchSource(source);
+  }, [embedSources, switchSource]);
+
+  const unlockAndFocus = useCallback(() => {
+    unlock();
+    window.requestAnimationFrame(() => focusPlayerIframe(playerFrameRef));
+  }, [unlock]);
+
+  const handleGatePointerDown = useCallback(
+    (event) => {
+      passThroughClickGate(event, { unlock, iframeRef: playerFrameRef });
+    },
+    [unlock]
+  );
+
+  usePlayerKeyboard({
+    enabled: Boolean(movie && movie.status !== 'coming_soon'),
+    playerShellRef,
+    playerFrameRef,
+    unlocked,
+    unlock: unlockAndFocus,
+    onReload: reloadPlayer,
+    onPrevServer: () => cycleServer(-1),
+    onNextServer: () => cycleServer(1),
+    onSelectServer: selectServerByIndex,
+    onBack: handleBack
+  });
 
   if (loading && !movie) {
     return (
@@ -253,7 +307,7 @@ const MovieWatchPage = () => {
       </header>
 
       <main className="movie-watch-main">
-        <div className="tv-watch-player-shell">
+        <div className="tv-watch-player-shell" ref={playerShellRef} tabIndex={0}>
           {playerLoading && embedUrl && (
             <div className="tv-watch-player-loading">
               <div className="loading-spinner" />
@@ -266,15 +320,25 @@ const MovieWatchPage = () => {
               <p>No playable stream found for this movie.</p>
             </div>
           ) : (
-            <iframe
-              key={`${activeSourceId}-${reloadToken}`}
-              title={`${movie.title} player`}
-              src={embedUrl}
-              className={`tv-watch-iframe${playerLoading ? ' is-loading' : ''}`}
-              allowFullScreen
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              onLoad={() => setPlayerLoading(false)}
-            />
+            <>
+              <iframe
+                ref={playerFrameRef}
+                key={`${activeSourceId}-${reloadToken}`}
+                title={`${movie.title} player`}
+                src={shieldedSrc}
+                className={`tv-watch-iframe${playerLoading ? ' is-loading' : ''}`}
+                {...SAFE_EMBED_IFRAME_PROPS}
+                onLoad={() => setPlayerLoading(false)}
+              />
+              {!unlocked && (
+                <button
+                  type="button"
+                  className="tv-watch-click-gate is-silent"
+                  onPointerDown={handleGatePointerDown}
+                  aria-label="Click to play"
+                />
+              )}
+            </>
           )}
         </div>
 
