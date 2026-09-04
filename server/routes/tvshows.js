@@ -525,6 +525,20 @@ router.post('/', protect, restrictToAdmin, [
       });
     }
 
+    const policyCheck = evaluateContentPolicy({
+      title,
+      description,
+      genre,
+      tagline: req.body.tagline
+    });
+    if (policyCheck.restricted) {
+      return res.status(400).json({
+        success: false,
+        message: 'This title cannot be published due to content policy.',
+        reason: policyCheck.reason
+      });
+    }
+
     // Upload images to Cloudinary
     let imageUrl;
     let images = [];

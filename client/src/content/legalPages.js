@@ -80,7 +80,7 @@ export const LEGAL_PAGES = {
       },
       {
         heading: 'Content standards',
-        body: `NK Movie Hub is intended for general audiences. We do not publish sexually explicit, pornographic, or adult-only entertainment. Titles that violate our content standards may be removed or hidden without notice.`
+        body: `NK Movie Hub is intended for general audiences and Google AdSense programme policies. We do not publish sexually explicit, pornographic, sexually suggestive entertainment, or titles focused on sexual education or adult themes (including obfuscated titles). Titles that violate these standards are removed or hidden without notice.`
       },
       {
         heading: 'Use of the service',
