@@ -236,7 +236,13 @@
 .tv-watch-server-tip {
   margin: 0.7rem 0 0;
   font-size: 0.76rem;
+  line-height: 1.45;
   color: #9ca3af;
+}
+
+.tv-watch-server-tip-alert {
+  color: #ef4444;
+  font-weight: 600;
 }
 
 .tv-watch-sidebar {
