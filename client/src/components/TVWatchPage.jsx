@@ -384,7 +384,10 @@ const TVWatchPage = () => {
               ))}
             </div>
             <p className="tv-watch-server-tip">
-              If a server doesn&apos;t load, try another. Install uBlock Origin to block ads.
+              If a server doesn&apos;t load, try another.{' '}
+              <span className="tv-watch-server-tip-alert">
+                Install uBlock Origin to block ads.
+              </span>
             </p>
           </div>
         </main>
