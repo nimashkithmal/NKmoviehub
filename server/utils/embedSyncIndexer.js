@@ -298,12 +298,13 @@ async function runPool(items, worker) {
 }
 
 async function collectTrendingCandidates() {
-  // Sequential — parallel trending calls often get HTTP 403 from 2embed.
-  const movieWeek = await fetchTrendingResults('movie', 'week', TRENDING_PAGES);
+  // 2embed only (skin HTML / API) — never TMDB for sync candidates.
+  const noTmdb = { allowTmdb: false };
+  const movieWeek = await fetchTrendingResults('movie', 'week', TRENDING_PAGES, noTmdb);
   await new Promise((r) => setTimeout(r, 500));
-  const movieDay = await fetchTrendingResults('movie', 'day', 2);
+  const movieDay = await fetchTrendingResults('movie', 'day', 2, noTmdb);
   await new Promise((r) => setTimeout(r, 500));
-  const tvWeek = await fetchTrendingResults('tv', 'week', TRENDING_PAGES);
+  const tvWeek = await fetchTrendingResults('tv', 'week', TRENDING_PAGES, noTmdb);
 
   const seen = new Set();
   const candidates = [];
@@ -621,6 +622,9 @@ async function runIndexer(options = {}) {
     );
   } catch (err) {
     console.error('2embed sync job error:', err.message);
+    state.lastSkipReason = 'api_error';
+    state.lastSkipMessage = `2embed request failed: ${err.message}`;
+    state.failed = Math.max(state.failed, 1);
   } finally {
     state.running = false;
     state.finishedAt = new Date();
