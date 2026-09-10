@@ -4,6 +4,7 @@
  */
 const { EMBED_API, fetchEmbedJson } = require('./embedHttp');
 const { fetchTmdbTrendingRows, hasTmdbAuth } = require('./tmdb');
+const { fetchSkinTrendingRows } = require('./embedSkinTrending');
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const STALE_TTL_MS = 6 * 60 * 60 * 1000; // serve old data up to 6h if API is down
@@ -101,14 +102,20 @@ async function loadTrendingPagesFromEmbed(base, timeWindow, maxPages, cacheKey) 
 }
 
 async function loadTrendingPages(kind, base, timeWindow, maxPages, cacheKey) {
-  let embed = { rows: null, error: null };
+  // Prefer www.2embed.skin HTML — api.2embed.cc trending is Cloudflare 403 for many IPs.
+  try {
+    const skinRows = await fetchSkinTrendingRows(kind, {
+      limit: Math.max(20, maxPages * 20)
+    });
+    if (skinRows.length) {
+      return skinRows;
+    }
+  } catch (err) {
+    logFetchIssue(`${cacheKey}_skin`, err.message);
+  }
 
-  if (Date.now() < embedTrendingBlockedUntil) {
-    embed = {
-      rows: null,
-      error: new Error('HTTP 403 (circuit open)')
-    };
-  } else {
+  let embed = { rows: null, error: null };
+  if (Date.now() >= embedTrendingBlockedUntil) {
     embed = await loadTrendingPagesFromEmbed(
       base,
       timeWindow,
@@ -116,9 +123,10 @@ async function loadTrendingPages(kind, base, timeWindow, maxPages, cacheKey) {
       cacheKey
     );
     if (embed.error) markEmbedTrendingBlocked(embed.error);
+    if (embed.rows?.length) return embed.rows;
+  } else {
+    embed = { rows: null, error: new Error('HTTP 403 (circuit open)') };
   }
-
-  if (embed.rows?.length) return embed.rows;
 
   if (hasTmdbAuth()) {
     try {
@@ -126,11 +134,9 @@ async function loadTrendingPages(kind, base, timeWindow, maxPages, cacheKey) {
         pages: maxPages
       });
       if (tmdbRows.length) {
-        if (embed.error) {
-          console.warn(
-            `Trending (${cacheKey}): 2embed ${embed.error.message} → TMDB fallback OK (${tmdbRows.length})`
-          );
-        }
+        console.warn(
+          `Trending (${cacheKey}): 2embed.skin empty → TMDB fallback OK (${tmdbRows.length})`
+        );
         return tmdbRows;
       }
     } catch (err) {
