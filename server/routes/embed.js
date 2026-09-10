@@ -1,9 +1,7 @@
 const express = require('express');
-const fetch = require('node-fetch');
+const { fetchEmbedJson } = require('../utils/embedHttp');
 
 const router = express.Router();
-
-const EMBED_API = 'https://api.2embed.cc';
 
 const proxyEmbed = async (req, res, path) => {
   const { tmdb_id, imdb_id } = req.query;
@@ -20,18 +18,7 @@ const proxyEmbed = async (req, res, path) => {
   if (imdb_id) params.set('imdb_id', String(imdb_id));
 
   try {
-    const response = await fetch(`${EMBED_API}/${path}?${params.toString()}`, {
-      headers: { Accept: 'application/json' }
-    });
-
-    if (!response.ok) {
-      return res.status(response.status).json({
-        success: false,
-        message: 'Embed metadata unavailable'
-      });
-    }
-
-    const data = await response.json();
+    const data = await fetchEmbedJson(`/${path}?${params.toString()}`);
     return res.json(data);
   } catch (err) {
     console.error(`Embed proxy error (${path}):`, err.message);
@@ -58,19 +45,9 @@ router.get('/season', async (req, res) => {
   }
 
   try {
-    const response = await fetch(
-      `${EMBED_API}/season?tmdb_id=${encodeURIComponent(tmdbId)}&season=${seasonNum}`,
-      { headers: { Accept: 'application/json' } }
+    const data = await fetchEmbedJson(
+      `/season?tmdb_id=${encodeURIComponent(tmdbId)}&season=${seasonNum}`
     );
-
-    if (!response.ok) {
-      return res.status(response.status).json({
-        success: false,
-        message: 'Season metadata unavailable'
-      });
-    }
-
-    const data = await response.json();
     const episodes = (data.episodes || []).map((ep) => ({
       episodeNumber: Number(ep.episode_number) || 0,
       still: ep.still || ''

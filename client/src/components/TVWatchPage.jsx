@@ -13,6 +13,11 @@ import { getEmbedPlayableUrl, buildTvEmbedSources } from '../utils/embedSources'
 import { goBackOr } from '../utils/navigation';
 import { readTvWatchCache, writeTvWatchCache } from '../utils/tvWatchCache';
 import { fetchSeasonEpisodeStills, getEpisodeStillUrl } from '../utils/tvEpisodeStills';
+import { useManualSubtitles } from '../hooks/useManualSubtitles';
+import {
+  ManualSubtitlesControls,
+  ManualSubtitlesOverlay
+} from './ManualSubtitles';
 import './TVWatchPage.css';
 
 const PLAYER_LOADING_TIMEOUT_MS = 10000;
@@ -39,9 +44,14 @@ const TVWatchPage = () => {
   const trackedShowRef = useRef('');
   const preconnectedRef = useRef(false);
   const lastEmbedUrlRef = useRef('');
+  const subtitles = useManualSubtitles();
 
   const seasonNumber = Math.max(1, parseInt(searchParams.get('season') || '1', 10) || 1);
   const episodeNumber = Math.max(1, parseInt(searchParams.get('episode') || '1', 10) || 1);
+
+  useEffect(() => {
+    subtitles.clear();
+  }, [seasonNumber, episodeNumber, id, subtitles.clear]);
 
   useEffect(() => {
     if (preconnectedRef.current) return;
@@ -331,7 +341,10 @@ const TVWatchPage = () => {
                 onLoad={() => setPlayerLoading(false)}
               />
             )}
+            <ManualSubtitlesOverlay subtitles={subtitles} />
           </div>
+
+          <ManualSubtitlesControls subtitles={subtitles} />
 
           <div className="tv-watch-show-bar">
             <div>

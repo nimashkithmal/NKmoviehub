@@ -1,6 +1,17 @@
 /**
  * Move coming_soon titles to active once their release date has passed.
  */
+
+const COMING_SOON_CACHE_TTL_MS = 3 * 60 * 1000;
+const COMING_SOON_STALE_TTL_MS = 30 * 60 * 1000;
+const PROMOTE_INTERVAL_MS = 10 * 60 * 1000;
+const COMING_SOON_CARD_SELECT =
+  'title year releaseDate imageUrl images imdbRating averageRating matureContent status genre language';
+
+let comingSoonCache = { at: 0, movies: null, tvShows: null };
+let lastPromoteAt = 0;
+let promoteInFlight = false;
+
 function isReleased(doc, todayArg) {
   const today = todayArg instanceof Date ? todayArg : new Date();
   const todayStr = today.toISOString().slice(0, 10);
@@ -82,11 +93,104 @@ function filterUpcomingOnly(docs) {
   return sortComingSoon(docs.filter((doc) => isUpcomingDoc(doc)));
 }
 
+function scheduleComingSoonPromote(Movie, TVShow) {
+  const now = Date.now();
+  if (promoteInFlight || now - lastPromoteAt < PROMOTE_INTERVAL_MS) return;
+  promoteInFlight = true;
+  lastPromoteAt = now;
+  Promise.all([
+    promoteReleasedComingSoon(Movie),
+    promoteReleasedComingSoon(TVShow)
+  ])
+    .then((counts) => {
+      if ((counts[0] || 0) + (counts[1] || 0) > 0) {
+        comingSoonCache = { at: 0, movies: null, tvShows: null };
+      }
+    })
+    .catch((err) => {
+      console.error('Coming soon promote error:', err.message || err);
+    })
+    .finally(() => {
+      promoteInFlight = false;
+    });
+}
+
+/**
+ * Fast path for home Coming Soon: short TTL cache, lean fields, promote in background.
+ */
+async function getComingSoonCatalog({
+  Movie,
+  TVShow,
+  applyPublicCatalogFilter,
+  filterPublicItems,
+  limit = 40
+}) {
+  const now = Date.now();
+  const age = comingSoonCache.at ? now - comingSoonCache.at : Number.POSITIVE_INFINITY;
+  if (comingSoonCache.at && age < COMING_SOON_CACHE_TTL_MS) {
+    scheduleComingSoonPromote(Movie, TVShow);
+    return {
+      movies: comingSoonCache.movies || [],
+      tvShows: comingSoonCache.tvShows || [],
+      fromCache: true
+    };
+  }
+
+  scheduleComingSoonPromote(Movie, TVShow);
+
+  try {
+    const movieFilter = applyPublicCatalogFilter
+      ? applyPublicCatalogFilter({ status: 'coming_soon' })
+      : { status: 'coming_soon' };
+    const tvFilter = applyPublicCatalogFilter
+      ? applyPublicCatalogFilter({ status: 'coming_soon' })
+      : { status: 'coming_soon' };
+
+    const [movieDocs, tvDocs] = await Promise.all([
+      Movie.find(movieFilter).select(COMING_SOON_CARD_SELECT).lean(),
+      TVShow.find(tvFilter).select(COMING_SOON_CARD_SELECT).lean()
+    ]);
+
+    let movies = filterUpcomingOnly(movieDocs);
+    let tvShows = filterUpcomingOnly(tvDocs);
+    if (typeof filterPublicItems === 'function') {
+      movies = filterPublicItems(movies);
+      tvShows = filterPublicItems(tvShows);
+    }
+    movies = movies.slice(0, limit);
+    tvShows = tvShows.slice(0, limit);
+
+    comingSoonCache = { at: Date.now(), movies, tvShows };
+    return { movies, tvShows, fromCache: false };
+  } catch (err) {
+    if (comingSoonCache.at && age < COMING_SOON_STALE_TTL_MS) {
+      console.warn(
+        'Coming soon catalog falling back to stale cache:',
+        err.message || err
+      );
+      return {
+        movies: comingSoonCache.movies || [],
+        tvShows: comingSoonCache.tvShows || [],
+        fromCache: true,
+        stale: true
+      };
+    }
+    throw err;
+  }
+}
+
+function invalidateComingSoonCache() {
+  comingSoonCache = { at: 0, movies: null, tvShows: null };
+}
+
 module.exports = {
   isReleased,
   isUpcomingDoc,
   releaseSortKey,
   promoteReleasedComingSoon,
   sortComingSoon,
-  filterUpcomingOnly
+  filterUpcomingOnly,
+  getComingSoonCatalog,
+  invalidateComingSoonCache,
+  scheduleComingSoonPromote
 };

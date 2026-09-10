@@ -6,6 +6,11 @@ import { setDetailPageMeta } from '../utils/seo';
 import { buildEmbedSourcesFromUrl, getEmbedPlayableUrl } from '../utils/embedSources';
 import { goBackOr } from '../utils/navigation';
 import { readMovieWatchCache, writeMovieWatchCache } from '../utils/movieWatchCache';
+import { useManualSubtitles } from '../hooks/useManualSubtitles';
+import {
+  ManualSubtitlesControls,
+  ManualSubtitlesOverlay
+} from './ManualSubtitles';
 import './TVWatchPage.css';
 import './MovieWatchPage.css';
 
@@ -31,6 +36,7 @@ const MovieWatchPage = () => {
   const trackedMovieRef = useRef('');
   const preconnectedRef = useRef(false);
   const lastEmbedUrlRef = useRef('');
+  const subtitles = useManualSubtitles();
 
   useEffect(() => {
     if (preconnectedRef.current) return;
@@ -276,7 +282,10 @@ const MovieWatchPage = () => {
               onLoad={() => setPlayerLoading(false)}
             />
           )}
+          <ManualSubtitlesOverlay subtitles={subtitles} />
         </div>
+
+        <ManualSubtitlesControls subtitles={subtitles} />
 
         <div className="tv-watch-show-bar">
           <div>

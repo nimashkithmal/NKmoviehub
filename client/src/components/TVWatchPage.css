@@ -245,6 +245,119 @@
   font-weight: 600;
 }
 
+.manual-sub-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 8%;
+  transform: translateX(-50%);
+  z-index: 3;
+  width: min(92%, 44rem);
+  pointer-events: none;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.manual-sub-line {
+  display: block;
+  color: #fff;
+  font-size: clamp(0.95rem, 2.4vw, 1.35rem);
+  font-weight: 600;
+  line-height: 1.35;
+  text-shadow:
+    0 0 4px #000,
+    0 1px 2px #000,
+    1px 1px 2px #000,
+    -1px -1px 2px #000;
+  white-space: pre-wrap;
+}
+
+.manual-sub-panel {
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid #23232b;
+  border-radius: 0.65rem;
+  background: #101015;
+}
+
+.manual-sub-panel-head {
+  margin-bottom: 0.65rem;
+}
+
+.manual-sub-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.manual-sub-hint {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: #9ca3af;
+}
+
+.manual-sub-file-input {
+  display: none;
+}
+
+.manual-sub-actions,
+.manual-sub-sync {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.manual-sub-sync {
+  margin-top: 0.55rem;
+}
+
+.manual-sub-btn {
+  border: 1px solid #2f2f38;
+  background: #181820;
+  color: #e5e7eb;
+  border-radius: 999px;
+  padding: 0.38rem 0.8rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.manual-sub-btn.is-primary {
+  border-color: #e50914;
+  background: #e50914;
+  color: #fff;
+}
+
+.manual-sub-btn.is-compact {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+}
+
+.manual-sub-offset {
+  min-width: 3.2rem;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #d1d5db;
+  font-variant-numeric: tabular-nums;
+}
+
+.manual-sub-file-name {
+  margin: 0.55rem 0 0;
+  font-size: 0.74rem;
+  color: #9ca3af;
+  word-break: break-all;
+}
+
+.manual-sub-error {
+  margin: 0.45rem 0 0;
+  font-size: 0.74rem;
+  color: #ef4444;
+}
+
 .tv-watch-sidebar {
   border: 1px solid #23232b;
   border-radius: 0.65rem;

@@ -98,6 +98,10 @@ SITE_URL=http://localhost:3000
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
+
+# TMDB — powers the home “Now Playing” row (theatrical list)
+TMDB_API_KEY=your_tmdb_v3_api_key
+# Also set the same value as GitHub Actions secret TMDB_API_KEY so EC2 deploys sync it.
 ```
 
 ### Run

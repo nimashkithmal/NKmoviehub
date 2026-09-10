@@ -1,18 +1,16 @@
-const fetch = require('node-fetch');
 const Movie = require('../models/Movie');
 const TVShow = require('../models/TVShow');
 const CastTitleCache = require('../models/CastTitleCache');
 const CastPerson = require('../models/CastPerson');
 const { applyPublicCatalogFilter } = require('./contentPolicy');
 const { extractTmdbId, extractTvTmdbId } = require('./trendingPopular');
+const { EMBED_API, fetchEmbedJson: fetchEmbedApi } = require('./embedHttp');
 
-const EMBED_API = 'https://api.2embed.cc';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const FAILED_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const CONCURRENCY = 6;
-const FETCH_TIMEOUT_MS = 20000;
+const CONCURRENCY = 3;
 const FETCH_RETRIES = 2;
-const REQUEST_GAP_MS = 80;
+const REQUEST_GAP_MS = 120;
 const MIN_SEARCH_SCORE = 50;
 
 const state = {
@@ -89,23 +87,7 @@ const searchRowYear = (row, type) => {
 };
 
 async function fetchEmbedJson(url) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: controller.signal
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    return await response.json();
-  } finally {
-    clearTimeout(timer);
-  }
+  return fetchEmbedApi(url);
 }
 
 async function fetchEmbedCast(type, tmdbId) {
