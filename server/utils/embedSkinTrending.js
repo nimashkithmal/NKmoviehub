@@ -301,6 +301,34 @@ async function searchSkinByTitle(kind = 'movie', query = '', { limit = 8 } = {})
     if (!row.name && card.title) row.name = card.title;
     rows.push(row);
   }
+  if (rows.length) return rows;
+
+  // Title not on trending/library — resolve IMDb via TMDB, then require a live
+  // 2embed.skin /movie|tv/tt… page (still syncing from 2embed, not TMDB catalog).
+  try {
+    const { searchTmdbForImdbIds } = require('./tmdb');
+    const hints = await searchTmdbForImdbIds(kind, q, { limit });
+    const scored = hints
+      .map((hint) => ({ ...hint, score: scoreTitle(q, hint.title) }))
+      .filter((hint) => hint.score >= 70)
+      .sort((a, b) => b.score - a.score);
+
+    for (const hint of scored) {
+      const row = await fetchSkinDetailByImdb(hint.imdbId, kind);
+      await sleep(120);
+      if (!row?.tmdb_id) continue;
+      const id = String(row.tmdb_id);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      if (!row.title && hint.title) row.title = hint.title;
+      if (!row.name && hint.title) row.name = hint.title;
+      rows.push(row);
+      if (rows.length >= limit) break;
+    }
+  } catch (err) {
+    console.warn(`2embed.skin TMDB-assisted search failed (${kind}):`, err.message || err);
+  }
+
   return rows;
 }
 

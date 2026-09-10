@@ -599,9 +599,30 @@ async function runIndexer(options = {}) {
     state.total = candidates.length;
 
     if (!candidates.length) {
+      if (query) {
+        const escapeRegex = (value = '') =>
+          String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pendingFilter = {
+          status: 'pending',
+          title: { $regex: escapeRegex(query), $options: 'i' }
+        };
+        if (typeFilter) pendingFilter.type = typeFilter;
+        const alreadyPending = await PendingTitle.findOne(pendingFilter)
+          .select('title type')
+          .lean();
+        if (alreadyPending) {
+          state.skipped += 1;
+          state.lastSkipReason = 'already_pending';
+          state.lastSkipMessage = `"${alreadyPending.title}" is already in the pending queue.`;
+          state.currentTitle = alreadyPending.title;
+          console.log(`ℹ️ "${alreadyPending.title}" already pending — skip Sync Now`);
+          return;
+        }
+      }
+
       state.lastSkipReason = 'not_found';
       state.lastSkipMessage = query
-        ? `No match on 2embed for "${query}". Try a shorter name (e.g. without "The").`
+        ? `No match on 2embed for "${query}". Try a shorter name (e.g. without "The"), or paste an IMDb id (tt…).`
         : '';
       console.log(
         query

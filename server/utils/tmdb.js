@@ -179,9 +179,73 @@ async function fetchNowPlayingTmdbIds({
     : [];
 }
 
+/**
+ * Title → IMDb ids via TMDB search (used only to look up 2embed.skin detail pages
+ * when api.2embed.cc search is blocked and the title is not on skin trending/library).
+ */
+async function searchTmdbForImdbIds(
+  kind = 'movie',
+  query = '',
+  { limit = 5, language = 'en-US' } = {}
+) {
+  if (!hasTmdbAuth()) return [];
+  const q = String(query || '').trim();
+  if (!q) return [];
+
+  const isTv = kind === 'tv' || kind === 'tvshow';
+  const searchPath = isTv ? '/search/tv' : '/search/movie';
+  const detailPath = isTv ? '/tv' : '/movie';
+
+  try {
+    const data = await fetchTmdbJson(searchPath, {
+      query: q,
+      language,
+      include_adult: 'false',
+      page: 1
+    });
+    const results = Array.isArray(data?.results) ? data.results : [];
+    const out = [];
+    const seen = new Set();
+
+    for (const row of results.slice(0, Math.max(1, Math.min(8, limit * 2)))) {
+      const tmdbId = row?.id != null ? String(row.id) : '';
+      if (!tmdbId || seen.has(tmdbId)) continue;
+      seen.add(tmdbId);
+
+      let imdbId = '';
+      try {
+        const ext = await fetchTmdbJson(`${detailPath}/${tmdbId}/external_ids`);
+        imdbId = String(ext?.imdb_id || '').trim();
+      } catch {
+        continue;
+      }
+      if (!/^tt\d+$/i.test(imdbId)) continue;
+
+      const release = isTv
+        ? String(row.first_air_date || '').trim()
+        : String(row.release_date || '').trim();
+
+      out.push({
+        tmdbId,
+        imdbId,
+        title: String(row.title || row.name || '').trim(),
+        year: release.slice(0, 4) || '',
+        mediaType: isTv ? 'tvshow' : 'movie'
+      });
+      if (out.length >= limit) break;
+    }
+
+    return out;
+  } catch (err) {
+    console.warn('TMDB title→IMDb lookup failed:', err.message || err);
+    return [];
+  }
+}
+
 module.exports = {
   hasTmdbAuth,
   fetchTmdbJson,
   fetchTmdbTrendingRows,
-  fetchNowPlayingTmdbIds
+  fetchNowPlayingTmdbIds,
+  searchTmdbForImdbIds
 };

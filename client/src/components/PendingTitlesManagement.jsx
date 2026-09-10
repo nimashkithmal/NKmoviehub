@@ -320,13 +320,15 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
           className={`pending-sync-status ${
             syncStatus.added > 0
               ? 'pending-sync-status--done'
-              : syncStatus.lastSkipReason === 'already_in_catalog'
+              :             syncStatus.lastSkipReason === 'already_in_catalog'
                 ? 'pending-sync-status--info'
                 : syncStatus.lastSkipReason === 'dismissed'
                   ? 'pending-sync-status--info'
-                  : syncStatus.lastSkipReason === 'not_found'
-                    ? 'pending-sync-status--warn'
-                    : 'pending-sync-status--done'
+                  : syncStatus.lastSkipReason === 'already_pending'
+                    ? 'pending-sync-status--done'
+                    : syncStatus.lastSkipReason === 'not_found'
+                      ? 'pending-sync-status--warn'
+                      : 'pending-sync-status--done'
           }`}
         >
           {syncStatus.lastSkipMessage ? (

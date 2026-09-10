@@ -101,14 +101,7 @@ async function loadTrendingPagesFromEmbed(base, timeWindow, maxPages, cacheKey) 
   return { rows, error: null };
 }
 
-async function loadTrendingPages(
-  kind,
-  base,
-  timeWindow,
-  maxPages,
-  cacheKey,
-  { allowTmdb = true } = {}
-) {
+async function loadTrendingPages(kind, base, timeWindow, maxPages, cacheKey) {
   // Prefer www.2embed.skin HTML — api.2embed.cc trending is Cloudflare 403 for many IPs.
   try {
     const skinRows = await fetchSkinTrendingRows(kind, {
@@ -135,8 +128,7 @@ async function loadTrendingPages(
     embed = { rows: null, error: new Error('HTTP 403 (circuit open)') };
   }
 
-  // Sync must stay on 2embed only — never invent candidates from TMDB.
-  if (allowTmdb && hasTmdbAuth()) {
+  if (hasTmdbAuth()) {
     try {
       const tmdbRows = await fetchTmdbTrendingRows(kind, timeWindow, {
         pages: maxPages
@@ -175,23 +167,8 @@ function storeRows(cacheKey, key, rows) {
   cache[key] = { ids: rows.map((r) => String(r.tmdb_id)), at: Date.now() };
 }
 
-async function refreshTrending(
-  kind,
-  cacheKey,
-  key,
-  base,
-  timeWindow,
-  maxPages,
-  options = {}
-) {
-  const rows = await loadTrendingPages(
-    kind,
-    base,
-    timeWindow,
-    maxPages,
-    cacheKey,
-    options
-  );
+async function refreshTrending(kind, cacheKey, key, base, timeWindow, maxPages) {
+  const rows = await loadTrendingPages(kind, base, timeWindow, maxPages, cacheKey);
   if (rows?.length) {
     storeRows(cacheKey, key, rows);
     return rows;
@@ -200,12 +177,7 @@ async function refreshTrending(
   return cached.stale ? cached.rows : [];
 }
 
-async function fetchTrendingResults(
-  kind = 'movie',
-  timeWindow = 'week',
-  maxPages = 1,
-  options = {}
-) {
+async function fetchTrendingResults(kind = 'movie', timeWindow = 'week', maxPages = 1) {
   const key = kind === 'tv' ? 'tv' : 'movie';
   const cacheKey = `${key}_${timeWindow}`;
   const now = Date.now();
@@ -222,15 +194,7 @@ async function fetchTrendingResults(
   const base =
     key === 'tv' ? `${EMBED_API}/trendingtv` : `${EMBED_API}/trending`;
 
-  const promise = refreshTrending(
-    key,
-    cacheKey,
-    key,
-    base,
-    timeWindow,
-    maxPages,
-    options
-  );
+  const promise = refreshTrending(key, cacheKey, key, base, timeWindow, maxPages);
 
   inFlight.set(cacheKey, promise);
   try {
