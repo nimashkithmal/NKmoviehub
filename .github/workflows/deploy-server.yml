@@ -167,19 +167,12 @@ jobs:
             CONFIG="$APP_DIR/server/config.env"
             if [ -n "${TMDB_API_KEY:-}" ]; then
               touch "$CONFIG"
-              CONFIG="$CONFIG" TMDB_API_KEY="$TMDB_API_KEY" python3 - <<'PY'
-import os, re
-from pathlib import Path
-path = Path(os.environ["CONFIG"])
-key = os.environ["TMDB_API_KEY"].strip()
-text = path.read_text() if path.exists() else ""
-if re.search(r"^TMDB_API_KEY=.*$", text, re.M):
-    text = re.sub(r"^TMDB_API_KEY=.*$", f"TMDB_API_KEY={key}", text, count=1, flags=re.M)
-else:
-    text = text.rstrip() + f"\n\nTMDB_API_KEY={key}\n"
-path.write_text(text)
-print("TMDB_API_KEY synced to config.env")
-PY
+              if grep -q '^TMDB_API_KEY=' "$CONFIG" 2>/dev/null; then
+                sed -i "s|^TMDB_API_KEY=.*$|TMDB_API_KEY=${TMDB_API_KEY}|" "$CONFIG"
+              else
+                printf '\nTMDB_API_KEY=%s\n' "$TMDB_API_KEY" >> "$CONFIG"
+              fi
+              echo "TMDB_API_KEY synced to config.env"
             else
               echo "WARNING: TMDB_API_KEY GitHub secret is empty — Now Playing will fall back."
             fi
