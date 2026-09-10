@@ -1,19 +1,17 @@
-const fetch = require('node-fetch');
 const { buildEpisodeUrl } = require('./tvEpisodeUrls');
+const { fetchEmbedJson } = require('./embedHttp');
 
-const EMBED_API = 'https://api.2embed.cc';
 const MAX_SEASON_PROBE = 50;
 
 async function fetchSeasonEpisodes(tmdbId, seasonNumber) {
-  const response = await fetch(
-    `${EMBED_API}/season?tmdb_id=${encodeURIComponent(tmdbId)}&season=${seasonNumber}`,
-    { headers: { Accept: 'application/json' } }
-  );
-
-  if (!response.ok) return [];
-
-  const data = await response.json();
-  return (data.episodes || []).filter((ep) => Number(ep.episode_number) > 0);
+  try {
+    const data = await fetchEmbedJson(
+      `/season?tmdb_id=${encodeURIComponent(tmdbId)}&season=${seasonNumber}`
+    );
+    return (data.episodes || []).filter((ep) => Number(ep.episode_number) > 0);
+  } catch {
+    return [];
+  }
 }
 
 async function buildAllSeasonEpisodes(tmdbId, numberOfSeasons = null) {

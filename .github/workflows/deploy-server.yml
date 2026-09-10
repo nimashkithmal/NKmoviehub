@@ -114,6 +114,7 @@ jobs:
           SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         run: |
           mkdir -p ~/.ssh
 
@@ -134,7 +135,7 @@ jobs:
               -o BatchMode=yes \
               -o ConnectTimeout=20 \
               "$EC2_USER@$EC2_HOST" \
-              APP_DIR="$APP_DIR" PM2_APP="$PM2_APP" 'bash -s' <<'REMOTE'
+              APP_DIR="$APP_DIR" PM2_APP="$PM2_APP" TMDB_API_KEY="$TMDB_API_KEY" 'bash -s' <<'REMOTE'
 
             set -euo pipefail
 
@@ -159,6 +160,27 @@ jobs:
             echo "--- installing dependencies ---"
             cd server
             npm ci
+
+            echo "--- syncing TMDB_API_KEY into config.env ---"
+            CONFIG="$APP_DIR/server/config.env"
+            if [ -n "${TMDB_API_KEY:-}" ]; then
+              touch "$CONFIG"
+              CONFIG="$CONFIG" TMDB_API_KEY="$TMDB_API_KEY" python3 - <<'PY'
+import os, re
+from pathlib import Path
+path = Path(os.environ["CONFIG"])
+key = os.environ["TMDB_API_KEY"].strip()
+text = path.read_text() if path.exists() else ""
+if re.search(r"^TMDB_API_KEY=.*$", text, re.M):
+    text = re.sub(r"^TMDB_API_KEY=.*$", f"TMDB_API_KEY={key}", text, count=1, flags=re.M)
+else:
+    text = text.rstrip() + f"\n\nTMDB_API_KEY={key}\n"
+path.write_text(text)
+print("TMDB_API_KEY synced to config.env")
+PY
+            else
+              echo "WARNING: TMDB_API_KEY GitHub secret is empty — Now Playing will fall back."
+            fi
 
             echo "--- restarting ---"
             pm2 restart "$PM2_APP" --update-env

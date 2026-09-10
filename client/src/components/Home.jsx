@@ -16,8 +16,10 @@ import './BrowseShelf.css';
 const PAGE_SIZE = 20;
 /** Server batch size — UI still shows PAGE_SIZE; next batch loads when you leave this window. */
 const BATCH_SIZE = 500;
-const DISCOVERY_CACHE_KEY = 'nk-home-discovery-v1';
+const DISCOVERY_CACHE_KEY = 'nk-home-discovery-v6';
 const DISCOVERY_CACHE_TTL_MS = 15 * 60 * 1000;
+const COMING_SOON_CACHE_KEY = 'nk-home-coming-soon-v1';
+const COMING_SOON_CACHE_TTL_MS = 15 * 60 * 1000;
 /** How often home rows refetch while the discovery page stays open */
 const HOME_LIVE_REFRESH_MS = 10 * 60 * 1000;
 
@@ -38,6 +40,51 @@ const writeDiscoveryCache = (data) => {
     sessionStorage.setItem(
       DISCOVERY_CACHE_KEY,
       JSON.stringify({ at: Date.now(), data })
+    );
+  } catch {
+    // Ignore quota / private mode errors
+  }
+};
+
+const mergeComingSoonItems = (movies = [], shows = []) =>
+  [
+    ...movies.map((m) => ({ ...m, _kind: 'movie' })),
+    ...shows.map((t) => ({ ...t, _kind: 'tvshow' }))
+  ].sort((a, b) => {
+    const key = (item) => {
+      if (item.releaseDate) {
+        const iso = String(item.releaseDate).match(/^(\d{4}-\d{2}-\d{2})/);
+        if (iso) return iso[1];
+        const t = Date.parse(item.releaseDate);
+        if (!Number.isNaN(t)) return new Date(t).toISOString().slice(0, 10);
+      }
+      if (item.year) return `${item.year}-12-31`;
+      return '9999-12-31';
+    };
+    const diff = key(a).localeCompare(key(b));
+    if (diff !== 0) return diff;
+    return String(a.title || '').localeCompare(String(b.title || ''));
+  });
+
+const readComingSoonCache = () => {
+  try {
+    const raw = sessionStorage.getItem(COMING_SOON_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed?.items) || Date.now() - parsed.at > COMING_SOON_CACHE_TTL_MS) {
+      return null;
+    }
+    return parsed.items;
+  } catch {
+    return null;
+  }
+};
+
+const writeComingSoonCache = (items) => {
+  try {
+    sessionStorage.setItem(
+      COMING_SOON_CACHE_KEY,
+      JSON.stringify({ at: Date.now(), items })
     );
   } catch {
     // Ignore quota / private mode errors
@@ -93,8 +140,14 @@ const Home = () => {
   const [comingSoonOnly, setComingSoonOnly] = useState(false);
   const [contentType, setContentType] = useState('movies');
   const [homeBanners, setHomeBanners] = useState([]);
-  const [comingSoonItems, setComingSoonItems] = useState([]);
-  const [comingSoonLoading, setComingSoonLoading] = useState(true);
+  const [comingSoonItems, setComingSoonItems] = useState(() => {
+    const cached = readComingSoonCache();
+    return cached || [];
+  });
+  const [comingSoonLoading, setComingSoonLoading] = useState(() => {
+    const cached = readComingSoonCache();
+    return !cached?.length;
+  });
   const [comingSoonRefreshing, setComingSoonRefreshing] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [heroReady, setHeroReady] = useState(false);
@@ -135,38 +188,42 @@ const Home = () => {
   }, []);
 
   const loadComingSoon = useCallback(async ({ showRefresh = false } = {}) => {
-    if (showRefresh) setComingSoonRefreshing(true);
-    else setComingSoonLoading(true);
+    const cached = readComingSoonCache();
+    if (cached?.length) {
+      setComingSoonItems(cached);
+      setComingSoonLoading(false);
+      if (showRefresh) setComingSoonRefreshing(true);
+    } else if (showRefresh) {
+      setComingSoonRefreshing(true);
+    } else {
+      setComingSoonLoading(true);
+    }
+
     try {
-      const [moviesRes, tvRes] = await Promise.all([
-        fetch('/api/movies/coming-soon'),
-        fetch('/api/tvshows/coming-soon')
-      ]);
-      const moviesJson = await moviesRes.json();
-      const tvJson = await tvRes.json();
-      const movies = moviesJson.success
-        ? (moviesJson.data.movies || []).map((m) => ({ ...m, _kind: 'movie' }))
-        : [];
-      const shows = tvJson.success
-        ? (tvJson.data.tvShows || []).map((t) => ({ ...t, _kind: 'tvshow' }))
-        : [];
-      setComingSoonItems(
-        [...movies, ...shows].sort((a, b) => {
-          const key = (item) => {
-            if (item.releaseDate) {
-              const iso = String(item.releaseDate).match(/^(\d{4}-\d{2}-\d{2})/);
-              if (iso) return iso[1];
-              const t = Date.parse(item.releaseDate);
-              if (!Number.isNaN(t)) return new Date(t).toISOString().slice(0, 10);
-            }
-            if (item.year) return `${item.year}-12-31`;
-            return '9999-12-31';
-          };
-          const diff = key(a).localeCompare(key(b));
-          if (diff !== 0) return diff;
-          return String(a.title || '').localeCompare(String(b.title || ''));
-        })
-      );
+      let items = null;
+      const response = await fetch('/api/discovery/coming-soon');
+      if (response.ok) {
+        const json = await response.json();
+        if (json.success) {
+          items = mergeComingSoonItems(json.data?.movies || [], json.data?.tvShows || []);
+        }
+      } else {
+        // Older server without combined route — fall back to split endpoints.
+        const [moviesRes, tvRes] = await Promise.all([
+          fetch('/api/movies/coming-soon'),
+          fetch('/api/tvshows/coming-soon')
+        ]);
+        const moviesJson = await moviesRes.json();
+        const tvJson = await tvRes.json();
+        items = mergeComingSoonItems(
+          moviesJson.success ? moviesJson.data?.movies || [] : [],
+          tvJson.success ? tvJson.data?.tvShows || [] : []
+        );
+      }
+      if (items) {
+        setComingSoonItems(items);
+        writeComingSoonCache(items);
+      }
     } catch (err) {
       console.error('Error fetching coming soon:', err);
     } finally {
@@ -360,6 +417,10 @@ const Home = () => {
 
     const loadFastDiscovery = async () => {
       try {
+        // Don't overwrite a good live cache with the temporary catalog fallback.
+        if (cached?.meta?.source === 'live' && hasDiscoveryRows(cached)) {
+          return;
+        }
         const response = await fetch('/api/discovery/home?limit=20&fast=1', {
           signal: controller.signal
         });
@@ -367,7 +428,6 @@ const Home = () => {
         if (!result.success || cancelled) return;
         if (!hasDiscoveryRows(result.data)) return;
         applyDiscoveryRows(result.data, setters);
-        writeDiscoveryCache(result.data);
       } catch (err) {
         if (err.name === 'AbortError' || cancelled) return;
         console.error('Error loading fast discovery catalog:', err);
@@ -385,7 +445,9 @@ const Home = () => {
         const result = await response.json();
         if (!result.success || cancelled) return;
         applyDiscoveryRows(result.data, setters);
-        writeDiscoveryCache(result.data);
+        if (result.data?.meta?.source === 'live') {
+          writeDiscoveryCache(result.data);
+        }
       } catch (err) {
         if (err.name === 'AbortError' || cancelled) return;
         console.error('Error loading live discovery catalog:', err);
@@ -401,9 +463,15 @@ const Home = () => {
     };
 
     const bootstrapDiscovery = async () => {
+      // One paint path: if we already have rows, refresh quietly; otherwise
+      // load catalog/live once (skip fast→live flash of wrong duplicate rows).
+      if (hasDiscoveryRows(cached)) {
+        await loadLiveDiscovery({ showRefresh: true });
+        return;
+      }
       await loadFastDiscovery();
       if (!cancelled) {
-        await loadLiveDiscovery({ showRefresh: hasDiscoveryRows(readDiscoveryCache()) });
+        await loadLiveDiscovery({ showRefresh: false });
       }
     };
 
@@ -770,7 +838,7 @@ const Home = () => {
                 {nowPlaying.length > 0 && (
                   <ContentRow
                     title="Now Playing"
-                    subtitle="In theaters now"
+                    subtitle="In theaters now · TMDB"
                     onViewAll={() => navigate('/?browse=1&sort=popular')}
                   >
                     {nowPlaying.map((movie) => (

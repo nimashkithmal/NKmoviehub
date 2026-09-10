@@ -15,7 +15,8 @@ const {
 const {
   promoteReleasedComingSoon,
   sortComingSoon,
-  filterUpcomingOnly
+  filterUpcomingOnly,
+  getComingSoonCatalog
 } = require('../utils/comingSoon');
 const {
   applyPublicCatalogFilter,
@@ -361,17 +362,18 @@ router.get('/filters', async (req, res) => {
 // @access  Public
 router.get('/coming-soon', async (req, res) => {
   try {
-    await promoteReleasedComingSoon(TVShow);
-
-    const tvShows = await TVShow.find({ status: 'coming_soon' })
-      .select('-__v')
-      .lean();
-
-    const upcoming = filterUpcomingOnly(tvShows);
+    const Movie = require('../models/Movie');
+    const { tvShows } = await getComingSoonCatalog({
+      Movie,
+      TVShow,
+      applyPublicCatalogFilter,
+      filterPublicItems,
+      limit: 40
+    });
 
     res.json({
       success: true,
-      data: { tvShows: upcoming.slice(0, 40) }
+      data: { tvShows }
     });
   } catch (error) {
     console.error('Get coming soon TV shows error:', error);

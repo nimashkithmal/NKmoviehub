@@ -1,4 +1,3 @@
-const fetch = require('node-fetch');
 const Movie = require('../models/Movie');
 const TVShow = require('../models/TVShow');
 const PendingTitle = require('../models/PendingTitle');
@@ -10,14 +9,13 @@ const {
 const { evaluateContentPolicy } = require('./contentPolicy');
 const { isUpcomingDoc } = require('./comingSoon');
 const { buildAllSeasonEpisodes } = require('./tvSeasonEpisodes');
+const { EMBED_API, fetchEmbedJson: fetchEmbedApi } = require('./embedHttp');
 
-const EMBED_API = 'https://api.2embed.cc';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 const TMDB_BACKDROP_BASE = 'https://image.tmdb.org/t/p/w1280';
-const FETCH_TIMEOUT_MS = 20000;
-const REQUEST_GAP_MS = 100;
-const CONCURRENCY = 5;
-const TRENDING_PAGES = 5;
+const REQUEST_GAP_MS = 150;
+const CONCURRENCY = 3;
+const TRENDING_PAGES = 3;
 const AUTO_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const STARTUP_DELAY_MS = 2 * 60 * 1000;
 
@@ -85,18 +83,7 @@ const trailerFromEmbed = (data = {}) => {
 };
 
 async function fetchEmbedJson(url) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: controller.signal
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
-  } finally {
-    clearTimeout(timer);
-  }
+  return fetchEmbedApi(url);
 }
 
 function mapSearchRowToEmbedData(type, row = {}) {
@@ -142,19 +129,7 @@ function mapSearchRowToEmbedData(type, row = {}) {
 
 async function fetchEmbedMetadata(type, tmdbId) {
   const path = type === 'tvshow' ? 'tv' : 'movie';
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(
-      `${EMBED_API}/${path}?tmdb_id=${encodeURIComponent(tmdbId)}`,
-      { headers: { Accept: 'application/json' }, signal: controller.signal }
-    );
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
-  } finally {
-    clearTimeout(timer);
-  }
+  return fetchEmbedApi(`/${path}?tmdb_id=${encodeURIComponent(tmdbId)}`);
 }
 
 async function buildCatalogTmdbSets() {
@@ -323,11 +298,12 @@ async function runPool(items, worker) {
 }
 
 async function collectTrendingCandidates() {
-  const [movieWeek, movieDay, tvWeek] = await Promise.all([
-    fetchTrendingResults('movie', 'week', TRENDING_PAGES),
-    fetchTrendingResults('movie', 'day', 2),
-    fetchTrendingResults('tv', 'week', TRENDING_PAGES)
-  ]);
+  // Sequential — parallel trending calls often get HTTP 403 from 2embed.
+  const movieWeek = await fetchTrendingResults('movie', 'week', TRENDING_PAGES);
+  await new Promise((r) => setTimeout(r, 500));
+  const movieDay = await fetchTrendingResults('movie', 'day', 2);
+  await new Promise((r) => setTimeout(r, 500));
+  const tvWeek = await fetchTrendingResults('tv', 'week', TRENDING_PAGES);
 
   const seen = new Set();
   const candidates = [];
@@ -339,7 +315,7 @@ async function collectTrendingCandidates() {
       const key = `${type}:${tmdbId}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      candidates.push({ type, tmdbId, source });
+      candidates.push({ type, tmdbId, source, searchRow: row });
     }
   };
 

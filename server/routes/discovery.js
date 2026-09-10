@@ -5,10 +5,11 @@ const {
   extractTmdbId,
   extractTvTmdbId,
   fetchTrendingResults,
-  pickNowPlayingIds,
-  pickTopRatedIds
+  pickNowPlayingIds
 } = require('../utils/trendingPopular');
-const { filterPublicItems } = require('../utils/contentPolicy');
+const { fetchNowPlayingTmdbIds } = require('../utils/tmdb');
+const { filterPublicItems, applyPublicCatalogFilter } = require('../utils/contentPolicy');
+const { getComingSoonCatalog } = require('../utils/comingSoon');
 
 const router = express.Router();
 
@@ -101,27 +102,177 @@ const getTvTmdbMap = async () => {
   return map;
 };
 
+const takeUniqueDocs = (docs = [], limit = 20, excludeIds = null) => {
+  const out = [];
+  const seen = excludeIds || new Set();
+  for (const doc of docs) {
+    const key = String(doc._id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(doc);
+    if (out.length >= limit) break;
+  }
+  return out;
+};
+
+const hasPoster = (doc = {}) =>
+  Boolean(
+    (doc.imageUrl && String(doc.imageUrl).trim()) ||
+      (Array.isArray(doc.images) && doc.images.some(Boolean))
+  );
+
+/** Drop sync noise: perfect IMDb scores with no site engagement, missing art, etc. */
+const isCatalogJunk = (doc = {}) => {
+  if (!hasPoster(doc)) return true;
+  const rating = Number(doc.imdbRating) || 0;
+  const siteVotes = Number(doc.totalRatings) || 0;
+  if (rating <= 0) return true;
+  if (rating >= 9.7 && siteVotes === 0) return true;
+  return false;
+};
+
+const isCredibleRating = (doc = {}) => {
+  const rating = Number(doc.imdbRating) || 0;
+  return rating >= 5.8 && rating <= 9.3;
+};
+
+const movieCardSelect =
+  'title year description genre imageUrl images imdbRating averageRating totalRatings releaseDate createdAt status policyRestricted movieUrl matureContent';
+
+/**
+ * True “Top Rated” / all-time greats from the local 2embed-backed catalog.
+ * 2embed only exposes trending lists — sorting those by vote_average surfaces
+ * brand-new titles, not classics. Catalog also has sync junk (fake ~9.x scores,
+ * concerts, docs), so those are filtered out here.
+ */
+const WEAK_TOP_RATED_TITLE =
+  /live at|live in|concert|greatest (video )?hits|video hits|unplugged|\btour\b|festival|stand-?up|comedy special|behind the scenes|making of|karaoke|music video|tribute to|best of|video show|video capture|songs from|top \d+ cars|in space$/i;
+
+/** Prefer recognizable theatrical titles over obscure sync noise with inflated scores. */
+const TOP_RATED_TITLE_BOOST =
+  /\b(lord of the rings|hobbit|interstellar|inception|the matrix|godfather|dark knight|pulp fiction|fight club|forrest gump|gladiator|avengers|spider-?man|star wars|harry potter|jurassic|terminator|alien\b|joker|parasite|whiplash|the prestige|the departed|goodfellas|shawshank|schindler|saving private|spirited away|princess mononoke|deadpool|iron man|batman|superman|wonder woman|justice league|john wick|mission:? impossible|indiana jones|back to the future|die hard|silence of the lambs|\bse7en\b|\bseven\b|django|mad max|blade runner|\bdune\b|oppenheimer|jaws|rocky|titanic|avatar|casablanca|psycho|vertigo|gone with the wind|12 angry men|good will hunting|the green mile|american history x|the usual suspects|no country for old men|there will be blood|the social network|la la land|get out|knives out|everything everywhere|top gun|guardians of the galaxy|black panther|doctor strange|captain america|thor\b|wolverine|x-men|fantastic four|transformers|pirates of the caribbean)\b/i;
+
+const isWeakTopRatedGenre = (genre = '') => {
+  const raw = String(genre || '').trim();
+  if (/^documentary\b/i.test(raw)) return true;
+  const parts = raw
+    .split(/[,/|]/)
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+  if (!parts.length) return false;
+  return parts.every((part) =>
+    /^(music|documentary|tv movie|reality)$/i.test(part)
+  );
+};
+
+const isTopRatedCandidate = (doc = {}) => {
+  if (isCatalogJunk(doc) || !isCredibleRating(doc) || !hasPoster(doc)) return false;
+  const rating = Number(doc.imdbRating) || 0;
+  const siteVotes = Number(doc.totalRatings) || 0;
+  const year = Number(doc.year) || 0;
+  const currentYear = new Date().getFullYear();
+  // All-time row: skip current-year releases and obvious sync fluff.
+  if (year >= currentYear || year < 1970) return false;
+  if (doc.releaseDate) {
+    const iso = String(doc.releaseDate).trim().match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (iso && iso > todayStr) return false;
+  }
+  if (siteVotes === 0 && rating >= 8.8) return false;
+  if (rating < 7) return false;
+  if (WEAK_TOP_RATED_TITLE.test(String(doc.title || ''))) return false;
+  if (isWeakTopRatedGenre(doc.genre)) return false;
+  return true;
+};
+
+const topRatedSortScore = (doc = {}) => {
+  const rating = Number(doc.imdbRating) || 0;
+  const boost = TOP_RATED_TITLE_BOOST.test(String(doc.title || '')) ? 100 : 0;
+  const votes = Number(doc.totalRatings) || 0;
+  return boost + rating + Math.min(votes, 50) / 100;
+};
+
+const loadTopRatedFromCatalog = async (limit) => {
+  const currentYear = new Date().getFullYear();
+  const docs = await Movie.find({
+    status: 'active',
+    policyRestricted: { $ne: true },
+    year: { $lte: currentYear - 1, $gte: 1970 },
+    $or: [
+      { imdbRating: { $gte: 7, $lt: 8.8 } },
+      { imdbRating: { $gte: 7, $lte: 9.3 }, totalRatings: { $gt: 0 } }
+    ]
+  })
+    .sort({ imdbRating: -1, totalRatings: -1, year: -1 })
+    .select(movieCardSelect)
+    .limit(Math.max(limit * 20, 400))
+    .lean();
+
+  const ranked = filterPublicItems(docs)
+    .filter(isTopRatedCandidate)
+    .sort((a, b) => {
+      const score = topRatedSortScore(b) - topRatedSortScore(a);
+      if (score) return score;
+      return String(a.title || '').localeCompare(String(b.title || ''));
+    });
+
+  return takeUniqueDocs(ranked, limit);
+};
+
 const buildLocalFallback = async (limit) => {
-  const [fallbackMovies, fallbackShows] = await Promise.all([
-    Movie.find({ status: 'active', policyRestricted: { $ne: true } })
-      .sort({ imdbRating: -1, year: -1, createdAt: -1 })
-      .select('-__v')
-      .limit(limit)
+  const baseFilter = { status: 'active', policyRestricted: { $ne: true } };
+  const poolLimit = Math.max(limit * 25, 300);
+  const currentYear = new Date().getFullYear();
+
+  const [recentPool, fallbackShows, topRatedMovies] = await Promise.all([
+    Movie.find(baseFilter)
+      .sort({ createdAt: -1, year: -1 })
+      .select(movieCardSelect)
+      .limit(poolLimit)
       .lean(),
-    TVShow.find({ status: 'active', policyRestricted: { $ne: true } })
-      .sort({ imdbRating: -1, year: -1, createdAt: -1 })
+    TVShow.find(baseFilter)
+      .sort({ createdAt: -1, imdbRating: -1, year: -1 })
       .select('-__v')
-      .limit(limit)
-      .lean()
+      .limit(Math.max(limit * 4, 40))
+      .lean(),
+    loadTopRatedFromCatalog(limit)
   ]);
 
-  const movies = filterPublicItems(fallbackMovies);
-  const shows = filterPublicItems(fallbackShows);
+  const poolAll = filterPublicItems(recentPool).filter(
+    (doc) => hasPoster(doc) && (Number(doc.imdbRating) || 0) > 0
+  );
+  // Newest row: keep fresh additions even if IMDb is a placeholder 10.
+  const pool = poolAll;
+  const qualityPool = poolAll.filter((doc) => !isCatalogJunk(doc));
+  const shows = filterPublicItems(fallbackShows)
+    .filter((doc) => hasPoster(doc))
+    .slice(0, limit);
+
+  // Newest on the site first — matches what users expect while 2embed is blocked.
+  const trendingNow = takeUniqueDocs(pool, limit);
+
+  const used = new Set(trendingNow.map((doc) => String(doc._id)));
+  const recentTheatrical = qualityPool.filter(
+    (doc) =>
+      Number(doc.year) >= currentYear - 2 &&
+      Number(doc.year) <= currentYear + 1 &&
+      isCredibleRating(doc)
+  );
+  let nowPlaying = takeUniqueDocs(recentTheatrical, limit, used);
+  if (nowPlaying.length < Math.min(10, limit)) {
+    nowPlaying = takeUniqueDocs(
+      qualityPool.filter(
+        (doc) => Number(doc.year) >= currentYear - 5 && isCredibleRating(doc)
+      ),
+      limit,
+      used
+    );
+  }
 
   return {
-    trendingNow: movies,
-    nowPlaying: movies.slice(0, Math.min(limit, movies.length)),
-    topRatedMovies: movies,
+    trendingNow,
+    nowPlaying,
+    topRatedMovies,
     trendingTVShows: shows,
     meta: {
       source: 'catalog',
@@ -149,26 +300,66 @@ router.get('/home', async (req, res) => {
       return res.json(homeResponseCache.payload);
     }
 
-    const [weekMovies, weekTv, movieMap, tvMap] = await Promise.all([
-      fetchTrendingResults('movie', 'week', 1),
-      fetchTrendingResults('tv', 'week', 1),
-      getMovieTmdbMap(),
-      getTvTmdbMap()
-    ]);
+    // Sequential 2embed windows — day/month feed Now Playing + Top Rated with fresh titles.
+    const weekMovies = await fetchTrendingResults('movie', 'week', 2);
+    const dayMovies = await fetchTrendingResults('movie', 'day', 1);
+    const monthMovies = await fetchTrendingResults('movie', 'month', 1);
+    const weekTv = await fetchTrendingResults('tv', 'week', 1);
+    const [movieMap, tvMap] = await Promise.all([getMovieTmdbMap(), getTvTmdbMap()]);
+
+    const mergeRows = (...lists) => {
+      const seen = new Set();
+      const out = [];
+      for (const list of lists) {
+        for (const row of list || []) {
+          const id = row?.tmdb_id != null ? String(row.tmdb_id) : '';
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          out.push(row);
+        }
+      }
+      return out;
+    };
+
+    const combinedMovies = mergeRows(dayMovies, weekMovies, monthMovies);
 
     const trendingIds = weekMovies
       .map((r) => (r?.tmdb_id != null ? String(r.tmdb_id) : ''))
       .filter(Boolean);
 
-    const nowPlayingIds = pickNowPlayingIds(weekMovies, {
-      days: 75,
-      limit: 60
+    // Prefer official TMDB theatrical now_playing, then 2embed recent releases.
+    let nowPlayingIds = await fetchNowPlayingTmdbIds({
+      pages: 2,
+      limit: 80,
+      language: 'en-US'
     });
+    const usedTmdbNowPlaying = nowPlayingIds.length > 0;
 
-    const topRatedIds = pickTopRatedIds(weekMovies, {
-      limit: 60,
-      minVotes: 20
-    });
+    if (nowPlayingIds.length < 12) {
+      const fromEmbed = pickNowPlayingIds(combinedMovies, {
+        days: 150,
+        limit: 80
+      });
+      const seen = new Set(nowPlayingIds);
+      for (const id of fromEmbed) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        nowPlayingIds.push(id);
+        if (nowPlayingIds.length >= 40) break;
+      }
+    }
+    if (nowPlayingIds.length < 12) {
+      const dayIds = dayMovies
+        .map((r) => (r?.tmdb_id != null ? String(r.tmdb_id) : ''))
+        .filter(Boolean);
+      const seen = new Set(nowPlayingIds);
+      for (const id of dayIds) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        nowPlayingIds.push(id);
+        if (nowPlayingIds.length >= 40) break;
+      }
+    }
 
     const trendingTvIds = weekTv
       .map((r) => (r?.tmdb_id != null ? String(r.tmdb_id) : ''))
@@ -176,14 +367,37 @@ router.get('/home', async (req, res) => {
 
     let trendingMovieIds = matchIdsFromMap(trendingIds, movieMap);
     let nowPlayingMovieIds = matchIdsFromMap(nowPlayingIds, movieMap);
-    let topRatedMovieIds = matchIdsFromMap(topRatedIds, movieMap);
     let trendingShowIds = matchIdsFromMap(trendingTvIds, tvMap);
 
+    // Fill thin Now Playing from week trending only when TMDB now_playing was empty.
+    const fillThin = (target, sourceIds) => {
+      if (target.length >= Math.min(10, limit)) return target;
+      const seen = new Set(target.map(String));
+      for (const id of sourceIds) {
+        const key = String(id);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        target.push(id);
+        if (target.length >= limit) break;
+      }
+      return target;
+    };
+    if (!usedTmdbNowPlaying) {
+      nowPlayingMovieIds = fillThin(nowPlayingMovieIds, trendingMovieIds);
+    } else if (nowPlayingMovieIds.length < Math.min(8, limit)) {
+      // TMDB list is authoritative; only top up with recent theatrical catalog matches.
+      const embedIds = matchIdsFromMap(
+        pickNowPlayingIds(combinedMovies, { days: 150, limit: 80 }),
+        movieMap
+      );
+      nowPlayingMovieIds = fillThin(nowPlayingMovieIds, embedIds);
+    }
+
     if (!trendingMovieIds.length) {
+      // 2embed trending is often blocked — serve quality catalog without caching
+      // a weak payload for the full live TTL.
       const data = await buildLocalFallback(limit);
-      const payload = { success: true, data };
-      homeResponseCache = { payload, at: Date.now() };
-      return res.json(payload);
+      return res.json({ success: true, data });
     }
 
     if (!trendingShowIds.length) {
@@ -199,7 +413,7 @@ router.get('/home', async (req, res) => {
       await Promise.all([
         hydrateMovies(trendingMovieIds, limit),
         hydrateMovies(nowPlayingMovieIds, limit),
-        hydrateMovies(topRatedMovieIds, limit),
+        loadTopRatedFromCatalog(limit),
         hydrateTVShows(trendingShowIds, limit)
       ]);
 
@@ -210,6 +424,7 @@ router.get('/home', async (req, res) => {
       topRatedMovies: filterPublicItems(topRatedMovies),
       meta: {
         source: weekMovies.length || weekTv.length ? 'live' : 'catalog',
+        nowPlayingSource: usedTmdbNowPlaying ? 'tmdb' : 'embed',
         refreshedAt: new Date().toISOString(),
         cacheMinutes: 15
       }
@@ -230,6 +445,40 @@ router.get('/home', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while loading home discovery'
+    });
+  }
+});
+
+// @route   GET /api/discovery/coming-soon
+// @desc    Combined Coming Soon row for home (cached, lean)
+// @access  Public
+router.get('/coming-soon', async (req, res) => {
+  try {
+    const { movies, tvShows, fromCache, stale } = await getComingSoonCatalog({
+      Movie,
+      TVShow,
+      applyPublicCatalogFilter,
+      filterPublicItems,
+      limit: 40
+    });
+
+    res.json({
+      success: true,
+      data: {
+        movies,
+        tvShows,
+        meta: {
+          fromCache: Boolean(fromCache),
+          stale: Boolean(stale),
+          refreshedAt: new Date().toISOString()
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Discovery coming soon error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while loading coming soon'
     });
   }
 });

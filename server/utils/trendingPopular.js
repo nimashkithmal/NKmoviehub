@@ -1,12 +1,12 @@
 /**
  * Resolve external trending order for Popular sort + home discovery rows.
  */
+const { EMBED_API, fetchEmbedJson } = require('./embedHttp');
+
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const STALE_TTL_MS = 6 * 60 * 60 * 1000; // serve old data up to 6h if API is down
-const FETCH_TIMEOUT_MS = 30000;
 const MAX_TRENDING_PAGES = 2; // 2 * 20 = 40 titles
-const PAGE_DELAY_MS = 250;
-const MAX_RETRIES = 2;
+const PAGE_DELAY_MS = 400;
 
 const cache = {
   movie: { ids: [], at: 0 },
@@ -21,7 +21,6 @@ const cache = {
 
 const inFlight = new Map();
 const lastErrorLog = new Map();
-let fetchChain = Promise.resolve();
 
 function logFetchIssue(cacheKey, message) {
   const now = Date.now();
@@ -31,39 +30,8 @@ function logFetchIssue(cacheKey, message) {
   console.warn(`Trending unavailable (${cacheKey}): ${message}`);
 }
 
-function enqueueFetch(task) {
-  const run = fetchChain.then(task, task);
-  fetchChain = run.catch(() => {});
-  return run;
-}
-
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function fetchJson(url) {
-  return enqueueFetch(async () => {
-    let lastError = null;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-      try {
-        const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
-      } catch (err) {
-        lastError = err;
-        if (attempt < MAX_RETRIES) {
-          await sleep(400 * (attempt + 1));
-        }
-      } finally {
-        clearTimeout(timer);
-      }
-    }
-
-    throw lastError || new Error('fetch failed');
-  });
 }
 
 function extractTmdbId(url = '') {
@@ -102,7 +70,9 @@ async function loadTrendingPages(base, timeWindow, maxPages, cacheKey) {
 
   for (let page = 1; page <= pages; page += 1) {
     try {
-      const data = await fetchJson(`${base}?time_window=${timeWindow}&page=${page}`);
+      const data = await fetchEmbedJson(
+        `${base}?time_window=${encodeURIComponent(timeWindow)}&page=${page}`
+      );
       pushUniqueRows(rows, data?.results, seen);
       if (page >= (Number(data?.total_pages) || 1)) break;
       if (page < pages) await sleep(PAGE_DELAY_MS);
@@ -160,9 +130,7 @@ async function fetchTrendingResults(kind = 'movie', timeWindow = 'week', maxPage
   }
 
   const base =
-    key === 'tv'
-      ? 'https://api.2embed.cc/trendingtv'
-      : 'https://api.2embed.cc/trending';
+    key === 'tv' ? `${EMBED_API}/trendingtv` : `${EMBED_API}/trending`;
 
   const promise = refreshTrending(cacheKey, key, base, timeWindow, maxPages);
 
@@ -225,30 +193,49 @@ function orderDocsTrendingFirst(docs, trendingIds, getTmdbId) {
   return [...trending.map((row) => row.doc), ...rest];
 }
 
-function pickNowPlayingIds(rows, { days = 60, limit = 40 } = {}) {
+function pickNowPlayingIds(rows, { days = 120, limit = 40 } = {}) {
   const today = new Date();
   today.setHours(23, 59, 59, 999);
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() - days);
+  // Allow titles releasing within the next 2 weeks (still “in theaters / new”).
+  const upcomingCap = new Date(today);
+  upcomingCap.setDate(upcomingCap.getDate() + 14);
 
-  return rows
-    .filter((row) => {
-      const status = String(row.status || '').toLowerCase();
-      if (status && status !== 'released') return false;
-      if (!row.release_date) return false;
-      const d = new Date(row.release_date);
-      if (Number.isNaN(d.getTime())) return false;
-      return d >= cutoff && d <= today;
-    })
-    .map((row) => String(row.tmdb_id))
-    .filter(Boolean)
-    .slice(0, limit);
+  const seen = new Set();
+  const out = [];
+
+  for (const row of rows || []) {
+    const id = row?.tmdb_id != null ? String(row.tmdb_id) : '';
+    if (!id || seen.has(id)) continue;
+
+    const status = String(row.status || '').toLowerCase();
+    if (status && !/(released|post production|in production)/i.test(status) && status !== 'rumored') {
+      // keep released / empty; skip clearly cancelled
+      if (/(cancelled|canceled)/i.test(status)) continue;
+    }
+
+    if (!row.release_date) continue;
+    const d = new Date(row.release_date);
+    if (Number.isNaN(d.getTime())) continue;
+    if (d < cutoff || d > upcomingCap) continue;
+
+    seen.add(id);
+    out.push(id);
+    if (out.length >= limit) break;
+  }
+
+  return out;
 }
 
-function pickTopRatedIds(rows, { limit = 40, minVotes = 50 } = {}) {
-  return [...rows]
-    .filter((row) => Number(row.vote_average) > 0)
-    .filter((row) => Number(row.vote_count || 0) >= minVotes || !row.vote_count)
+function pickTopRatedIds(rows, { limit = 40, minVotes = 5 } = {}) {
+  const seen = new Set();
+  return [...(rows || [])]
+    .filter((row) => Number(row.vote_average) >= 6)
+    .filter((row) => {
+      const votes = Number(row.vote_count || 0);
+      return votes >= minVotes || !row.vote_count;
+    })
     .sort((a, b) => {
       const score =
         Number(b.vote_average || 0) - Number(a.vote_average || 0) ||
@@ -256,7 +243,11 @@ function pickTopRatedIds(rows, { limit = 40, minVotes = 50 } = {}) {
       return score;
     })
     .map((row) => String(row.tmdb_id))
-    .filter(Boolean)
+    .filter((id) => {
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
     .slice(0, limit);
 }
 
