@@ -15,11 +15,12 @@ const embedTlsAgent = new https.Agent({
 });
 
 const EMBED_FETCH_HEADERS = {
-  Accept: 'application/json',
+  Accept: 'application/json,text/plain,*/*',
+  'Accept-Language': 'en-US,en;q=0.9',
   'User-Agent':
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-  Referer: 'https://www.2embed.skin/',
-  Origin: 'https://www.2embed.skin'
+  Referer: 'https://www.2embed.cc/',
+  Origin: 'https://www.2embed.cc'
 };
 
 let fetchChain = Promise.resolve();
@@ -55,14 +56,34 @@ async function fetchEmbedJson(pathOrUrl, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}
         });
 
         if (response.status === 403 || response.status === 429) {
-          throw new Error(`HTTP ${response.status}`);
+          throw Object.assign(new Error(`HTTP ${response.status}`), {
+            status: response.status,
+            retryAfterMs: 2500 * (attempt + 1)
+          });
         }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const contentType = String(response.headers.get('content-type') || '');
+        if (!/json/i.test(contentType)) {
+          const text = await response.text();
+          if (/<!DOCTYPE|<html/i.test(text.slice(0, 200))) {
+            throw new Error('HTTP 403');
+          }
+          try {
+            return JSON.parse(text);
+          } catch {
+            throw new Error('Invalid JSON from embed API');
+          }
+        }
+
         return await response.json();
       } catch (err) {
         lastError = err;
         if (attempt < MAX_RETRIES) {
-          await sleep(800 * (attempt + 1) + Math.floor(Math.random() * 400));
+          const wait =
+            Number(err.retryAfterMs) ||
+            800 * (attempt + 1) + Math.floor(Math.random() * 400);
+          await sleep(wait);
         }
       } finally {
         clearTimeout(timer);

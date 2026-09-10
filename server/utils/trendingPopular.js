@@ -1,7 +1,9 @@
 /**
  * Resolve external trending order for Popular sort + home discovery rows.
+ * Prefers 2embed; falls back to TMDB when api.2embed.cc returns 403/blocks.
  */
 const { EMBED_API, fetchEmbedJson } = require('./embedHttp');
+const { fetchTmdbTrendingRows, hasTmdbAuth } = require('./tmdb');
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const STALE_TTL_MS = 6 * 60 * 60 * 1000; // serve old data up to 6h if API is down
@@ -21,6 +23,8 @@ const cache = {
 
 const inFlight = new Map();
 const lastErrorLog = new Map();
+/** Skip hammering 2embed trending after Cloudflare 403s. */
+let embedTrendingBlockedUntil = 0;
 
 function logFetchIssue(cacheKey, message) {
   const now = Date.now();
@@ -32,6 +36,13 @@ function logFetchIssue(cacheKey, message) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function markEmbedTrendingBlocked(err) {
+  const msg = String(err?.message || err || '');
+  if (/HTTP 403|HTTP 429/i.test(msg)) {
+    embedTrendingBlockedUntil = Date.now() + 15 * 60 * 1000;
+  }
 }
 
 function extractTmdbId(url = '') {
@@ -63,10 +74,11 @@ function pushUniqueRows(rows, list, seen) {
   }
 }
 
-async function loadTrendingPages(base, timeWindow, maxPages, cacheKey) {
+async function loadTrendingPagesFromEmbed(base, timeWindow, maxPages, cacheKey) {
   const rows = [];
   const seen = new Set();
   const pages = Math.max(1, Math.min(maxPages, MAX_TRENDING_PAGES));
+  let firstError = null;
 
   for (let page = 1; page <= pages; page += 1) {
     try {
@@ -78,14 +90,58 @@ async function loadTrendingPages(base, timeWindow, maxPages, cacheKey) {
       if (page < pages) await sleep(PAGE_DELAY_MS);
     } catch (err) {
       if (page === 1) {
-        logFetchIssue(cacheKey, err.message);
-        return null;
+        firstError = err;
+        return { rows: null, error: firstError };
       }
       break;
     }
   }
 
-  return rows;
+  return { rows, error: null };
+}
+
+async function loadTrendingPages(kind, base, timeWindow, maxPages, cacheKey) {
+  let embed = { rows: null, error: null };
+
+  if (Date.now() < embedTrendingBlockedUntil) {
+    embed = {
+      rows: null,
+      error: new Error('HTTP 403 (circuit open)')
+    };
+  } else {
+    embed = await loadTrendingPagesFromEmbed(
+      base,
+      timeWindow,
+      maxPages,
+      cacheKey
+    );
+    if (embed.error) markEmbedTrendingBlocked(embed.error);
+  }
+
+  if (embed.rows?.length) return embed.rows;
+
+  if (hasTmdbAuth()) {
+    try {
+      const tmdbRows = await fetchTmdbTrendingRows(kind, timeWindow, {
+        pages: maxPages
+      });
+      if (tmdbRows.length) {
+        if (embed.error) {
+          console.warn(
+            `Trending (${cacheKey}): 2embed ${embed.error.message} → TMDB fallback OK (${tmdbRows.length})`
+          );
+        }
+        return tmdbRows;
+      }
+    } catch (err) {
+      logFetchIssue(`${cacheKey}_tmdb`, err.message);
+    }
+  }
+
+  if (embed.error) {
+    logFetchIssue(cacheKey, embed.error.message);
+  }
+  return embed.rows;
 }
 
 function getCachedRows(cacheKey, now = Date.now()) {
@@ -105,8 +161,8 @@ function storeRows(cacheKey, key, rows) {
   cache[key] = { ids: rows.map((r) => String(r.tmdb_id)), at: Date.now() };
 }
 
-async function refreshTrending(cacheKey, key, base, timeWindow, maxPages) {
-  const rows = await loadTrendingPages(base, timeWindow, maxPages, cacheKey);
+async function refreshTrending(kind, cacheKey, key, base, timeWindow, maxPages) {
+  const rows = await loadTrendingPages(kind, base, timeWindow, maxPages, cacheKey);
   if (rows?.length) {
     storeRows(cacheKey, key, rows);
     return rows;
@@ -132,7 +188,7 @@ async function fetchTrendingResults(kind = 'movie', timeWindow = 'week', maxPage
   const base =
     key === 'tv' ? `${EMBED_API}/trendingtv` : `${EMBED_API}/trending`;
 
-  const promise = refreshTrending(cacheKey, key, base, timeWindow, maxPages);
+  const promise = refreshTrending(key, cacheKey, key, base, timeWindow, maxPages);
 
   inFlight.set(cacheKey, promise);
   try {
