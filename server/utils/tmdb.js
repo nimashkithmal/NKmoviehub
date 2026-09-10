@@ -1,5 +1,5 @@
 /**
- * Lightweight TMDB v3 client (now playing, etc.).
+ * Lightweight TMDB v3 client (now playing, trending, etc.).
  * Auth: TMDB_API_KEY (query) and/or TMDB_ACCESS_TOKEN / TMDB_READ_ACCESS_TOKEN (Bearer).
  */
 const fetch = require('node-fetch');
@@ -33,7 +33,9 @@ async function fetchTmdbJson(pathname, query = {}) {
     throw new Error('TMDB_API_KEY or TMDB_ACCESS_TOKEN not configured');
   }
 
-  const url = new URL(`${TMDB_API}${pathname.startsWith('/') ? pathname : `/${pathname}`}`);
+  const url = new URL(
+    `${TMDB_API}${pathname.startsWith('/') ? pathname : `/${pathname}`}`
+  );
   for (const [key, value] of Object.entries(query)) {
     if (value == null || value === '') continue;
     url.searchParams.set(key, String(value));
@@ -51,6 +53,73 @@ async function fetchTmdbJson(pathname, query = {}) {
     throw new Error(`TMDB HTTP ${response.status}`);
   }
   return response.json();
+}
+
+function mapTmdbRowToEmbedShape(row = {}, kind = 'movie') {
+  const release =
+    kind === 'tv'
+      ? String(row.first_air_date || '').trim()
+      : String(row.release_date || '').trim();
+  return {
+    title: row.title || row.name || '',
+    name: row.name || row.title || '',
+    year: release.slice(0, 4) || '',
+    status: 'released',
+    release_date: release,
+    tmdb_id: row.id,
+    vote_average: row.vote_average,
+    vote_count: row.vote_count,
+    poster: row.poster_path
+      ? `https://image.tmdb.org/t/p/w500${row.poster_path}`
+      : '',
+    original_language: row.original_language || ''
+  };
+}
+
+/**
+ * Trending rows shaped like 2embed results (tmdb_id, title, votes…).
+ * Used when api.2embed.cc trending is blocked (HTTP 403).
+ */
+async function fetchTmdbTrendingRows(
+  kind = 'movie',
+  timeWindow = 'week',
+  { pages = 1, language = 'en-US' } = {}
+) {
+  if (!hasTmdbAuth()) return [];
+
+  const isTv = kind === 'tv';
+  const window = timeWindow === 'day' ? 'day' : 'week';
+  const maxPages = Math.max(1, Math.min(3, pages));
+  const rows = [];
+  const seen = new Set();
+
+  try {
+    for (let page = 1; page <= maxPages; page += 1) {
+      let data;
+      if (timeWindow === 'month' && !isTv) {
+        data = await fetchTmdbJson('/movie/popular', { language, page });
+      } else {
+        data = await fetchTmdbJson(
+          `/trending/${isTv ? 'tv' : 'movie'}/${window}`,
+          { language, page }
+        );
+      }
+
+      for (const row of data?.results || []) {
+        const id = row?.id != null ? String(row.id) : '';
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        rows.push(mapTmdbRowToEmbedShape(row, isTv ? 'tv' : 'movie'));
+      }
+
+      if (page >= (Number(data?.total_pages) || 1)) break;
+    }
+  } catch (err) {
+    console.warn('TMDB trending unavailable:', err.message || err);
+    return [];
+  }
+
+  return rows;
 }
 
 /**
@@ -113,5 +182,6 @@ async function fetchNowPlayingTmdbIds({
 module.exports = {
   hasTmdbAuth,
   fetchTmdbJson,
+  fetchTmdbTrendingRows,
   fetchNowPlayingTmdbIds
 };
