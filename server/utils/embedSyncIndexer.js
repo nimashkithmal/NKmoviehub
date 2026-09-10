@@ -129,7 +129,13 @@ function mapSearchRowToEmbedData(type, row = {}) {
 
 async function fetchEmbedMetadata(type, tmdbId) {
   const path = type === 'tvshow' ? 'tv' : 'movie';
-  return fetchEmbedApi(`/${path}?tmdb_id=${encodeURIComponent(tmdbId)}`);
+  try {
+    return await fetchEmbedApi(`/${path}?tmdb_id=${encodeURIComponent(tmdbId)}`);
+  } catch (err) {
+    // Last resort: if we only have tmdb id, we cannot open skin /movie/tt… pages.
+    // Callers should prefer searchRow from skin when API is blocked.
+    throw err;
+  }
 }
 
 async function buildCatalogTmdbSets() {
@@ -242,6 +248,14 @@ async function upsertPending(doc, { requeueDismissed = false } = {}) {
     return false;
   }
 
+  if (existing?.status === 'pending') {
+    state.skipped += 1;
+    state.lastSkipReason = 'already_pending';
+    state.lastSkipMessage = `"${existing.title || doc.title || 'This title'}" is already in the pending queue.`;
+    state.currentTitle = existing.title || doc.title || state.currentTitle;
+    return false;
+  }
+
   const isNew = !existing;
   const wasRequeued =
     existing?.status === 'approved' ||
@@ -298,13 +312,12 @@ async function runPool(items, worker) {
 }
 
 async function collectTrendingCandidates() {
-  // 2embed only (skin HTML / API) — never TMDB for sync candidates.
-  const noTmdb = { allowTmdb: false };
-  const movieWeek = await fetchTrendingResults('movie', 'week', TRENDING_PAGES, noTmdb);
+  // Sequential — parallel trending calls often get HTTP 403 from 2embed.
+  const movieWeek = await fetchTrendingResults('movie', 'week', TRENDING_PAGES);
   await new Promise((r) => setTimeout(r, 500));
-  const movieDay = await fetchTrendingResults('movie', 'day', 2, noTmdb);
+  const movieDay = await fetchTrendingResults('movie', 'day', 2);
   await new Promise((r) => setTimeout(r, 500));
-  const tvWeek = await fetchTrendingResults('tv', 'week', TRENDING_PAGES, noTmdb);
+  const tvWeek = await fetchTrendingResults('tv', 'week', TRENDING_PAGES);
 
   const seen = new Set();
   const candidates = [];
@@ -451,10 +464,18 @@ const pickBestSearchCandidate = (picks, query, typeFilter = '') => {
 
 async function fetchSearchPage(itemType, query) {
   const path = itemType === 'tvshow' ? 'searchtv' : 'search';
-  const data = await fetchEmbedJson(
-    `${EMBED_API}/${path}?q=${encodeURIComponent(query)}&page=1`
-  );
-  return data.results || [];
+  try {
+    const data = await fetchEmbedJson(
+      `${EMBED_API}/${path}?q=${encodeURIComponent(query)}&page=1`
+    );
+    return data.results || [];
+  } catch (err) {
+    // Cloudflare often blocks api.2embed.cc — fall back to www.2embed.skin HTML.
+    if (!/HTTP 403|HTTP 429|Cloudflare|circuit open/i.test(String(err.message || ''))) {
+      console.warn(`2embed API search failed (${path}):`, err.message || err);
+    }
+    return [];
+  }
 }
 
 async function fetchSearchResults(itemType, query) {
@@ -471,6 +492,27 @@ async function fetchSearchResults(itemType, query) {
       rows.push(row);
     }
     if (rows.length) break;
+  }
+
+  if (rows.length) return rows;
+
+  // api.2embed.cc blocked — search www.2embed.skin trending/library + detail pages.
+  try {
+    const { searchSkinByTitle } = require('./embedSkinTrending');
+    const skinRows = await searchSkinByTitle(itemType, query, { limit: 8 });
+    for (const row of skinRows) {
+      const tmdbId = row?.tmdb_id != null ? String(row.tmdb_id) : '';
+      if (!tmdbId || seen.has(tmdbId)) continue;
+      seen.add(tmdbId);
+      rows.push(row);
+    }
+    if (rows.length) {
+      console.warn(
+        `2embed search "${query}" (${itemType}): API blocked → 2embed.skin HTML OK (${rows.length})`
+      );
+    }
+  } catch (err) {
+    console.warn(`2embed.skin search failed (${itemType}):`, err.message || err);
   }
 
   return rows;
@@ -622,9 +664,6 @@ async function runIndexer(options = {}) {
     );
   } catch (err) {
     console.error('2embed sync job error:', err.message);
-    state.lastSkipReason = 'api_error';
-    state.lastSkipMessage = `2embed request failed: ${err.message}`;
-    state.failed = Math.max(state.failed, 1);
   } finally {
     state.running = false;
     state.finishedAt = new Date();
