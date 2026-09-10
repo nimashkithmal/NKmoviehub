@@ -4,6 +4,6 @@
  * The last number is the build counter and moves up by one on every deploy.
  * scripts/bump-version.js rewrites the line below, so keep it on one line.
  */
-export const APP_VERSION = '1.0.0.18';
+export const APP_VERSION = '1.0.0.19';
 
 export default APP_VERSION;
