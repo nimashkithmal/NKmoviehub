@@ -16,12 +16,30 @@ import './BrowseShelf.css';
 const PAGE_SIZE = 20;
 /** Server batch size — UI still shows PAGE_SIZE; next batch loads when you leave this window. */
 const BATCH_SIZE = 500;
-const DISCOVERY_CACHE_KEY = 'nk-home-discovery-v6';
+const DISCOVERY_CACHE_KEY = 'nk-home-discovery-v7';
 const DISCOVERY_CACHE_TTL_MS = 15 * 60 * 1000;
 const COMING_SOON_CACHE_KEY = 'nk-home-coming-soon-v1';
 const COMING_SOON_CACHE_TTL_MS = 15 * 60 * 1000;
 /** How often home rows refetch while the discovery page stays open */
 const HOME_LIVE_REFRESH_MS = 10 * 60 * 1000;
+
+/** Drop older discovery session caches so fixed Top Rated / Now Playing show up. */
+const purgeStaleDiscoveryCaches = () => {
+  try {
+    const stale = [
+      'nk-home-discovery-v1',
+      'nk-home-discovery-v2',
+      'nk-home-discovery-v3',
+      'nk-home-discovery-v4',
+      'nk-home-discovery-v5',
+      'nk-home-discovery-v6'
+    ];
+    for (const key of stale) sessionStorage.removeItem(key);
+  } catch {
+    // Ignore quota / private mode errors
+  }
+};
+purgeStaleDiscoveryCaches();
 
 const readDiscoveryCache = () => {
   try {
