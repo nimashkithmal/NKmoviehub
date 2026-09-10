@@ -24,6 +24,10 @@ const {
   evaluateContentPolicy,
   isPubliclyAccessible
 } = require('../utils/contentPolicy');
+const {
+  buildTopRatedMongoFilter,
+  rankTopRatedDocs
+} = require('../utils/topRatedCatalog');
 const fetch = require('node-fetch');
 // Cloudinary is configured once in utils/cloudinaryUpload; every poster that
 // reaches the database is uploaded there first
@@ -201,9 +205,43 @@ router.get('/', async (req, res) => {
       });
     }
 
+    // Top Rated: credible IMDb scores only (drop sync junk at 9–10).
+    if (sort === 'rated') {
+      const ratedFilter = buildTopRatedMongoFilter(filter);
+      const candidates = await Movie.find(ratedFilter)
+        .select(
+          '_id title year imdbRating averageRating totalRatings genre imageUrl images releaseDate status policyRestricted'
+        )
+        .lean();
+      const orderedIds = rankTopRatedDocs(filterPublicItems(candidates)).map(
+        (doc) => doc._id
+      );
+      const total = orderedIds.length;
+      const pageIds = orderedIds.slice(skip, skip + limitNum);
+      const found = await Movie.find({ _id: { $in: pageIds } })
+        .populate('addedBy', 'name email')
+        .lean();
+      const byId = new Map(found.map((m) => [String(m._id), m]));
+      const movies = filterPublicItems(
+        pageIds.map((id) => byId.get(String(id))).filter(Boolean)
+      );
+
+      return res.json({
+        success: true,
+        data: {
+          movies,
+          pagination: {
+            currentPage: pageNum,
+            totalPages: Math.max(1, Math.ceil(total / limitNum) || 1),
+            totalMovies: total,
+            moviesPerPage: limitNum
+          }
+        }
+      });
+    }
+
     let sortSpec = { year: -1, createdAt: -1 };
-    if (sort === 'rated') sortSpec = { imdbRating: -1, averageRating: -1, createdAt: -1 };
-    else if (sort === 'az') sortSpec = { title: 1 };
+    if (sort === 'az') sortSpec = { title: 1 };
     
     // Get movies with pagination
     const movies = filterPublicItems(

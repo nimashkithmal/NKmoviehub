@@ -10,6 +10,13 @@ const {
 const { fetchNowPlayingTmdbIds } = require('../utils/tmdb');
 const { filterPublicItems, applyPublicCatalogFilter } = require('../utils/contentPolicy');
 const { getComingSoonCatalog } = require('../utils/comingSoon');
+const {
+  hasPoster,
+  isCatalogJunk,
+  isCredibleRating,
+  buildTopRatedMongoFilter,
+  rankTopRatedDocs
+} = require('../utils/topRatedCatalog');
 
 const router = express.Router();
 
@@ -115,108 +122,20 @@ const takeUniqueDocs = (docs = [], limit = 20, excludeIds = null) => {
   return out;
 };
 
-const hasPoster = (doc = {}) =>
-  Boolean(
-    (doc.imageUrl && String(doc.imageUrl).trim()) ||
-      (Array.isArray(doc.images) && doc.images.some(Boolean))
-  );
-
-/** Drop sync noise: perfect IMDb scores with no site engagement, missing art, etc. */
-const isCatalogJunk = (doc = {}) => {
-  if (!hasPoster(doc)) return true;
-  const rating = Number(doc.imdbRating) || 0;
-  const siteVotes = Number(doc.totalRatings) || 0;
-  if (rating <= 0) return true;
-  if (rating >= 9.7 && siteVotes === 0) return true;
-  return false;
-};
-
-const isCredibleRating = (doc = {}) => {
-  const rating = Number(doc.imdbRating) || 0;
-  return rating >= 5.8 && rating <= 9.3;
-};
-
 const movieCardSelect =
   'title year description genre imageUrl images imdbRating averageRating totalRatings releaseDate createdAt status policyRestricted movieUrl matureContent';
 
-/**
- * True “Top Rated” / all-time greats from the local 2embed-backed catalog.
- * 2embed only exposes trending lists — sorting those by vote_average surfaces
- * brand-new titles, not classics. Catalog also has sync junk (fake ~9.x scores,
- * concerts, docs), so those are filtered out here.
- */
-const WEAK_TOP_RATED_TITLE =
-  /live at|live in|concert|greatest (video )?hits|video hits|unplugged|\btour\b|festival|stand-?up|comedy special|behind the scenes|making of|karaoke|music video|tribute to|best of|video show|video capture|songs from|top \d+ cars|in space$/i;
-
-/** Prefer recognizable theatrical titles over obscure sync noise with inflated scores. */
-const TOP_RATED_TITLE_BOOST =
-  /\b(lord of the rings|hobbit|interstellar|inception|the matrix|godfather|dark knight|pulp fiction|fight club|forrest gump|gladiator|avengers|spider-?man|star wars|harry potter|jurassic|terminator|alien\b|joker|parasite|whiplash|the prestige|the departed|goodfellas|shawshank|schindler|saving private|spirited away|princess mononoke|deadpool|iron man|batman|superman|wonder woman|justice league|john wick|mission:? impossible|indiana jones|back to the future|die hard|silence of the lambs|\bse7en\b|\bseven\b|django|mad max|blade runner|\bdune\b|oppenheimer|jaws|rocky|titanic|avatar|casablanca|psycho|vertigo|gone with the wind|12 angry men|good will hunting|the green mile|american history x|the usual suspects|no country for old men|there will be blood|the social network|la la land|get out|knives out|everything everywhere|top gun|guardians of the galaxy|black panther|doctor strange|captain america|thor\b|wolverine|x-men|fantastic four|transformers|pirates of the caribbean)\b/i;
-
-const isWeakTopRatedGenre = (genre = '') => {
-  const raw = String(genre || '').trim();
-  if (/^documentary\b/i.test(raw)) return true;
-  const parts = raw
-    .split(/[,/|]/)
-    .map((part) => part.trim().toLowerCase())
-    .filter(Boolean);
-  if (!parts.length) return false;
-  return parts.every((part) =>
-    /^(music|documentary|tv movie|reality)$/i.test(part)
-  );
-};
-
-const isTopRatedCandidate = (doc = {}) => {
-  if (isCatalogJunk(doc) || !isCredibleRating(doc) || !hasPoster(doc)) return false;
-  const rating = Number(doc.imdbRating) || 0;
-  const siteVotes = Number(doc.totalRatings) || 0;
-  const year = Number(doc.year) || 0;
-  const currentYear = new Date().getFullYear();
-  // All-time row: skip current-year releases and obvious sync fluff.
-  if (year >= currentYear || year < 1970) return false;
-  if (doc.releaseDate) {
-    const iso = String(doc.releaseDate).trim().match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
-    const todayStr = new Date().toISOString().slice(0, 10);
-    if (iso && iso > todayStr) return false;
-  }
-  if (siteVotes === 0 && rating >= 8.8) return false;
-  if (rating < 7) return false;
-  if (WEAK_TOP_RATED_TITLE.test(String(doc.title || ''))) return false;
-  if (isWeakTopRatedGenre(doc.genre)) return false;
-  return true;
-};
-
-const topRatedSortScore = (doc = {}) => {
-  const rating = Number(doc.imdbRating) || 0;
-  const boost = TOP_RATED_TITLE_BOOST.test(String(doc.title || '')) ? 100 : 0;
-  const votes = Number(doc.totalRatings) || 0;
-  return boost + rating + Math.min(votes, 50) / 100;
-};
-
 const loadTopRatedFromCatalog = async (limit) => {
-  const currentYear = new Date().getFullYear();
-  const docs = await Movie.find({
+  const docs = await Movie.find(buildTopRatedMongoFilter({
     status: 'active',
-    policyRestricted: { $ne: true },
-    year: { $lte: currentYear - 1, $gte: 1970 },
-    $or: [
-      { imdbRating: { $gte: 7, $lt: 8.8 } },
-      { imdbRating: { $gte: 7, $lte: 9.3 }, totalRatings: { $gt: 0 } }
-    ]
-  })
+    policyRestricted: { $ne: true }
+  }))
     .sort({ imdbRating: -1, totalRatings: -1, year: -1 })
     .select(movieCardSelect)
     .limit(Math.max(limit * 20, 400))
     .lean();
 
-  const ranked = filterPublicItems(docs)
-    .filter(isTopRatedCandidate)
-    .sort((a, b) => {
-      const score = topRatedSortScore(b) - topRatedSortScore(a);
-      if (score) return score;
-      return String(a.title || '').localeCompare(String(b.title || ''));
-    });
-
-  return takeUniqueDocs(ranked, limit);
+  return takeUniqueDocs(rankTopRatedDocs(filterPublicItems(docs)), limit);
 };
 
 const buildLocalFallback = async (limit) => {
