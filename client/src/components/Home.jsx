@@ -16,7 +16,7 @@ import './BrowseShelf.css';
 const PAGE_SIZE = 20;
 /** Server batch size — UI still shows PAGE_SIZE; next batch loads when you leave this window. */
 const BATCH_SIZE = 500;
-const DISCOVERY_CACHE_KEY = 'nk-home-discovery-v10';
+const DISCOVERY_CACHE_KEY = 'nk-home-discovery-v11';
 const DISCOVERY_CACHE_TTL_MS = 10 * 60 * 1000;
 const COMING_SOON_CACHE_KEY = 'nk-home-coming-soon-v1';
 const COMING_SOON_CACHE_TTL_MS = 15 * 60 * 1000;
@@ -35,7 +35,8 @@ const purgeStaleDiscoveryCaches = () => {
       'nk-home-discovery-v6',
       'nk-home-discovery-v7',
       'nk-home-discovery-v8',
-      'nk-home-discovery-v9'
+      'nk-home-discovery-v9',
+      'nk-home-discovery-v10'
     ];
     for (const key of stale) sessionStorage.removeItem(key);
   } catch {
@@ -44,12 +45,19 @@ const purgeStaleDiscoveryCaches = () => {
 };
 purgeStaleDiscoveryCaches();
 
+/** Only keep / restore TMDB (or legacy live) rows — never catalog fallback flashes. */
+const isLiveTmdbDiscovery = (data) => {
+  const source = data?.meta?.source;
+  return source === 'tmdb' || source === 'live';
+};
+
 const readDiscoveryCache = () => {
   try {
     const raw = sessionStorage.getItem(DISCOVERY_CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed?.data || Date.now() - parsed.at > DISCOVERY_CACHE_TTL_MS) return null;
+    if (!isLiveTmdbDiscovery(parsed.data)) return null;
     return parsed.data;
   } catch {
     return null;
@@ -58,6 +66,7 @@ const readDiscoveryCache = () => {
 
 const writeDiscoveryCache = (data) => {
   try {
+    if (!isLiveTmdbDiscovery(data)) return;
     sessionStorage.setItem(
       DISCOVERY_CACHE_KEY,
       JSON.stringify({ at: Date.now(), data })
@@ -422,7 +431,7 @@ const Home = () => {
     ]
   );
 
-  // Discovery: show cached/local rows immediately, then refresh live trending in background
+  // Discovery: prefer cached TMDB rows, then fetch live TMDB (skip catalog fast flash)
   useEffect(() => {
     if (!isDiscoveryMode) return undefined;
 
@@ -440,33 +449,12 @@ const Home = () => {
     };
 
     const cached = readDiscoveryCache();
-    if (hasDiscoveryRows(cached)) {
+    if (hasDiscoveryRows(cached) && isLiveTmdbDiscovery(cached)) {
       applyDiscoveryRows(cached, setters);
       setLoading(false);
     } else {
       setLoading(true);
     }
-
-    const loadFastDiscovery = async () => {
-      try {
-        // Don't overwrite a good live cache with the temporary catalog fallback.
-        if (cached?.meta?.source === 'live' && hasDiscoveryRows(cached)) {
-          return;
-        }
-        const response = await fetch('/api/discovery/home?limit=20&fast=1', {
-          signal: controller.signal
-        });
-        const result = await response.json();
-        if (!result.success || cancelled) return;
-        if (!hasDiscoveryRows(result.data)) return;
-        applyDiscoveryRows(result.data, setters);
-      } catch (err) {
-        if (err.name === 'AbortError' || cancelled) return;
-        console.error('Error loading fast discovery catalog:', err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
 
     const loadLiveDiscovery = async ({ showRefresh = false } = {}) => {
       if (showRefresh) setDiscoveryRefreshing(true);
@@ -476,10 +464,16 @@ const Home = () => {
         });
         const result = await response.json();
         if (!result.success || cancelled) return;
-        applyDiscoveryRows(result.data, setters);
-        if (result.data?.meta?.source === 'live') {
-          writeDiscoveryCache(result.data);
+        // Never paint catalog fallback over good TMDB rows (avoids refresh flash).
+        if (
+          !isLiveTmdbDiscovery(result.data) &&
+          hasDiscoveryRows(cached) &&
+          isLiveTmdbDiscovery(cached)
+        ) {
+          return;
         }
+        applyDiscoveryRows(result.data, setters);
+        writeDiscoveryCache(result.data);
       } catch (err) {
         if (err.name === 'AbortError' || cancelled) return;
         console.error('Error loading live discovery catalog:', err);
@@ -495,16 +489,10 @@ const Home = () => {
     };
 
     const bootstrapDiscovery = async () => {
-      // One paint path: if we already have rows, refresh quietly; otherwise
-      // load catalog/live once (skip fast→live flash of wrong duplicate rows).
-      if (hasDiscoveryRows(cached)) {
-        await loadLiveDiscovery({ showRefresh: true });
-        return;
-      }
-      await loadFastDiscovery();
-      if (!cancelled) {
-        await loadLiveDiscovery({ showRefresh: false });
-      }
+      // Skip fast=1 catalog path — it caused old lists to flash before TMDB.
+      await loadLiveDiscovery({
+        showRefresh: hasDiscoveryRows(cached) && isLiveTmdbDiscovery(cached)
+      });
     };
 
     bootstrapDiscovery();
@@ -515,7 +503,10 @@ const Home = () => {
 
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        loadLiveDiscovery({ showRefresh: hasDiscoveryRows(readDiscoveryCache()) });
+        const latest = readDiscoveryCache();
+        loadLiveDiscovery({
+          showRefresh: hasDiscoveryRows(latest) && isLiveTmdbDiscovery(latest)
+        });
       }
     };
     document.addEventListener('visibilitychange', onVisible);
