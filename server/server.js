@@ -98,13 +98,27 @@ app.use('/api/cast', castRoutes);
 app.use('/api/sync', syncRoutes);
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+app.get('/api/health', async (req, res) => {
+  const { hasTmdbAuth, fetchTmdbJson } = require('./utils/tmdb');
+  const tmdbConfigured = hasTmdbAuth();
+  let tmdbReachable = false;
+  if (tmdbConfigured) {
+    try {
+      await fetchTmdbJson('/configuration');
+      tmdbReachable = true;
+    } catch {
+      tmdbReachable = false;
+    }
+  }
+
+  res.json({
+    status: 'OK',
     message: 'NKMovieHUB Server is running',
     timestamp: new Date().toISOString(),
-    database: 'Connected',
-    environment: process.env.NODE_ENV || 'development'
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+    environment: process.env.NODE_ENV || 'development',
+    tmdbConfigured,
+    tmdbReachable
   });
 });
 
