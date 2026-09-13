@@ -5,11 +5,14 @@
 const fetch = require('node-fetch');
 
 const TMDB_API = 'https://api.themoviedb.org/3';
-const CACHE_TTL_MS = 15 * 60 * 1000;
+/** Keep lists fresh — home client refreshes on a similar cadence. */
+const CACHE_TTL_MS = 10 * 60 * 1000;
 const STALE_TTL_MS = 6 * 60 * 60 * 1000;
 
 const cache = {
-  nowPlaying: { ids: [], at: 0 }
+  nowPlaying: { ids: [], at: 0 },
+  popular: { ids: [], at: 0 },
+  topRated: { ids: [], at: 0 }
 };
 
 function getTmdbAuth() {
@@ -72,8 +75,183 @@ function mapTmdbRowToEmbedShape(row = {}, kind = 'movie') {
     poster: row.poster_path
       ? `https://image.tmdb.org/t/p/w500${row.poster_path}`
       : '',
-    original_language: row.original_language || ''
+    original_language: row.original_language || '',
+    adult: row.adult === true
   };
+}
+
+/**
+ * Ordered TMDB movie ids from list endpoints (popular / now_playing / top_rated).
+ * Skips adult titles. Cached briefly so home + browse stay live.
+ */
+async function fetchTmdbMovieListIds(
+  pathname,
+  cacheKey,
+  {
+    pages = 2,
+    limit = 40,
+    language = 'en-US',
+    region = '',
+    extraQuery = {},
+    /** Keep only titles whose release_date falls in this theatrical window. */
+    theatricalWindow = null
+  } = {}
+) {
+  const now = Date.now();
+  const hit = cache[cacheKey] || { ids: [], at: 0 };
+  if (hit.ids.length && now - hit.at < CACHE_TTL_MS) {
+    return hit.ids.slice(0, limit);
+  }
+
+  if (!hasTmdbAuth()) {
+    return hit.ids.length && now - hit.at < STALE_TTL_MS
+      ? hit.ids.slice(0, limit)
+      : [];
+  }
+
+  const inTheatricalWindow = (releaseDate) => {
+    if (!theatricalWindow) return true;
+    const iso = String(releaseDate || '').trim().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+    const release = Date.parse(`${iso}T00:00:00Z`);
+    if (!Number.isFinite(release)) return false;
+    const pastDays = Math.max(0, Number(theatricalWindow.pastDays) || 90);
+    const futureDays = Math.max(0, Number(theatricalWindow.futureDays) || 45);
+    const today = Date.now();
+    const min = today - pastDays * 24 * 60 * 60 * 1000;
+    const max = today + futureDays * 24 * 60 * 60 * 1000;
+    return release >= min && release <= max;
+  };
+
+  try {
+    const ids = [];
+    const seen = new Set();
+    const maxPages = Math.max(1, Math.min(5, pages));
+
+    for (let page = 1; page <= maxPages; page += 1) {
+      const data = await fetchTmdbJson(pathname, {
+        language,
+        page,
+        ...(region ? { region } : {}),
+        ...extraQuery
+      });
+      for (const row of data?.results || []) {
+        if (row?.adult === true) continue;
+        if (!inTheatricalWindow(row.release_date)) continue;
+        const id = row?.id != null ? String(row.id) : '';
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        ids.push(id);
+        if (ids.length >= limit) break;
+      }
+      if (ids.length >= limit) break;
+      if (page >= (Number(data?.total_pages) || 1)) break;
+    }
+
+    if (ids.length) {
+      cache[cacheKey] = { ids, at: Date.now() };
+      return ids.slice(0, limit);
+    }
+  } catch (err) {
+    console.warn(`TMDB ${pathname} unavailable:`, err.message || err);
+  }
+
+  return hit.ids.length && now - hit.at < STALE_TTL_MS
+    ? hit.ids.slice(0, limit)
+    : [];
+}
+
+/** https://www.themoviedb.org/movie — /movie/popular */
+async function fetchPopularTmdbIds(options = {}) {
+  return fetchTmdbMovieListIds('/movie/popular', 'popular', {
+    pages: 3,
+    limit: 80,
+    ...options
+  });
+}
+
+/**
+ * https://www.themoviedb.org/movie/now-playing — /movie/now_playing
+ * Region US + recent theatrical window so re-releases / catalog noise drop out.
+ */
+async function fetchNowPlayingTmdbIds(options = {}) {
+  const {
+    theatricalWindow = { pastDays: 75, futureDays: 50 },
+    ...rest
+  } = options;
+  return fetchTmdbMovieListIds('/movie/now_playing', 'nowPlaying', {
+    pages: 2,
+    limit: 40,
+    region: 'US',
+    theatricalWindow,
+    ...rest
+  });
+}
+
+/** https://www.themoviedb.org/movie/top-rated — /movie/top_rated */
+async function fetchTopRatedTmdbIds(options = {}) {
+  return fetchTmdbMovieListIds('/movie/top_rated', 'topRated', {
+    pages: 3,
+    limit: 80,
+    ...options
+  });
+}
+
+/**
+ * TMDB homepage Trending (all media) — Today / This Week.
+ * https://api.themoviedb.org/3/trending/all/{day|week}
+ * @returns {Promise<Array<{ tmdbId: string, mediaType: 'movie'|'tv' }>>}
+ */
+async function fetchTmdbAllTrendingEntries(
+  timeWindow = 'day',
+  { pages = 2, limit = 40, language = 'en-US' } = {}
+) {
+  if (!hasTmdbAuth()) return [];
+
+  const window = timeWindow === 'week' ? 'week' : 'day';
+  const cacheKey = `trending_all_${window}`;
+  if (!cache[cacheKey]) cache[cacheKey] = { ids: [], at: 0 };
+  const hit = cache[cacheKey];
+  const now = Date.now();
+  if (Array.isArray(hit.entries) && hit.entries.length && now - hit.at < CACHE_TTL_MS) {
+    return hit.entries.slice(0, limit);
+  }
+
+  try {
+    const entries = [];
+    const seen = new Set();
+    const maxPages = Math.max(1, Math.min(3, pages));
+
+    for (let page = 1; page <= maxPages; page += 1) {
+      const data = await fetchTmdbJson(`/trending/all/${window}`, {
+        language,
+        page
+      });
+      for (const row of data?.results || []) {
+        if (row?.adult === true) continue;
+        const mediaType = row?.media_type === 'tv' ? 'tv' : row?.media_type === 'movie' ? 'movie' : '';
+        if (!mediaType) continue;
+        const tmdbId = row?.id != null ? String(row.id) : '';
+        if (!tmdbId || seen.has(`${mediaType}:${tmdbId}`)) continue;
+        seen.add(`${mediaType}:${tmdbId}`);
+        entries.push({ tmdbId, mediaType });
+        if (entries.length >= limit) break;
+      }
+      if (entries.length >= limit) break;
+      if (page >= (Number(data?.total_pages) || 1)) break;
+    }
+
+    if (entries.length) {
+      cache[cacheKey] = { entries, at: Date.now() };
+      return entries.slice(0, limit);
+    }
+  } catch (err) {
+    console.warn(`TMDB trending/all/${window} unavailable:`, err.message || err);
+  }
+
+  return Array.isArray(hit.entries) && hit.entries.length && now - hit.at < STALE_TTL_MS
+    ? hit.entries.slice(0, limit)
+    : [];
 }
 
 /**
@@ -120,63 +298,6 @@ async function fetchTmdbTrendingRows(
   }
 
   return rows;
-}
-
-/**
- * Ordered TMDB movie ids currently in theatres.
- * https://api.themoviedb.org/3/movie/now_playing
- */
-async function fetchNowPlayingTmdbIds({
-  pages = 2,
-  limit = 40,
-  language = 'en-US',
-  region = ''
-} = {}) {
-  const now = Date.now();
-  const hit = cache.nowPlaying;
-  if (hit.ids.length && now - hit.at < CACHE_TTL_MS) {
-    return hit.ids.slice(0, limit);
-  }
-
-  if (!hasTmdbAuth()) {
-    return hit.ids.length && now - hit.at < STALE_TTL_MS
-      ? hit.ids.slice(0, limit)
-      : [];
-  }
-
-  try {
-    const ids = [];
-    const seen = new Set();
-    const maxPages = Math.max(1, Math.min(5, pages));
-
-    for (let page = 1; page <= maxPages; page += 1) {
-      const data = await fetchTmdbJson('/movie/now_playing', {
-        language,
-        page,
-        ...(region ? { region } : {})
-      });
-      for (const row of data?.results || []) {
-        const id = row?.id != null ? String(row.id) : '';
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-        ids.push(id);
-        if (ids.length >= limit) break;
-      }
-      if (ids.length >= limit) break;
-      if (page >= (Number(data?.total_pages) || 1)) break;
-    }
-
-    if (ids.length) {
-      cache.nowPlaying = { ids, at: Date.now() };
-      return ids.slice(0, limit);
-    }
-  } catch (err) {
-    console.warn('TMDB now_playing unavailable:', err.message || err);
-  }
-
-  return hit.ids.length && now - hit.at < STALE_TTL_MS
-    ? hit.ids.slice(0, limit)
-    : [];
 }
 
 /**
@@ -246,6 +367,10 @@ module.exports = {
   hasTmdbAuth,
   fetchTmdbJson,
   fetchTmdbTrendingRows,
+  fetchTmdbMovieListIds,
+  fetchPopularTmdbIds,
   fetchNowPlayingTmdbIds,
+  fetchTopRatedTmdbIds,
+  fetchTmdbAllTrendingEntries,
   searchTmdbForImdbIds
 };

@@ -1,9 +1,18 @@
 import React, { useRef } from 'react';
 
 /**
- * Horizontally scrolling content row (MovieAI / Netflix pattern).
+ * Horizontally scrolling content row (MovieAI / Netflix / TMDB pattern).
+ * Optional tabs e.g. Today | This Week for TMDB Trending.
  */
-const ContentRow = ({ title, subtitle, onViewAll, children }) => {
+const ContentRow = ({
+  title,
+  subtitle,
+  onViewAll,
+  tabs = null,
+  activeTab = '',
+  onTabChange,
+  children
+}) => {
   const scrollerRef = useRef(null);
 
   const scrollByPage = (direction) => {
@@ -16,8 +25,29 @@ const ContentRow = ({ title, subtitle, onViewAll, children }) => {
   return (
     <section className="content-row">
       <div className="content-row-header">
-        <div>
+        <div className="content-row-heading">
           <h2 className="content-row-title">{title}</h2>
+          {Array.isArray(tabs) && tabs.length > 0 && (
+            <div className="content-row-tabs" role="tablist" aria-label={`${title} period`}>
+              {tabs.map((tab) => {
+                const id = tab.id || tab.value || tab;
+                const label = tab.label || tab;
+                const selected = String(activeTab) === String(id);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    className={`content-row-tab${selected ? ' is-active' : ''}`}
+                    onClick={() => onTabChange?.(id)}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {subtitle && <p className="content-row-subtitle">{subtitle}</p>}
         </div>
         {onViewAll && (

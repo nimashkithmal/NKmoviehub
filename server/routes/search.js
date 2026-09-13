@@ -2,15 +2,13 @@ const express = require('express');
 const Movie = require('../models/Movie');
 const TVShow = require('../models/TVShow');
 const { applyPublicCatalogFilter, filterPublicItems } = require('../utils/contentPolicy');
+const { escapeRegex, parseCatalogSearch, tokenRegex } = require('../utils/catalogSearch');
 
 const router = express.Router();
 
 const SUGGEST_FIELDS = 'title year imageUrl status';
 const MAX_PER_TYPE = 6;
 const MAX_TOTAL = 8;
-
-const escapeRegex = (value = '') =>
-  String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const rankTitle = (title = '', query = '') => {
   const t = String(title).toLowerCase();
@@ -27,15 +25,23 @@ const rankTitle = (title = '', query = '') => {
 // @access  Public
 router.get('/suggest', async (req, res) => {
   try {
-    const query = String(req.query.q || req.query.search || '').trim();
-    if (query.length < 2) {
+    const rawQuery = String(req.query.q || req.query.search || '').trim();
+    if (rawQuery.length < 2) {
       return res.json({ success: true, data: { suggestions: [] } });
     }
 
-    const escaped = escapeRegex(query);
+    const { query, year: yearHint } = parseCatalogSearch(rawQuery);
+    const text = query || rawQuery;
+    if (text.length < 2 && !yearHint) {
+      return res.json({ success: true, data: { suggestions: [] } });
+    }
+
+    const escaped = escapeRegex(text);
+    const titlePattern = text.length >= 2 ? tokenRegex(text) : escaped;
     const titleFilter = applyPublicCatalogFilter({
       status: { $in: ['active', 'coming_soon'] },
-      title: { $regex: escaped, $options: 'i' }
+      ...(text.length >= 2 ? { title: { $regex: titlePattern, $options: 'i' } } : {}),
+      ...(yearHint ? { year: yearHint } : {})
     });
 
     const [movies, tvShows] = await Promise.all([
@@ -48,8 +54,13 @@ router.get('/suggest', async (req, res) => {
       ...tvShows.map((item) => ({ ...item, type: 'tvshow' }))
     ])
       .sort((a, b) => {
-        const rankDiff = rankTitle(a.title, query) - rankTitle(b.title, query);
+        const rankDiff = rankTitle(a.title, text) - rankTitle(b.title, text);
         if (rankDiff !== 0) return rankDiff;
+        if (yearHint) {
+          const aYear = Number(a.year) === Number(yearHint) ? 0 : 1;
+          const bYear = Number(b.year) === Number(yearHint) ? 0 : 1;
+          if (aYear !== bYear) return aYear - bYear;
+        }
         return String(a.title).localeCompare(String(b.title));
       })
       .slice(0, MAX_TOTAL)
@@ -65,7 +76,7 @@ router.get('/suggest', async (req, res) => {
     res.set('Cache-Control', 'private, max-age=30');
     res.json({
       success: true,
-      data: { suggestions, query }
+      data: { suggestions, query: rawQuery }
     });
   } catch (error) {
     console.error('Search suggest error:', error);

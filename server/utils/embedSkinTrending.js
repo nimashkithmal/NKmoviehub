@@ -242,13 +242,31 @@ const stripArticle = (value = '') =>
 
 const titleKey = (value = '') => stripArticle(value).toLowerCase();
 
+const escapeRegExp = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Whole-token match — "dange" must not score against "dangerous". */
+const hasWholeToken = (haystack = '', needle = '') => {
+  const h = String(haystack || '');
+  const n = String(needle || '');
+  if (!h || !n) return false;
+  return new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(n)}(?:[^a-z0-9]|$)`, 'i').test(h);
+};
+
+const hasTokenPrefix = (title = '', query = '') => {
+  const t = String(title || '');
+  const q = String(query || '');
+  if (!t || !q) return false;
+  if (t === q) return true;
+  return t.startsWith(`${q} `) || t.startsWith(`${q}:`) || t.startsWith(`${q}-`);
+};
+
 function scoreTitle(query, title) {
   const q = titleKey(query);
   const t = titleKey(title);
   if (!q || !t) return 0;
   if (t === q) return 100;
-  if (t.startsWith(q) || q.startsWith(t)) return 85;
-  if (t.includes(q) || q.includes(t)) return 70;
+  if (hasTokenPrefix(t, q) || hasTokenPrefix(q, t)) return 85;
+  if (hasWholeToken(t, q) || hasWholeToken(q, t)) return 70;
   return 0;
 }
 
