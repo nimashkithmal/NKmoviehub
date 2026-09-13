@@ -67,7 +67,18 @@ const BLOCKED_TITLE_PATTERNS = [
   /\bjunior college lesbians?\b/i,
   /\bbad girls\b/i,
   /\bfaster pussycat\b/i,
-  /\bmother\s*fucker\b/i
+  /\bmother\s*fucker\b/i,
+  // Adult studio / Private Media Group catalogs that slip past keyword checks
+  /^private\s+(café|cafe|chateau|football|lessons|black\s*label)\b/i,
+  /\bprivate\s+black\s*label\b/i,
+  /\bbuttwoman\b/i,
+  /\binternal\s+cumb?ustion\b/i,
+  /\bass\s+worship\b/i,
+  /\bteenlicious\b/i,
+  /\bflesh\s+for\s+sale\b/i,
+  /\bdorcel\b/i,
+  /\bfashionistas\b/i,
+  /\bpirates\s+ii:\s*stagnetti/i
 ];
 
 const BLOCKED_TEXT_PATTERNS = [
@@ -84,7 +95,10 @@ const BLOCKED_TEXT_PATTERNS = [
   /\b(revenge porn|deepfake porn)\b/i,
   /\b(digital playground|pussy-eating|go-go dancers)\b/i,
   /\bmake a porno\b/i,
-  /\bbitchcraft\b/i
+  /\bbitchcraft\b/i,
+  /\b(monique covet|tori black|jesse jane)\b/i,
+  /\bprivate\s+(media|gold|castings|tropical)\b/i,
+  /\b(horny friends|wet secrets)\b/i
 ];
 
 const getSearchText = (item = {}) =>
@@ -99,6 +113,14 @@ const matchesAny = (text, patterns) => patterns.some((pattern) => pattern.test(t
 const evaluateContentPolicy = (item = {}) => {
   const title = String(item.title || '').trim();
   const text = getSearchText(item);
+
+  // TMDB / embed "adult" flag — hard block even when synopsis is vague
+  if (item.adult === true || item.isAdult === true) {
+    return {
+      restricted: true,
+      reason: 'Blocked adult-flagged title for AdSense compliance'
+    };
+  }
 
   if (title && matchesAny(title, TITLE_ALLOWLIST)) {
     return { restricted: false, reason: '' };

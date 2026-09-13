@@ -29,6 +29,7 @@ const {
   applyLanguageFilter,
   collectLanguageOptions
 } = require('../utils/languageFilter');
+const { applyCatalogTextSearch } = require('../utils/catalogSearch');
 
 const processEpisodeList = (episodes = [], tmdbId = '') =>
   episodes
@@ -131,11 +132,8 @@ router.get('/', async (req, res) => {
     }
     
     if (hasSearch) {
-      filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { genre: { $regex: search, $options: 'i' } }
-      ];
+      // Supports "Show Name 2024" / "Show Name (2024)"
+      applyCatalogTextSearch(filter, search);
     }
     
     if (genre) {
@@ -262,11 +260,7 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
     const filter = {};
     
     if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { genre: { $regex: search, $options: 'i' } }
-      ];
+      applyCatalogTextSearch(filter, search);
     }
     
     if (genre) {

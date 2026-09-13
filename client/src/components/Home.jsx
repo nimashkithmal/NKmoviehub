@@ -16,12 +16,12 @@ import './BrowseShelf.css';
 const PAGE_SIZE = 20;
 /** Server batch size — UI still shows PAGE_SIZE; next batch loads when you leave this window. */
 const BATCH_SIZE = 500;
-const DISCOVERY_CACHE_KEY = 'nk-home-discovery-v7';
-const DISCOVERY_CACHE_TTL_MS = 15 * 60 * 1000;
+const DISCOVERY_CACHE_KEY = 'nk-home-discovery-v10';
+const DISCOVERY_CACHE_TTL_MS = 10 * 60 * 1000;
 const COMING_SOON_CACHE_KEY = 'nk-home-coming-soon-v1';
 const COMING_SOON_CACHE_TTL_MS = 15 * 60 * 1000;
 /** How often home rows refetch while the discovery page stays open */
-const HOME_LIVE_REFRESH_MS = 10 * 60 * 1000;
+const HOME_LIVE_REFRESH_MS = 8 * 60 * 1000;
 
 /** Drop older discovery session caches so fixed Top Rated / Now Playing show up. */
 const purgeStaleDiscoveryCaches = () => {
@@ -32,7 +32,10 @@ const purgeStaleDiscoveryCaches = () => {
       'nk-home-discovery-v3',
       'nk-home-discovery-v4',
       'nk-home-discovery-v5',
-      'nk-home-discovery-v6'
+      'nk-home-discovery-v6',
+      'nk-home-discovery-v7',
+      'nk-home-discovery-v8',
+      'nk-home-discovery-v9'
     ];
     for (const key of stale) sessionStorage.removeItem(key);
   } catch {
@@ -115,15 +118,19 @@ const applyDiscoveryRows = (data, setters) => {
     setNowPlaying,
     setTopRatedMovies,
     setTrendingTVShows,
+    setTrendingToday,
+    setTrendingWeek,
     setMovies,
     setTVShows
   } = setters;
   setTrendingNow(data.trendingNow || []);
   setNowPlaying(data.nowPlaying || []);
   setTopRatedMovies(data.topRatedMovies || []);
+  setTrendingToday(data.trendingToday || []);
+  setTrendingWeek(data.trendingWeek || []);
   setTrendingTVShows(data.trendingTVShows || []);
   setMovies(data.trendingNow || []);
-  setTVShows(data.trendingTVShows || []);
+  setTVShows(data.trendingTVShows || data.trendingWeek || []);
 };
 
 const hasDiscoveryRows = (data) =>
@@ -132,6 +139,8 @@ const hasDiscoveryRows = (data) =>
       ((data.trendingNow && data.trendingNow.length > 0) ||
         (data.nowPlaying && data.nowPlaying.length > 0) ||
         (data.topRatedMovies && data.topRatedMovies.length > 0) ||
+        (data.trendingToday && data.trendingToday.length > 0) ||
+        (data.trendingWeek && data.trendingWeek.length > 0) ||
         (data.trendingTVShows && data.trendingTVShows.length > 0))
   );
 
@@ -178,6 +187,9 @@ const Home = () => {
   const [trendingNow, setTrendingNow] = useState([]);
   const [nowPlaying, setNowPlaying] = useState([]);
   const [trendingTVShows, setTrendingTVShows] = useState([]);
+  const [trendingToday, setTrendingToday] = useState([]);
+  const [trendingWeek, setTrendingWeek] = useState([]);
+  const [trendingWindow, setTrendingWindow] = useState('day'); // day | week
   const [discoveryRefreshing, setDiscoveryRefreshing] = useState(false);
   const [loadedBatchIndex, setLoadedBatchIndex] = useState(-1);
   const batchCacheRef = useRef(new Map());
@@ -421,6 +433,8 @@ const Home = () => {
       setNowPlaying,
       setTopRatedMovies,
       setTrendingTVShows,
+      setTrendingToday,
+      setTrendingWeek,
       setMovies,
       setTVShows
     };
@@ -652,10 +666,20 @@ const Home = () => {
     );
   };
 
+  const trendingItems =
+    trendingWindow === 'week'
+      ? trendingWeek.length
+        ? trendingWeek
+        : trendingToday
+      : trendingToday.length
+        ? trendingToday
+        : trendingWeek;
   const hasDiscoveryContent =
     trendingNow.length > 0 ||
     nowPlaying.length > 0 ||
     topRatedMovies.length > 0 ||
+    trendingToday.length > 0 ||
+    trendingWeek.length > 0 ||
     trendingTVShows.length > 0;
 
   const openBrowseMovies = () => navigate('/?browse=1&sort=popular');
@@ -833,14 +857,14 @@ const Home = () => {
                     {discoveryRefreshing && comingSoonRefreshing
                       ? 'Updating home picks…'
                       : discoveryRefreshing
-                        ? 'Updating trending picks…'
+                        ? 'Updating TMDB picks…'
                         : 'Updating upcoming releases…'}
                   </p>
                 )}
                 {trendingNow.length > 0 && (
                   <ContentRow
-                    title="Trending Now"
-                    subtitle="Most popular this week"
+                    title="Popular"
+                    subtitle="TMDB Popular · live"
                     onViewAll={() => navigate('/?browse=1&sort=popular')}
                   >
                     {trendingNow.map((movie) => (
@@ -869,29 +893,43 @@ const Home = () => {
                   </ContentRow>
                 )}
 
-                {trendingTVShows.length > 0 && (
+                {(trendingItems.length > 0 ||
+                  trendingToday.length > 0 ||
+                  trendingWeek.length > 0) && (
                   <ContentRow
-                    title="Trending TV Shows"
-                    subtitle="Most watched series this week"
-                    onViewAll={() => navigate('/?type=tvshows&sort=popular')}
+                    title="Trending"
+                    subtitle="TMDB Trending · live"
+                    tabs={[
+                      { id: 'day', label: 'Today' },
+                      { id: 'week', label: 'This Week' }
+                    ]}
+                    activeTab={trendingWindow}
+                    onTabChange={setTrendingWindow}
+                    onViewAll={() => navigate('/?browse=1&sort=popular')}
                   >
-                    {trendingTVShows.map((show) => (
-                      <PosterCard
-                        key={show._id}
-                        item={show}
-                        kind="tvshow"
-                        onClick={() =>
-                          navigate(`/tvshow/${show._id}`, withReturnPath(location))
-                        }
-                      />
-                    ))}
+                    {trendingItems.map((item) => {
+                      const isTv = item._kind === 'tvshow';
+                      return (
+                        <PosterCard
+                          key={`${item._kind || 'movie'}-${item._id}`}
+                          item={item}
+                          badge={isTv ? 'TV' : null}
+                          onClick={() =>
+                            navigate(
+                              isTv ? `/tvshow/${item._id}` : `/movie/${item._id}`,
+                              isTv ? withReturnPath(location) : undefined
+                            )
+                          }
+                        />
+                      );
+                    })}
                   </ContentRow>
                 )}
 
                 {topRatedMovies.length > 0 && (
                   <ContentRow
                     title="Top Rated Movies"
-                    subtitle="Critically acclaimed all-time greats"
+                    subtitle="TMDB Top Rated · live"
                     onViewAll={() => navigate('/?browse=1&sort=rated')}
                   >
                     {topRatedMovies.map((movie) => (

@@ -10,8 +10,13 @@ const { protect, restrictToAdmin } = require('../middleware/auth');
 const {
   extractTmdbId,
   getTrendingTmdbIds,
-  orderDocsTrendingFirst
+  orderDocsTrendingFirst,
+  orderDocsByTrending
 } = require('../utils/trendingPopular');
+const {
+  fetchPopularTmdbIds,
+  fetchTopRatedTmdbIds
+} = require('../utils/tmdb');
 const {
   promoteReleasedComingSoon,
   sortComingSoon,
@@ -36,6 +41,7 @@ const {
   applyLanguageFilter,
   collectLanguageOptions
 } = require('../utils/languageFilter');
+const { applyCatalogTextSearch } = require('../utils/catalogSearch');
 const { findExistingMovieDuplicate } = require('../utils/deduplicateMovies');
 
 const router = express.Router();
@@ -120,12 +126,8 @@ router.get('/', async (req, res) => {
     }
     
     if (hasSearch) {
-      // Use regex search instead of $text for better compatibility
-      filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { genre: { $regex: search, $options: 'i' } }
-      ];
+      // Supports "Dange 2024" / "Dange (2024)" — year is peeled off the phrase
+      applyCatalogTextSearch(filter, search);
     }
     
     if (genre) {
@@ -170,13 +172,16 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // Popular: trending titles first, then the rest of the catalog
+    // Popular: TMDB /movie/popular order first (https://www.themoviedb.org/movie), then rest of catalog
     if (sort === 'popular') {
-      const trendingIds = await getTrendingTmdbIds('movie', 2);
+      let popularIds = await fetchPopularTmdbIds({ pages: 3, limit: 80, language: 'en-US' });
+      if (!popularIds.length) {
+        popularIds = await getTrendingTmdbIds('movie', 2);
+      }
       const candidates = await Movie.find(filter)
         .select('_id movieUrl imdbRating averageRating year title')
         .lean();
-      const orderedIds = orderDocsTrendingFirst(candidates, trendingIds, (doc) =>
+      const orderedIds = orderDocsTrendingFirst(candidates, popularIds, (doc) =>
         extractTmdbId(doc.movieUrl)
       )
         .filter((doc) => isPubliclyAccessible(doc))
@@ -205,17 +210,38 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // Top Rated: credible IMDb scores only (drop sync junk at 9–10).
+    // Top Rated: TMDB /movie/top_rated order first (https://www.themoviedb.org/movie/top-rated)
     if (sort === 'rated') {
-      const ratedFilter = buildTopRatedMongoFilter(filter);
-      const candidates = await Movie.find(ratedFilter)
+      const tmdbTopIds = await fetchTopRatedTmdbIds({ pages: 3, limit: 80, language: 'en-US' });
+      const candidates = await Movie.find(filter)
         .select(
-          '_id title year imdbRating averageRating totalRatings genre imageUrl images releaseDate status policyRestricted'
+          '_id title year imdbRating averageRating totalRatings genre imageUrl images releaseDate status policyRestricted movieUrl'
         )
         .lean();
-      const orderedIds = rankTopRatedDocs(filterPublicItems(candidates)).map(
-        (doc) => doc._id
-      );
+      const publicDocs = candidates.filter((doc) => isPubliclyAccessible(doc));
+
+      let orderedIds;
+      if (tmdbTopIds.length) {
+        const tmdbOrdered = orderDocsByTrending(publicDocs, tmdbTopIds, (doc) =>
+          extractTmdbId(doc.movieUrl)
+        );
+        const tmdbIdSet = new Set(tmdbOrdered.map((d) => String(d._id)));
+        const rest = rankTopRatedDocs(
+          publicDocs.filter((doc) => !tmdbIdSet.has(String(doc._id)))
+        );
+        orderedIds = [...tmdbOrdered, ...rest].map((doc) => doc._id);
+      } else {
+        const ratedFilter = buildTopRatedMongoFilter(filter);
+        const ratedCandidates = await Movie.find(ratedFilter)
+          .select(
+            '_id title year imdbRating averageRating totalRatings genre imageUrl images releaseDate status policyRestricted movieUrl'
+          )
+          .lean();
+        orderedIds = rankTopRatedDocs(filterPublicItems(ratedCandidates)).map(
+          (doc) => doc._id
+        );
+      }
+
       const total = orderedIds.length;
       const pageIds = orderedIds.slice(skip, skip + limitNum);
       const found = await Movie.find({ _id: { $in: pageIds } })
@@ -288,13 +314,15 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
     
     if (search && String(search).trim()) {
       const q = String(search).trim();
-      filter.$or = [
-        { title: { $regex: q, $options: 'i' } },
-        { description: { $regex: q, $options: 'i' } },
-        { genre: { $regex: q, $options: 'i' } }
-      ];
       if (/^\d{4}$/.test(q)) {
-        filter.$or.push({ year: parseInt(q, 10) });
+        filter.$or = [
+          { title: { $regex: q, $options: 'i' } },
+          { description: { $regex: q, $options: 'i' } },
+          { genre: { $regex: q, $options: 'i' } },
+          { year: parseInt(q, 10) }
+        ];
+      } else {
+        applyCatalogTextSearch(filter, q);
       }
     }
     

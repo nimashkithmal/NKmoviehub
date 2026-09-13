@@ -123,7 +123,8 @@ function mapSearchRowToEmbedData(type, row = {}) {
     original_language: row.original_language,
     imdb_id: row.imdb_id,
     runtime: row.runtime,
-    crew: row.cast_crew?.crew
+    crew: row.cast_crew?.crew,
+    adult: row.adult === true || row.is_adult === true
   };
 }
 
@@ -188,7 +189,12 @@ function mapEmbedToPending(type, tmdbId, data = {}, source = 'trending') {
   const description = descriptionFromEmbed(data);
   const genre = genreFromEmbed(data);
 
-  const policy = evaluateContentPolicy({ title, description, genre });
+  const policy = evaluateContentPolicy({
+    title,
+    description,
+    genre,
+    adult: data.adult === true || data.is_adult === true
+  });
   if (policy.restricted) return null;
 
   const catalogStatus = resolveCatalogStatus(data);
@@ -386,6 +392,29 @@ const stripLeadingArticle = (value = '') =>
 
 const normalizeTitleKey = (value = '') => stripLeadingArticle(value).toLowerCase();
 
+/** Escape a string for use inside a RegExp. */
+const escapeRegExp = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * True when `needle` appears as a whole token in `haystack`
+ * (not a prefix of a longer word — "dange" must not match "dangerous").
+ */
+const hasWholeToken = (haystack = '', needle = '') => {
+  const h = String(haystack || '');
+  const n = String(needle || '');
+  if (!h || !n) return false;
+  return new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(n)}(?:[^a-z0-9]|$)`, 'i').test(h);
+};
+
+/** Title starts with query as a full token ("dange …"), not "dangerous…". */
+const hasTokenPrefix = (titleKey = '', queryKey = '') => {
+  const t = String(titleKey || '');
+  const q = String(queryKey || '');
+  if (!t || !q) return false;
+  if (t === q) return true;
+  return t.startsWith(`${q} `) || t.startsWith(`${q}:`) || t.startsWith(`${q}-`);
+};
+
 const buildSearchVariants = (query = '') => {
   const base = String(query || '').trim();
   if (!base) return [];
@@ -398,6 +427,8 @@ const buildSearchVariants = (query = '') => {
   return variants;
 };
 
+const MIN_SEARCH_SCORE = 70;
+
 const titleMatchScore = (query, title, yearHint, rowYear) => {
   const qKey = normalizeTitleKey(query);
   const tKey = normalizeTitleKey(title);
@@ -405,9 +436,9 @@ const titleMatchScore = (query, title, yearHint, rowYear) => {
 
   let score = 0;
   if (tKey === qKey) score = 100;
-  else if (tKey.startsWith(qKey) || qKey.startsWith(tKey)) score = 85;
-  else if (tKey.includes(qKey) || qKey.includes(tKey)) score = 70;
-  else score = 20;
+  else if (hasTokenPrefix(tKey, qKey) || hasTokenPrefix(qKey, tKey)) score = 85;
+  else if (hasWholeToken(tKey, qKey) || hasWholeToken(qKey, tKey)) score = 70;
+  else score = 0;
 
   if (yearHint && rowYear && Number(yearHint) === Number(rowYear)) score += 20;
   if (yearHint && rowYear && Number(yearHint) !== Number(rowYear)) score -= 25;
@@ -442,18 +473,23 @@ const adjustSearchPickScore = (pick, query) => {
   return score;
 };
 
-const pickBestSearchCandidate = (picks, query, typeFilter = '') => {
-  const ranked = picks
+const rankSearchCandidates = (picks, query, typeFilter = '') =>
+  picks
     .map((pick) => ({ ...pick, finalScore: adjustSearchPickScore(pick, query) }))
+    .filter((pick) => pick.finalScore >= MIN_SEARCH_SCORE)
     .sort((a, b) => {
       if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
       if (typeFilter === 'tvshow') return a.type === 'tvshow' ? -1 : 1;
       if (typeFilter === 'movie') return a.type === 'movie' ? -1 : 1;
-      if (querySuggestsMovie(query)) return a.type === 'movie' ? -1 : 1;
-      return a.type === 'tvshow' ? -1 : 1;
+      if (querySuggestsTvShow(query)) return a.type === 'tvshow' ? -1 : 1;
+      // Named title syncs (e.g. "Dange 2024") default to movie over fuzzy TV hits.
+      return a.type === 'movie' ? -1 : 1;
     });
 
+const pickBestSearchCandidate = (picks, query, typeFilter = '') => {
+  const ranked = rankSearchCandidates(picks, query, typeFilter);
   const best = ranked[0];
+  if (!best) return null;
   return {
     type: best.type,
     tmdbId: best.tmdbId,
@@ -567,7 +603,8 @@ async function collectSearchCandidates(query, typeFilter = '') {
 
   if (!picks.length) return [];
 
-  return [pickBestSearchCandidate(picks, normalized, typeFilter)];
+  const best = pickBestSearchCandidate(picks, normalized, typeFilter);
+  return best ? [best] : [];
 }
 
 async function runIndexer(options = {}) {
