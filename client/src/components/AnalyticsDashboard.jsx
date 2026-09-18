@@ -4,13 +4,15 @@ import './AnalyticsDashboard.css';
 const RANGE_OPTIONS = [
   { id: '7d', label: 'Last 7 days' },
   { id: '30d', label: 'Last 30 days' },
-  { id: '90d', label: 'Last 90 days' }
+  { id: '90d', label: 'Last 90 days' },
+  { id: 'all', label: 'All days' }
 ];
 
 const formatNumber = (n) => Number(n || 0).toLocaleString();
 
-const BarChart = ({ data, valueKey, labelKey, maxBars = 12 }) => {
-  const rows = (data || []).slice(0, maxBars);
+const BarChart = ({ data, valueKey, labelKey, maxBars = 12, fromEnd = false }) => {
+  const source = data || [];
+  const rows = fromEnd ? source.slice(-maxBars) : source.slice(0, maxBars);
   const max = Math.max(...rows.map((r) => r[valueKey] || 0), 1);
 
   if (!rows.length) {
@@ -159,6 +161,8 @@ const AnalyticsDashboard = ({ token }) => {
             }))}
             valueKey="value"
             labelKey="date"
+            maxBars={range === 'all' ? 30 : 14}
+            fromEnd
           />
         </section>
 

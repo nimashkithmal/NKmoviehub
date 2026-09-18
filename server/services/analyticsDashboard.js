@@ -10,6 +10,8 @@ const parseRange = (query = {}) => {
   let start;
   if (query.startDate) {
     start = new Date(query.startDate);
+  } else if (preset === 'all') {
+    start = new Date(0);
   } else if (preset === '7d') {
     start = new Date(end.getTime() - 6 * MS_DAY);
   } else if (preset === '90d') {
