@@ -104,9 +104,10 @@ function mapSearchRowToEmbedData(type, row = {}) {
       trailer: row.trailer,
       original_language: row.original_language,
       imdb_id: row.imdb_id,
-      number_of_seasons: row.number_of_seasons,
-      number_of_episodes: row.number_of_episodes,
-      crew: row.cast_crew?.crew
+    adult: row.adult === true || row.is_adult === true,
+    number_of_seasons: row.number_of_seasons,
+    number_of_episodes: row.number_of_episodes,
+    crew: row.cast_crew?.crew
     };
   }
 

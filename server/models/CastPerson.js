@@ -51,6 +51,21 @@ const castPersonSchema = new mongoose.Schema({
   credits: {
     type: [castCreditSchema],
     default: []
+  },
+  policyRestricted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  policyRestrictedReason: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  adsenseSafe: {
+    type: Boolean,
+    default: true,
+    index: true
   }
 });
 

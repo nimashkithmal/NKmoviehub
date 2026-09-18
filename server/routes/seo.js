@@ -2,7 +2,11 @@ const express = require('express');
 const Movie = require('../models/Movie');
 const TVShow = require('../models/TVShow');
 const { buildMovieHtml, buildTvShowHtml } = require('../utils/seoHtml');
-const { isPubliclyAccessible } = require('../utils/contentPolicy');
+const {
+  isPubliclyAccessible,
+  isIndexableContent,
+  applyIndexableCatalogFilter
+} = require('../utils/contentPolicy');
 
 const router = express.Router();
 
@@ -18,6 +22,7 @@ const STATIC_PAGES = [
   { loc: '/contact', changefreq: 'monthly', priority: '0.6' },
   { loc: '/privacy', changefreq: 'monthly', priority: '0.5' },
   { loc: '/terms', changefreq: 'monthly', priority: '0.5' },
+  { loc: '/disclaimer', changefreq: 'monthly', priority: '0.5' },
   { loc: '/dmca', changefreq: 'monthly', priority: '0.5' }
 ];
 
@@ -36,21 +41,25 @@ const xmlEscape = (value = '') =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 
+const INDEXABLE_SELECT =
+  '_id updatedAt title description imageUrl images policyRestricted adsenseSafe tagline genre';
+
 // @route   GET /api/seo/sitemap.xml
-// @desc    Dynamic sitemap with public movies and TV shows
+// @desc    Dynamic sitemap with public, indexable movies and TV shows
 // @access  Public
 router.get('/sitemap.xml', async (req, res) => {
   try {
+    const catalogFilter = applyIndexableCatalogFilter({
+      status: { $in: ['active', 'coming_soon'] }
+    });
+
     const [movies, tvShows] = await Promise.all([
-      Movie.find({ status: { $in: ['active', 'coming_soon'] }, policyRestricted: { $ne: true } })
-        .select('_id updatedAt')
-        .sort({ updatedAt: -1 })
-        .lean(),
-      TVShow.find({ status: { $in: ['active', 'coming_soon'] }, policyRestricted: { $ne: true } })
-        .select('_id updatedAt')
-        .sort({ updatedAt: -1 })
-        .lean()
+      Movie.find(catalogFilter).select(INDEXABLE_SELECT).sort({ updatedAt: -1 }).lean(),
+      TVShow.find(catalogFilter).select(INDEXABLE_SELECT).sort({ updatedAt: -1 }).lean()
     ]);
+
+    const safeMovies = movies.filter((doc) => isIndexableContent(doc));
+    const safeShows = tvShows.filter((doc) => isIndexableContent(doc));
 
     const urls = [
       ...STATIC_PAGES.map((page) => ({
@@ -59,13 +68,13 @@ router.get('/sitemap.xml', async (req, res) => {
         priority: page.priority,
         lastmod: null
       })),
-      ...movies.map((movie) => ({
+      ...safeMovies.map((movie) => ({
         loc: `${SITE_ORIGIN}/movie/${movie._id}`,
         changefreq: 'weekly',
         priority: '0.8',
         lastmod: toIsoDate(movie.updatedAt)
       })),
-      ...tvShows.map((show) => ({
+      ...safeShows.map((show) => ({
         loc: `${SITE_ORIGIN}/tvshow/${show._id}`,
         changefreq: 'weekly',
         priority: '0.8',
@@ -104,7 +113,7 @@ ${body}
 router.get('/prerender/movie/:id', async (req, res) => {
   try {
     const movie = await Movie.findById(req.params.id).lean();
-    if (!movie || !isPubliclyAccessible(movie)) {
+    if (!movie || !isPubliclyAccessible(movie) || !isIndexableContent(movie)) {
       return res.status(404).send('Movie not found');
     }
 
@@ -124,7 +133,7 @@ router.get('/prerender/movie/:id', async (req, res) => {
 router.get('/prerender/tvshow/:id', async (req, res) => {
   try {
     const tvShow = await TVShow.findById(req.params.id).lean();
-    if (!tvShow || !isPubliclyAccessible(tvShow)) {
+    if (!tvShow || !isPubliclyAccessible(tvShow) || !isIndexableContent(tvShow)) {
       return res.status(404).send('TV show not found');
     }
 

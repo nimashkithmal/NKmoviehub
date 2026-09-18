@@ -1,5 +1,6 @@
 const express = require('express');
 const { fetchEmbedJson } = require('../utils/embedHttp');
+const { sanitizeEmbedMetadata } = require('../utils/contentPolicy');
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ const proxyEmbed = async (req, res, path) => {
 
   try {
     const data = await fetchEmbedJson(`/${path}?${params.toString()}`);
-    return res.json(data);
+    return res.json(sanitizeEmbedMetadata(data));
   } catch (err) {
     console.error(`Embed proxy error (${path}):`, err.message);
     return res.status(502).json({

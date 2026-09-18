@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "adsense:audit": "node scripts/adsenseAudit.js",
+    "adsense:cleanup": "node scripts/adsenseAudit.js --cleanup"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

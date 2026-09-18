@@ -13,7 +13,11 @@ const populateMovies = (query) =>
   query.populate({
     path: 'movies',
     select: MOVIE_FIELDS,
-    match: { status: { $in: ['active', 'coming_soon'] }, policyRestricted: { $ne: true } }
+    match: {
+      status: { $in: ['active', 'coming_soon'] },
+      policyRestricted: { $ne: true },
+      adsenseSafe: { $ne: false }
+    }
   });
 
 // @route   GET /api/collections

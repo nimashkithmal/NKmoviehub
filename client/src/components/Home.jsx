@@ -773,6 +773,48 @@ const Home = () => {
             )}
           </section>
 
+          <section className="home-intro" aria-label="About NK Movie Hub">
+            <div className="home-intro-inner">
+              <h2 className="home-intro-title">Discover movies &amp; TV series</h2>
+              <p className="home-intro-text">
+                NK Movie Hub helps you browse a curated catalogue with search, genres,
+                trending and top-rated picks, franchise collections, and title details
+                including cast, ratings, and trailers. Use the categories below or open
+                Browse to filter the full library.
+              </p>
+              <div className="home-intro-actions">
+                <button
+                  type="button"
+                  className="home-intro-link"
+                  onClick={() => navigate('/?browse=1&sort=popular')}
+                >
+                  Browse movies
+                </button>
+                <button
+                  type="button"
+                  className="home-intro-link"
+                  onClick={() => navigate('/?type=tvshows&sort=popular')}
+                >
+                  Browse TV shows
+                </button>
+                <button
+                  type="button"
+                  className="home-intro-link"
+                  onClick={() => navigate('/collections')}
+                >
+                  Collections
+                </button>
+                <button
+                  type="button"
+                  className="home-intro-link"
+                  onClick={() => navigate('/about')}
+                >
+                  About us
+                </button>
+              </div>
+            </div>
+          </section>
+
           <div className="home-rows" id="browse-anchor">
             <nav className="home-categories" aria-label="Browse categories">
               <button

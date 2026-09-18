@@ -65,6 +65,7 @@ const Footer = () => {
             <Link to="/contact">Contact</Link>
             <Link to="/privacy">Privacy</Link>
             <Link to="/terms">Terms</Link>
+            <Link to="/disclaimer">Disclaimer</Link>
             <Link to="/dmca">DMCA</Link>
           </nav>
 

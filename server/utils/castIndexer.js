@@ -2,7 +2,7 @@ const Movie = require('../models/Movie');
 const TVShow = require('../models/TVShow');
 const CastTitleCache = require('../models/CastTitleCache');
 const CastPerson = require('../models/CastPerson');
-const { applyPublicCatalogFilter } = require('./contentPolicy');
+const { applyPublicCatalogFilter, isAdsenseSafePerson, filterSafePeople } = require('./contentPolicy');
 const { extractTmdbId, extractTvTmdbId } = require('./trendingPopular');
 const { EMBED_API, fetchEmbedJson: fetchEmbedApi } = require('./embedHttp');
 
@@ -187,6 +187,7 @@ function buildPeopleFromEmbed(data = {}) {
     character: String(character || person.character || '').trim(),
     profile: String(person.profile || '').trim(),
     role,
+    adult: person.adult === true || person.is_adult === true,
     tmdbPersonId: String(person.id || person.tmdb_id || person.cast_id || '').trim()
   });
 
@@ -201,6 +202,7 @@ function buildPeopleFromEmbed(data = {}) {
   [...cast, ...directors].forEach((person) => {
     const key = `${person.name.toLowerCase()}::${person.role}`;
     if (!person.name || seen.has(key)) return;
+    if (!isAdsenseSafePerson(person)) return;
     seen.add(key);
     people.push(person);
   });
@@ -273,6 +275,9 @@ async function applyTitleCredits(title, people) {
             profile,
             credits,
             creditCount: credits.length,
+            policyRestricted: false,
+            policyRestrictedReason: '',
+            adsenseSafe: true,
             ...(person.tmdbPersonId ? { tmdbPersonId: person.tmdbPersonId } : {})
           }
         }
@@ -287,7 +292,10 @@ async function applyTitleCredits(title, people) {
         tmdbPersonId: person.tmdbPersonId || '',
         profile,
         credits: [credit],
-        creditCount: 1
+        creditCount: 1,
+        policyRestricted: false,
+        policyRestrictedReason: '',
+        adsenseSafe: true
       });
     } catch (err) {
       if (err?.code !== 11000) throw err;
@@ -549,8 +557,12 @@ function getCastIndexerStatus() {
 }
 
 async function getCastStats() {
+  const personFilter = {
+    policyRestricted: { $ne: true },
+    adsenseSafe: { $ne: false }
+  };
   const [people, indexedTitles, totalTitles] = await Promise.all([
-    CastPerson.countDocuments(),
+    CastPerson.countDocuments(personFilter),
     CastTitleCache.countDocuments(),
     catalogTotal > 0
       ? Promise.resolve(catalogTotal)
@@ -573,9 +585,11 @@ async function searchCastPeople({ q = '', page = 1, limit = 48, sort = 'popular'
   const skip = (safePage - 1) * safeLimit;
   const query = String(q || '').trim();
 
-  const filter = query
-    ? { name: { $regex: escapeRegex(query), $options: 'i' } }
-    : {};
+  const filter = {
+    policyRestricted: { $ne: true },
+    adsenseSafe: { $ne: false },
+    ...(query ? { name: { $regex: escapeRegex(query), $options: 'i' } } : {})
+  };
 
   const sortSpec = sort === 'name'
     ? { name: 1 }
@@ -603,7 +617,13 @@ async function searchCastPeople({ q = '', page = 1, limit = 48, sort = 'popular'
 }
 
 async function getCastPersonBySlug(slug) {
-  return CastPerson.findOne({ slug }).lean();
+  const person = await CastPerson.findOne({
+    slug,
+    policyRestricted: { $ne: true },
+    adsenseSafe: { $ne: false }
+  }).lean();
+  if (!person || !isAdsenseSafePerson(person)) return null;
+  return person;
 }
 
 module.exports = {
