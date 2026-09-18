@@ -22,7 +22,8 @@ const {
   applyPublicCatalogFilter,
   filterPublicItems,
   evaluateContentPolicy,
-  isPubliclyAccessible
+  isPubliclyAccessible,
+  policyUpdateFields
 } = require('../utils/contentPolicy');
 const { normalizeEpisodeRecord, extractTmdbId } = require('../utils/tvEpisodeUrls');
 const {
@@ -844,6 +845,28 @@ router.put('/:id', protect, restrictToAdmin, [
         updateData.bannerUrl = bannerUrl.trim();
       }
     }
+
+    const existing = await TVShow.findById(req.params.id).select(
+      'title description genre tagline status policyRestricted'
+    );
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'TV Show not found'
+      });
+    }
+
+    const policyCheck = evaluateContentPolicy({
+      title: updateData.title || existing.title,
+      description: updateData.description || existing.description,
+      genre: updateData.genre || existing.genre,
+      tagline: updateData.tagline ?? existing.tagline,
+      policyRestricted: existing.policyRestricted
+    });
+    Object.assign(
+      updateData,
+      policyUpdateFields(policyCheck, updateData.status || existing.status)
+    );
 
     const tvShow = await TVShow.findByIdAndUpdate(
       req.params.id,

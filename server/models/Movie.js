@@ -130,6 +130,12 @@ const movieSchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: ''
+  },
+  /** Inverse of policyRestricted — kept for AdSense audit clarity */
+  adsenseSafe: {
+    type: Boolean,
+    default: true,
+    index: true
   }
 }, {
   timestamps: true

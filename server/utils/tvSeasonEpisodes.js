@@ -1,5 +1,6 @@
 const { buildEpisodeUrl } = require('./tvEpisodeUrls');
 const { fetchEmbedJson } = require('./embedHttp');
+const { isAdsenseSafeEpisodeTitle } = require('./contentPolicy');
 
 const MAX_SEASON_PROBE = 50;
 
@@ -37,7 +38,10 @@ async function buildAllSeasonEpisodes(tmdbId, numberOfSeasons = null) {
         seasonNumber: season,
         seasonEpisodeNumber: Number(ep.episode_number),
         episodeUrl: buildEpisodeUrl(tmdbId, season, ep.episode_number),
-        episodeTitle: String(ep.name || '').trim()
+        episodeTitle: (() => {
+          const raw = String(ep.name || '').trim();
+          return isAdsenseSafeEpisodeTitle(raw) ? raw : '';
+        })()
       });
       globalEpisodeNumber += 1;
     }

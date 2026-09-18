@@ -168,6 +168,12 @@ const tvShowSchema = new mongoose.Schema({
     trim: true,
     default: ''
   },
+  /** Inverse of policyRestricted — kept for AdSense audit clarity */
+  adsenseSafe: {
+    type: Boolean,
+    default: true,
+    index: true
+  },
   matureContent: {
     type: Boolean,
     default: false,

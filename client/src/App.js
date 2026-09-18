@@ -61,6 +61,7 @@ const AppShell = () => {
           <Route path="/about" element={<LegalPage slug="about" />} />
           <Route path="/privacy" element={<LegalPage slug="privacy" />} />
           <Route path="/terms" element={<LegalPage slug="terms" />} />
+          <Route path="/disclaimer" element={<LegalPage slug="disclaimer" />} />
           <Route path="/dmca" element={<LegalPage slug="dmca" />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/movie/:id" element={<MovieDetail />} />

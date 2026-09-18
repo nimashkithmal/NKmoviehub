@@ -27,7 +27,8 @@ const {
   applyPublicCatalogFilter,
   filterPublicItems,
   evaluateContentPolicy,
-  isPubliclyAccessible
+  isPubliclyAccessible,
+  policyUpdateFields
 } = require('../utils/contentPolicy');
 const {
   buildTopRatedMongoFilter,
@@ -1101,16 +1102,10 @@ router.put('/:id', protect, restrictToAdmin, [
       tagline: updateData.tagline ?? existing.tagline,
       policyRestricted: existing.policyRestricted
     });
-    if (policyCheck.restricted) {
-      updateData.policyRestricted = true;
-      updateData.policyRestrictedReason = policyCheck.reason;
-      if (['active', 'coming_soon'].includes(updateData.status || existing.status)) {
-        updateData.status = 'inactive';
-      }
-    } else {
-      updateData.policyRestricted = false;
-      updateData.policyRestrictedReason = '';
-    }
+    Object.assign(
+      updateData,
+      policyUpdateFields(policyCheck, updateData.status || existing.status)
+    );
 
     // Use findByIdAndUpdate with the update object directly (MongoDB will handle it correctly)
     const movie = await Movie.findByIdAndUpdate(

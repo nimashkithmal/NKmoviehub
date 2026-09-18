@@ -6,5 +6,6 @@ Disallow: /add-movie
 Disallow: /add-tvshow
 Disallow: /login
 Disallow: /forgot-password
+Disallow: /watch/
 
 Sitemap: https://nkmoviehub.vercel.app/sitemap.xml

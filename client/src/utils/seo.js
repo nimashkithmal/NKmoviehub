@@ -7,7 +7,8 @@ const NO_INDEX_PREFIXES = [
   '/login',
   '/add-movie',
   '/add-tvshow',
-  '/forgot-password'
+  '/forgot-password',
+  '/watch'
 ];
 
 const DEFAULT_TITLE = 'NK Movie Hub — Movies & TV Series';
@@ -20,6 +21,7 @@ const ROUTE_TITLES = {
   '/contact': 'Contact Us | NK Movie Hub',
   '/privacy': 'Privacy Policy | NK Movie Hub',
   '/terms': 'Terms & Conditions | NK Movie Hub',
+  '/disclaimer': 'Disclaimer | NK Movie Hub',
   '/dmca': 'DMCA / Copyright | NK Movie Hub',
   '/login': 'Login | NK Movie Hub',
   '/forgot-password': 'Forgot Password | NK Movie Hub'
@@ -89,16 +91,23 @@ export const setDetailPageMeta = ({
   description,
   image,
   pathname,
-  type = 'video.movie'
+  type = 'video.movie',
+  noIndex = false
 }) => {
   if (!title || !pathname) return;
 
   const pageTitle = `${title} | NK Movie Hub`;
   const canonical = getCanonicalUrl(pathname);
-  const metaDescription = truncate(description || `Watch ${title} on NK Movie Hub.`);
+  const metaDescription = truncate(description || `Discover ${title} on NK Movie Hub.`);
+  const thin = !description || String(description).trim().length < 40;
 
   document.title = pageTitle;
   upsertLink('canonical', canonical);
+  upsertMeta(
+    'meta[name="robots"]',
+    { name: 'robots' },
+    noIndex || thin || shouldNoIndex(pathname) ? 'noindex, follow' : 'index, follow'
+  );
   upsertMeta('meta[name="description"]', { name: 'description' }, metaDescription);
   upsertMeta('meta[property="og:title"]', { property: 'og:title' }, pageTitle);
   upsertMeta('meta[property="og:description"]', { property: 'og:description' }, metaDescription);

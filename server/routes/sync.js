@@ -89,7 +89,10 @@ async function approvePendingTitle(pending, userId, payload = {}) {
       runtime: payload.runtime ?? pending.runtime ?? null,
       releaseStatus: String(payload.releaseStatus ?? pending.releaseStatus ?? '').trim(),
       addedBy: userId,
-      status: siteStatus
+      status: siteStatus,
+      policyRestricted: false,
+      policyRestrictedReason: '',
+      adsenseSafe: true
     });
 
     return { kind: 'movie', id: movie._id };
@@ -130,7 +133,10 @@ async function approvePendingTitle(pending, userId, payload = {}) {
     releaseStatus: String(payload.releaseStatus ?? pending.releaseStatus ?? '').trim(),
     tmdbId,
     addedBy: userId,
-    status: siteStatus
+    status: siteStatus,
+    policyRestricted: false,
+    policyRestrictedReason: '',
+    adsenseSafe: true
   });
 
   return { kind: 'tvshow', id: tvShow._id, numberOfSeasons: resolvedSeasons, episodeCount: episodes.length };

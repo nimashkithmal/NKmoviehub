@@ -11,7 +11,8 @@ const { isPubliclyAccessible } = require('../utils/contentPolicy');
 
 const router = express.Router();
 
-const DETAIL_FIELDS = 'title year description genre imdbRating averageRating imageUrl images';
+const DETAIL_FIELDS =
+  'title year description genre tagline imdbRating averageRating imageUrl images policyRestricted policyRestrictedReason adsenseSafe';
 const PICKER_FIELDS = 'title year genre bannerUrl status imdbRating';
 
 const buildPickerFilter = (search = '') => {

@@ -10,11 +10,16 @@ export const LEGAL_PAGES = {
       {
         heading: 'What we offer',
         list: [
-          'A searchable catalogue of movies and TV shows',
+          'A searchable catalogue of movies and TV shows with genre and language filters',
+          'Homepage discovery rows for trending, popular, top-rated, and coming soon titles',
           'Curated collections such as Marvel, DC, Harry Potter, and more',
-          'Title details including cast, overview, ratings, and release information',
+          'Title details including cast, overview, ratings, runtime, and trailers when available',
           'A simple way to request missing titles through our contact form'
         ]
+      },
+      {
+        heading: 'Content standards',
+        body: `NK Movie Hub is built for a general audience. We filter sexually explicit and primarily erotic titles from the public catalogue so the site remains suitable for advertising partners and family-friendly discovery.`
       },
       {
         heading: 'Our mission',
@@ -23,6 +28,40 @@ export const LEGAL_PAGES = {
       {
         heading: 'Contact',
         body: `Questions or feedback? Email us at qwe730375@gmail.com or use the request form on our home page.`
+      }
+    ]
+  },
+  disclaimer: {
+    title: 'Disclaimer',
+    subtitle: 'Important information about using NK Movie Hub.',
+    sections: [
+      {
+        heading: 'General information',
+        body: `NK Movie Hub provides a catalogue of movie and TV series information for personal entertainment discovery. Title details, posters, trailers, and descriptions may be sourced from third-party databases and remain the property of their respective owners.`
+      },
+      {
+        heading: 'No affiliation',
+        body: `NK Movie Hub is an independent project. We are not affiliated with, endorsed by, or sponsored by any movie studio, streaming platform, television network, or rights holder unless explicitly stated.`
+      },
+      {
+        heading: 'Accuracy',
+        body: `We aim to keep metadata accurate, but cast lists, ratings, release dates, and synopses can change. Always verify critical information with official sources.`
+      },
+      {
+        heading: 'External players & links',
+        body: `Embedded players and outbound links are provided by third parties. Their availability, terms, advertisements, and content policies are outside our control. Use them at your own discretion.`
+      },
+      {
+        heading: 'Content standards',
+        body: `The public catalogue is curated for a general audience and Google AdSense publisher policies. Sexually explicit, pornographic, or primarily erotic titles are not published. If you find a title that should be reviewed, contact us with the page URL.`
+      },
+      {
+        heading: 'Liability',
+        body: `The site is provided “as is” without warranties of any kind. To the fullest extent permitted by law, NK Movie Hub is not liable for damages arising from use of the site, reliance on catalogue information, or third-party services linked from our pages.`
+      },
+      {
+        heading: 'Contact',
+        body: `Disclaimer questions: qwe730375@gmail.com`
       }
     ]
   },
@@ -54,7 +93,11 @@ export const LEGAL_PAGES = {
       },
       {
         heading: 'Cookies & analytics',
-        body: `We may use cookies and similar technologies through Google Analytics 4 to measure site traffic. You can control cookies through your browser settings. Third-party embed players may set their own cookies when you play content.`
+        body: `We may use cookies and similar technologies through Google Analytics 4 and Google AdSense to measure traffic and display advertisements. You can control cookies through your browser settings. Third-party embed players may set their own cookies when you play content.`
+      },
+      {
+        heading: 'Advertising',
+        body: `We use Google AdSense to show ads. Google may use cookies or device identifiers to serve personalised or non-personalised ads according to your settings and applicable law. Learn more in Google’s advertising policies and your Google account ad settings.`
       },
       {
         heading: 'Sharing of data',
