@@ -35,69 +35,90 @@ export const withServerLabels = (sources = []) =>
     label: `Server ${index + 1}`
   }));
 
-export const buildTvEmbedSources = ({ tmdbId, season = 1, episode = 1, episodeUrl = '' }) => {
-  const s = Number(season) || 1;
-  const e = Number(episode) || 1;
-  if (!tmdbId) return [];
-
-  const twoEmbedUrl =
-    getEmbedPlayableUrl(episodeUrl) || buildTvEpisodeUrl(tmdbId, s, e);
-
-  const sources = [
-    { url: twoEmbedUrl },
-    { url: `https://vidsrc.to/embed/tv/${tmdbId}/${s}/${e}` },
-    { url: `https://vidsrc.me/embed/tv/${tmdbId}/${s}/${e}` },
-    { url: `https://embed.su/embed/tv/${tmdbId}/${s}/${e}` },
-    { url: `https://player.autoembed.cc/embed/tv/${tmdbId}/${s}/${e}` }
-  ];
-
+const uniqueLabeledSources = (sources = []) => {
   const seen = new Set();
   return withServerLabels(
     sources.filter((item) => {
-      if (!item.url || seen.has(item.url)) return false;
+      if (!item?.url || seen.has(item.url)) return false;
       seen.add(item.url);
       return true;
     })
   );
 };
 
+/** Extract TMDB / IMDb id from a stored catalog embed URL. */
+export const extractEmbedIds = (url) => {
+  const playable = getEmbedPlayableUrl(url) || url || '';
+  const tmdbMovie = playable.match(/2embed\.[^/]+\/embed\/(\d+)/i)?.[1];
+  const imdbMovie = playable.match(/2embed\.[^/]+\/embed\/(tt\d+)/i)?.[1];
+  const tmdbTv = playable.match(
+    /2embed\.[^/]+\/embedtv\/(\d+)/i
+  )?.[1];
+  return {
+    tmdbId: tmdbMovie || tmdbTv || null,
+    imdbId: imdbMovie || null
+  };
+};
+
+export const buildTvEmbedSources = ({ tmdbId, season = 1, episode = 1, episodeUrl = '' }) => {
+  const s = Number(season) || 1;
+  const e = Number(episode) || 1;
+  if (!tmdbId) return [];
+
+  // VidSrc first (more reliable default). Videasy replaces flaky 2embed as #2.
+  const sources = [
+    { url: `https://vidsrc.to/embed/tv/${tmdbId}/${s}/${e}` },
+    { url: `https://player.videasy.net/tv/${tmdbId}/${s}/${e}` },
+    { url: `https://moviesapi.to/tv/${tmdbId}-${s}-${e}` },
+    { url: `https://vidlink.pro/tv/${tmdbId}/${s}/${e}` },
+    { url: `https://vidsrc.me/embed/tv/${tmdbId}/${s}/${e}` },
+    {
+      url:
+        getEmbedPlayableUrl(episodeUrl) || buildTvEpisodeUrl(tmdbId, s, e)
+    }
+  ];
+
+  return uniqueLabeledSources(sources);
+};
+
 export const buildEmbedSourcesFromUrl = (url) => {
   const primary = getEmbedPlayableUrl(url);
   if (!primary) return [];
 
-  const sources = [{ url: primary }];
   const tvMatch = primary.match(
-    /2embed\.[^/]+\/embedtv\/(\d+)(?:\?s=(\d+)(?:&e=(\d+))?)?/i
+    /2embed\.[^/]+\/embedtv\/(\d+)(?:[?&]s=(\d+)(?:&e=(\d+))?)?/i
   );
 
   if (tvMatch) {
     const id = tvMatch[1];
     const s = tvMatch[2] || '1';
     const e = tvMatch[3] || '1';
-    return buildTvEmbedSources({ tmdbId: id, season: s, episode: e });
+    return buildTvEmbedSources({ tmdbId: id, season: s, episode: e, episodeUrl: primary });
   }
 
   const movieMatch = primary.match(/2embed\.[^/]+\/embed\/(\d+)/i);
   const imdbMovie = primary.match(/2embed\.[^/]+\/embed\/(tt\d+)/i);
+
   if (movieMatch) {
     const id = movieMatch[1];
-    sources.push(
+    // Server 1 = former Server 2 (vidsrc). Server 2 = Videasy (2embed replacement).
+    return uniqueLabeledSources([
       { url: `https://vidsrc.to/embed/movie/${id}` },
+      { url: `https://player.videasy.net/movie/${id}` },
+      { url: `https://moviesapi.to/movie/${id}` },
+      { url: `https://vidlink.pro/movie/${id}` },
       { url: `https://vidsrc.me/embed/movie/${id}` },
-      { url: `https://embed.su/embed/movie/${id}` },
-      { url: `https://player.autoembed.cc/embed/movie/${id}` },
-      { url: `https://vidsrcme.ru/embed/movie/${id}` }
-    );
-  } else if (imdbMovie) {
-    sources.push({ url: `https://vidsrc.to/embed/movie?imdb=${imdbMovie[1]}` });
+      { url: `https://multiembed.mov/?video_id=${id}&tmdb=1` },
+      { url: `https://www.2embed.cc/embed/${id}` }
+    ]);
   }
 
-  const seen = new Set();
-  return withServerLabels(
-    sources.filter((item) => {
-      if (seen.has(item.url)) return false;
-      seen.add(item.url);
-      return true;
-    })
-  );
+  if (imdbMovie) {
+    return uniqueLabeledSources([
+      { url: `https://vidsrc.to/embed/movie?imdb=${imdbMovie[1]}` },
+      { url: `https://www.2embed.cc/embed/${imdbMovie[1]}` }
+    ]);
+  }
+
+  return uniqueLabeledSources([{ url: primary }]);
 };

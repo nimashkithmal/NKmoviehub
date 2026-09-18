@@ -629,7 +629,7 @@ const MoviePlayer = ({ movie, onClose }) => {
               {showEmbedQualityTip && (
                 <div className="movie-player-quality-tip">
                   Use the settings icon inside the video player to change quality
-                  (Auto / 1080p / 720p). If one server says no video, try Server 2–6.
+                  (Auto / 1080p / 720p). If one server says no video, try another.
                   New releases may take a few days to appear on all servers.
                 </div>
               )}
@@ -719,9 +719,8 @@ const MoviePlayer = ({ movie, onClose }) => {
                 className="movie-player-video"
                 src={embedUrl}
                 frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen *"
                 allowFullScreen
-                referrerPolicy="no-referrer"
                 loading="eager"
                 title={movie.title}
                 onLoad={() => {
