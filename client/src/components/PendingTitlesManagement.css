@@ -226,6 +226,53 @@
   grid-column: span 2;
 }
 
+.pending-manual-play {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.pending-manual-play-toggle {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start;
+  gap: 0.55rem !important;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-size: 0.84rem !important;
+}
+
+.pending-manual-play-toggle input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+  accent-color: #e50914;
+}
+
+.pending-manual-play-toggle em {
+  font-style: normal;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.pending-manual-play-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.pending-manual-play-field small {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
 .pending-approval-full {
   grid-column: 1 / -1;
 }

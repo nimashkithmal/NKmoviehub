@@ -36,6 +36,8 @@ const AdminDashboard = () => {
     description: '',
     genre: '',
     movieUrl: '',
+    useManualPlayUrl: false,
+    manualPlayUrl: '',
     imdbRating: 0,
     director: '',
     language: '',
@@ -269,6 +271,8 @@ const AdminDashboard = () => {
       description: movie.description || '',
       genre: movie.genre || '',
       movieUrl: movie.movieUrl || '',
+      useManualPlayUrl: Boolean(String(movie.manualPlayUrl || '').trim()),
+      manualPlayUrl: movie.manualPlayUrl || '',
       imdbRating: movie.imdbRating || 0,
       director: movie.director || '',
       language: movie.language || '',
@@ -305,6 +309,10 @@ const AdminDashboard = () => {
         description: movieFormData.description,
         genre: movieFormData.genre,
         movieUrl: movieFormData.movieUrl,
+        manualPlayUrl:
+          movieFormData.useManualPlayUrl && String(movieFormData.manualPlayUrl || '').trim()
+            ? String(movieFormData.manualPlayUrl).trim()
+            : '',
         director: movieFormData.director,
         language: movieFormData.language,
         budget: movieFormData.budget,
@@ -407,6 +415,8 @@ const AdminDashboard = () => {
           description: '',
           genre: '',
           movieUrl: '',
+          useManualPlayUrl: false,
+          manualPlayUrl: '',
           imdbRating: 0,
           director: '',
           language: '',
@@ -1720,6 +1730,43 @@ const AdminDashboard = () => {
                 onChange={(e) => setMovieFormData({...movieFormData, movieUrl: e.target.value})}
                 placeholder="https://example.com/movie"
               />
+            </div>
+            <div className="form-group">
+              <label className="pending-manual-play-toggle" style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(movieFormData.useManualPlayUrl)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setMovieFormData({
+                      ...movieFormData,
+                      useManualPlayUrl: checked,
+                      manualPlayUrl: checked ? movieFormData.manualPlayUrl : ''
+                    });
+                  }}
+                  style={{ marginTop: '0.2rem' }}
+                />
+                <span>
+                  Use manual play URL{' '}
+                  <span style={{ opacity: 0.65 }}>(optional — only if servers don&apos;t work)</span>
+                </span>
+              </label>
+              {movieFormData.useManualPlayUrl && (
+                <>
+                  <input
+                    type="url"
+                    value={movieFormData.manualPlayUrl || ''}
+                    onChange={(e) =>
+                      setMovieFormData({ ...movieFormData, manualPlayUrl: e.target.value })
+                    }
+                    placeholder="https://www.youtube.com/watch?v=... or direct/embed URL"
+                    style={{ marginTop: '0.5rem' }}
+                  />
+                  <small>
+                    Plays inside the site player. YouTube opens in-player (not a popup).
+                  </small>
+                </>
+              )}
             </div>
             <div className="form-group">
               <label>IMDB Rating (0-10)</label>

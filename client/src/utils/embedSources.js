@@ -122,3 +122,38 @@ export const buildEmbedSourcesFromUrl = (url) => {
 
   return uniqueLabeledSources([{ url: primary }]);
 };
+
+/** Normalize admin manual override URL for in-site iframe (YouTube → embed). */
+export const getManualPlayEmbedUrl = (url) => {
+  const raw = String(url || '').trim();
+  if (!raw) return null;
+
+  const youtubeId =
+    raw.match(/youtube\.com\/watch\?[^#]*v=([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    raw.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    raw.match(/youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
+    null;
+
+  if (youtubeId) {
+    return `https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1`;
+  }
+
+  return getEmbedPlayableUrl(raw) || raw;
+};
+
+/**
+ * Watch sources for a movie. If admin set manualPlayUrl (servers broken),
+ * use only that — otherwise the usual multi-server list from movieUrl.
+ */
+export const buildMovieWatchSources = (movie) => {
+  const manual = getManualPlayEmbedUrl(movie?.manualPlayUrl);
+  if (manual) {
+    return [{ id: 'server-1', label: 'Manual', url: manual }];
+  }
+
+  const sources = buildEmbedSourcesFromUrl(movie?.movieUrl);
+  if (sources.length) return sources;
+
+  const playable = getEmbedPlayableUrl(movie?.movieUrl) || movie?.movieUrl;
+  return playable ? withServerLabels([{ url: playable }]) : [];
+};

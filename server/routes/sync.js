@@ -71,12 +71,15 @@ async function approvePendingTitle(pending, userId, payload = {}) {
       throw new Error('Poster URL is required');
     }
 
+    const manualPlayUrl = String(payload.manualPlayUrl || '').trim().slice(0, 500);
+
     const movie = await Movie.create({
       title,
       year,
       description,
       genre,
       movieUrl,
+      manualPlayUrl,
       imdbRating,
       imageUrl: posterUrl,
       images: [posterUrl],
