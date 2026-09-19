@@ -30,6 +30,8 @@ const buildApprovalForm = (item) => ({
     item.type === 'movie'
       ? `https://www.2embed.cc/embed/${item.tmdbId}`
       : '',
+  useManualPlayUrl: false,
+  manualPlayUrl: '',
   tmdbId: item.tmdbId || ''
 });
 
@@ -224,15 +226,22 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
     if (!approvalForm) return;
     setActionId(id);
     try {
+      const payload = {
+        ...approvalForm,
+        year: parseInt(approvalForm.year, 10),
+        imdbRating: parseFloat(approvalForm.imdbRating) || 0,
+        runtime: approvalForm.runtime === '' ? null : parseInt(approvalForm.runtime, 10),
+        manualPlayUrl:
+          approvalForm.useManualPlayUrl && String(approvalForm.manualPlayUrl || '').trim()
+            ? String(approvalForm.manualPlayUrl).trim()
+            : ''
+      };
+      delete payload.useManualPlayUrl;
+
       const response = await fetch(`${API_URL}/pending/${id}/approve`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({
-          ...approvalForm,
-          year: parseInt(approvalForm.year, 10),
-          imdbRating: parseFloat(approvalForm.imdbRating) || 0,
-          runtime: approvalForm.runtime === '' ? null : parseInt(approvalForm.runtime, 10)
-        })
+        body: JSON.stringify(payload)
       });
       const result = await response.json();
       if (result.success) {
@@ -573,6 +582,44 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
                           onChange={(e) => handleApprovalChange('movieUrl', e.target.value)}
                         />
                       </label>
+                    )}
+                    {item.type === 'movie' && (
+                      <div className="pending-approval-span2 pending-manual-play">
+                        <label className="pending-manual-play-toggle">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(approvalForm.useManualPlayUrl)}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setApprovalForm((prev) => ({
+                                ...prev,
+                                useManualPlayUrl: checked,
+                                manualPlayUrl: checked ? prev.manualPlayUrl : ''
+                              }));
+                            }}
+                          />
+                          <span>
+                            Use manual play URL <em>(optional — only if servers don&apos;t work)</em>
+                          </span>
+                        </label>
+                        {approvalForm.useManualPlayUrl && (
+                          <label className="pending-manual-play-field">
+                            Manual play URL (YouTube / direct)
+                            <input
+                              type="url"
+                              value={approvalForm.manualPlayUrl}
+                              onChange={(e) =>
+                                handleApprovalChange('manualPlayUrl', e.target.value)
+                              }
+                              placeholder="https://www.youtube.com/watch?v=... or embed URL"
+                            />
+                            <small>
+                              Plays inside the site player (YouTube opens in-player, not a popup).
+                              Leave empty to keep normal servers.
+                            </small>
+                          </label>
+                        )}
+                      </div>
                     )}
                     {item.type === 'tvshow' && (
                       <label>

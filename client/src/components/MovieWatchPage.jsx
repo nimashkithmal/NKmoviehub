@@ -3,7 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
 import { trackWatchClick } from '../utils/analytics';
 import { setDetailPageMeta } from '../utils/seo';
-import { buildEmbedSourcesFromUrl, getEmbedPlayableUrl } from '../utils/embedSources';
+import { buildMovieWatchSources } from '../utils/embedSources';
 import { goBackOr } from '../utils/navigation';
 import { readMovieWatchCache, writeMovieWatchCache } from '../utils/movieWatchCache';
 import { useManualSubtitles } from '../hooks/useManualSubtitles';
@@ -20,6 +20,7 @@ const PRECONNECT_HOSTS = [
   'https://player.videasy.net',
   'https://moviesapi.to',
   'https://vidlink.pro',
+  'https://www.youtube.com',
   'https://image.tmdb.org'
 ];
 
@@ -97,12 +98,11 @@ const MovieWatchPage = () => {
   }, [id]);
 
   const embedSources = useMemo(() => {
-    if (!movie?.movieUrl) return [];
-    const sources = buildEmbedSourcesFromUrl(movie.movieUrl);
-    if (sources.length) return sources;
-    const playable = getEmbedPlayableUrl(movie.movieUrl) || movie.movieUrl;
-    return playable ? [{ id: 'server-1', label: 'Server 1', url: playable }] : [];
+    if (!movie) return [];
+    return buildMovieWatchSources(movie);
   }, [movie]);
+
+  const usingManualPlay = Boolean(String(movie?.manualPlayUrl || '').trim());
 
   const activeSource = useMemo(() => {
     if (!embedSources.length) return null;
@@ -280,6 +280,7 @@ const MovieWatchPage = () => {
               className={`tv-watch-iframe${playerLoading ? ' is-loading' : ''}`}
               allowFullScreen
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen *"
+              referrerPolicy="strict-origin-when-cross-origin"
               onLoad={() => setPlayerLoading(false)}
             />
           )}
@@ -319,7 +320,7 @@ const MovieWatchPage = () => {
           </div>
         </article>
 
-        {embedSources.length > 0 && (
+        {embedSources.length > 0 && !usingManualPlay && (
           <div className="tv-watch-server-panel">
             <p className="tv-watch-server-try">Try another server:</p>
             <div className="tv-watch-server-list">

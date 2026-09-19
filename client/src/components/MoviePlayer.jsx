@@ -20,6 +20,20 @@ const getDirectSources = (movie) => {
 const getVideoType = (url) => {
   if (!url) return 'unknown';
 
+  // YouTube first — embed URLs also contain "/embed/"
+  if (
+    url.includes('youtube.com/watch') ||
+    url.includes('youtu.be/') ||
+    url.includes('youtube.com/embed')
+  ) {
+    return 'youtube';
+  }
+
+  // Vimeo
+  if (url.includes('vimeo.com/') || url.includes('player.vimeo.com')) {
+    return 'vimeo';
+  }
+
   // 2Embed / similar iframe embeds
   if (
     url.includes('2embed.') ||
@@ -33,22 +47,6 @@ const getVideoType = (url) => {
   // Google Drive URLs
   if (url.includes('drive.google.com')) {
     return 'googledrive';
-  }
-  
-  // YouTube URLs
-  if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
-    return 'youtube';
-  }
-  if (url.includes('youtube.com/embed')) {
-    return 'youtube';
-  }
-  
-  // Vimeo URLs
-  if (url.includes('vimeo.com/')) {
-    return 'vimeo';
-  }
-  if (url.includes('player.vimeo.com')) {
-    return 'vimeo';
   }
   
   // Direct video file extensions
@@ -93,7 +91,7 @@ const getEmbedPlayableUrl = (url) => {
   return url;
 };
 
-import { buildEmbedSourcesFromUrl } from '../utils/embedSources';
+import { buildEmbedSourcesFromUrl, getManualPlayEmbedUrl } from '../utils/embedSources';
 
 // Helper function to extract Google Drive file ID and convert to playable URL
 const getGoogleDrivePlayableUrl = (url) => {
@@ -181,9 +179,15 @@ const MoviePlayer = ({ movie, onClose }) => {
 
   // Determine video type and prepare embed URL
   useEffect(() => {
-    if (!movie || !movie.movieUrl) return;
-    
-    const type = getVideoType(movie.movieUrl);
+    if (!movie) return;
+
+    const playUrl =
+      getManualPlayEmbedUrl(movie.manualPlayUrl) || movie.movieUrl;
+    if (!playUrl) return;
+
+    const type = getVideoType(
+      String(movie.manualPlayUrl || '').trim() ? playUrl : movie.movieUrl
+    );
     setVideoType(type);
     setHasError(false);
     setErrorMessage('');
@@ -191,7 +195,7 @@ const MoviePlayer = ({ movie, onClose }) => {
     if (type === 'googledrive') {
       setEmbedSources([]);
       setActiveSourceId('');
-      const driveUrls = getGoogleDrivePlayableUrl(movie.movieUrl);
+      const driveUrls = getGoogleDrivePlayableUrl(playUrl);
       if (driveUrls) {
         // Google Drive videos should use iframe embed viewer
         setGoogleDriveUrls(driveUrls);
@@ -203,24 +207,33 @@ const MoviePlayer = ({ movie, onClose }) => {
         setIsLoading(false);
       }
     } else if (type === 'embed') {
-      const sources = buildEmbedSourcesFromUrl(movie.movieUrl);
-      if (sources.length) {
-        setEmbedSources(sources);
-        setActiveSourceId(sources[0].id);
-        setEmbedUrl(sources[0].url);
+      // Manual override: single source only (no multi-server list)
+      if (String(movie.manualPlayUrl || '').trim()) {
+        setEmbedSources([]);
+        setActiveSourceId('');
+        setEmbedUrl(playUrl);
         setIsLoading(false);
         setIsPlaying(true);
       } else {
-        setEmbedSources([]);
-        setActiveSourceId('');
-        setHasError(true);
-        setErrorMessage('Invalid embed URL');
-        setIsLoading(false);
+        const sources = buildEmbedSourcesFromUrl(movie.movieUrl);
+        if (sources.length) {
+          setEmbedSources(sources);
+          setActiveSourceId(sources[0].id);
+          setEmbedUrl(sources[0].url);
+          setIsLoading(false);
+          setIsPlaying(true);
+        } else {
+          setEmbedSources([]);
+          setActiveSourceId('');
+          setHasError(true);
+          setErrorMessage('Invalid embed URL');
+          setIsLoading(false);
+        }
       }
     } else if (type === 'youtube') {
       setEmbedSources([]);
       setActiveSourceId('');
-      const videoId = getYouTubeId(movie.movieUrl);
+      const videoId = getYouTubeId(playUrl);
       if (videoId) {
         setEmbedUrl(`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`);
         setIsLoading(false);
@@ -233,7 +246,7 @@ const MoviePlayer = ({ movie, onClose }) => {
     } else if (type === 'vimeo') {
       setEmbedSources([]);
       setActiveSourceId('');
-      const videoId = getVimeoId(movie.movieUrl);
+      const videoId = getVimeoId(playUrl);
       if (videoId) {
         setEmbedUrl(`https://player.vimeo.com/video/${videoId}?autoplay=1`);
         setIsLoading(false);
@@ -246,10 +259,12 @@ const MoviePlayer = ({ movie, onClose }) => {
     } else if (type === 'direct') {
       setEmbedSources([]);
       setActiveSourceId('');
-      const sources = getDirectSources(movie);
+      const sources = String(movie.manualPlayUrl || '').trim()
+        ? [{ id: 'manual', label: 'Manual', url: playUrl }]
+        : getDirectSources(movie);
       setDirectSources(sources);
       setActiveDirectSourceId(sources[0]?.id || '');
-      setDirectPlayUrl(sources[0]?.url || movie.movieUrl);
+      setDirectPlayUrl(sources[0]?.url || playUrl);
       setHlsQualities([]);
       setActiveHlsLevel(-1);
       setIsLoading(true);
@@ -260,7 +275,7 @@ const MoviePlayer = ({ movie, onClose }) => {
       setErrorMessage('Unsupported video URL format');
       setIsLoading(false);
     }
-  }, [movie?.movieUrl]);
+  }, [movie?.movieUrl, movie?.manualPlayUrl]);
 
   const switchEmbedSource = (source) => {
     if (!source || source.id === activeSourceId) return;
@@ -540,7 +555,7 @@ const MoviePlayer = ({ movie, onClose }) => {
     }
   };
 
-  if (!movie || !movie.movieUrl) {
+  if (!movie || (!movie.movieUrl && !movie.manualPlayUrl)) {
     return null;
   }
 

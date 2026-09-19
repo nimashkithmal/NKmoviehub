@@ -84,6 +84,9 @@ const pickMetaFields = (body = {}) => {
   if (body.releaseStatus !== undefined) meta.releaseStatus = String(body.releaseStatus || '').trim().slice(0, 80);
   if (body.releaseDate !== undefined) meta.releaseDate = String(body.releaseDate || '').trim().slice(0, 40);
   if (body.trailerUrl !== undefined) meta.trailerUrl = normalizeTrailerUrl(body.trailerUrl);
+  if (body.manualPlayUrl !== undefined) {
+    meta.manualPlayUrl = String(body.manualPlayUrl || '').trim().slice(0, 500);
+  }
   if (body.runtime !== undefined && body.runtime !== null && body.runtime !== '') {
     const runtime = parseInt(body.runtime, 10);
     meta.runtime = Number.isFinite(runtime) && runtime >= 0 ? runtime : null;
@@ -632,7 +635,7 @@ router.get('/:id/watch', async (req, res) => {
 
     const movie = await Movie.findById(req.params.id)
       .select(
-        'title year description imageUrl bannerUrl images movieUrl trailerUrl imdbRating genre runtime status language'
+        'title year description imageUrl bannerUrl images movieUrl manualPlayUrl trailerUrl imdbRating genre runtime status language'
       )
       .lean();
 

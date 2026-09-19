@@ -40,6 +40,15 @@ const movieSchema = new mongoose.Schema({
     required: [true, 'Movie URL is required'],
     trim: true
   },
+  /**
+   * Optional override when embed servers (2embed / vidsrc / etc.) do not work
+   * (common for some Sinhala titles). When set, the site player uses this URL only.
+   */
+  manualPlayUrl: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   trailerUrl: {
     type: String,
     trim: true,
