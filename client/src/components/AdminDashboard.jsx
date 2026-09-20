@@ -1747,8 +1747,7 @@ const AdminDashboard = () => {
                   style={{ marginTop: '0.2rem' }}
                 />
                 <span>
-                  Use manual play URL{' '}
-                  <span style={{ opacity: 0.65 }}>(optional — only if servers don&apos;t work)</span>
+                  Use manual play URL <span style={{ opacity: 0.65 }}>(optional)</span>
                 </span>
               </label>
               {movieFormData.useManualPlayUrl && (
@@ -1759,12 +1758,10 @@ const AdminDashboard = () => {
                     onChange={(e) =>
                       setMovieFormData({ ...movieFormData, manualPlayUrl: e.target.value })
                     }
-                    placeholder="https://www.youtube.com/watch?v=... or direct/embed URL"
+                    placeholder="https://www.youtube.com/watch?v=..."
                     style={{ marginTop: '0.5rem' }}
                   />
-                  <small>
-                    Plays inside the site player. YouTube opens in-player (not a popup).
-                  </small>
+                  <small>YouTube link eken daganna.</small>
                 </>
               )}
             </div>

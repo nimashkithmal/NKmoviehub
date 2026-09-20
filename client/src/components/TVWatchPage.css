@@ -245,6 +245,55 @@
   font-weight: 600;
 }
 
+.tv-watch-ublock-promo {
+  margin-top: 0.85rem;
+  padding: 0.9rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(229, 9, 20, 0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(229, 9, 20, 0.14),
+    rgba(255, 255, 255, 0.03)
+  );
+}
+
+.tv-watch-ublock-title {
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.tv-watch-ublock-body {
+  margin: 0 0 0.45rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.tv-watch-ublock-body strong {
+  color: #fff;
+}
+
+.tv-watch-ublock-install {
+  display: inline-flex;
+  align-items: center;
+  margin: 0.35rem 0 0.15rem;
+  padding: 0.55rem 0.95rem;
+  border-radius: 8px;
+  background: #e50914;
+  color: #fff;
+  font-size: 0.84rem;
+  font-weight: 650;
+  text-decoration: none;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.tv-watch-ublock-install:hover {
+  background: #f40612;
+  transform: translateY(-1px);
+}
+
 .manual-sub-overlay {
   position: absolute;
   left: 50%;

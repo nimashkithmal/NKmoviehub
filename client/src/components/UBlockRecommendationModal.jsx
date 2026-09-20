@@ -1,13 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  clearAdblockDetectionState,
-  detectAdBlockingActive
-} from '../utils/detectAdBlocking';
+import { detectAdBlockingActive } from '../utils/detectAdBlocking';
 import './UBlockRecommendationModal.css';
 
-const SESSION_DISMISSED = 'ublockRecommendationSessionDismissed_v5';
-const OPEN_DELAY_MS = 450;
+const SESSION_DISMISSED = 'ublockRecommendationSessionDismissed_v4';
+const OPEN_DELAY_MS = 400;
 const CLOSE_MS = 220;
 
 const UBLOCK_LITE_CHROME =
@@ -36,10 +33,6 @@ const markSessionDismissed = () => {
   } catch {
     /* ignore */
   }
-};
-
-const persistContinueThisVisit = () => {
-  markSessionDismissed();
 };
 
 const ShieldIcon = ({ size = 24 }) => (
@@ -78,25 +71,17 @@ const UBlockRecommendationModal = () => {
     const runId = ++runIdRef.current;
     let openTimer = null;
 
-    // Wipe older buggy caches that permanently hid the modal
-    clearAdblockDetectionState();
-
     const run = async () => {
-      // Only skip if user already closed/continued in THIS tab visit
       if (isSessionDismissed()) return;
 
       let blocking = false;
       try {
         blocking = await detectAdBlockingActive();
       } catch {
-        // On detector errors → show the recommendation
         blocking = false;
       }
 
       if (runId !== runIdRef.current) return;
-
-      // Extension filtering ON → do not show (do NOT permanently dismiss —
-      // a later visit without the extension should still see the modal)
       if (blocking) return;
 
       openTimer = window.setTimeout(() => {
@@ -142,7 +127,7 @@ const UBlockRecommendationModal = () => {
 
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
-        closeModal(persistContinueThisVisit);
+        closeModal(markSessionDismissed);
       }
     };
 
@@ -154,11 +139,11 @@ const UBlockRecommendationModal = () => {
   }, [visible, closeModal]);
 
   const handleContinue = useCallback(() => {
-    closeModal(persistContinueThisVisit);
+    closeModal(markSessionDismissed);
   }, [closeModal]);
 
   const handleInstall = useCallback(() => {
-    closeModal(persistContinueThisVisit);
+    closeModal(markSessionDismissed);
   }, [closeModal]);
 
   if (!visible || typeof document === 'undefined') return null;
@@ -197,35 +182,26 @@ const UBlockRecommendationModal = () => {
             <ShieldIcon size={26} />
           </div>
           <h2 id="ubm-title" className="ubm-title">
-            Enjoy a Cleaner NKMovieHUB Experience
+            🎬 Enjoy Movies Without Ads!
           </h2>
           <p className="ubm-subtitle">
-            For the best experience, we recommend <strong>uBlock Origin Lite</strong>
+            Better viewing experience ekak sandaha <strong>uBlock Origin Lite</strong>{' '}
+            extension eka use karanna.
           </p>
         </header>
 
         <div className="ubm-sections">
-          <section className="ubm-lang" aria-label="English">
-            <span className="ubm-pill">English</span>
+          <section className="ubm-lang" aria-label="Message">
             <p>
-              For the best viewing experience on NKMovieHUB, we recommend using{' '}
-              <strong>uBlock Origin Lite</strong>. It helps reduce unwanted ads
-              for a cleaner, smoother browse &amp; stream.
-            </p>
-            <p>Already installed? Make sure it is enabled for NKMovieHUB.</p>
-          </section>
-
-          <section className="ubm-lang" aria-label="Sinhala">
-            <span className="ubm-pill">සිංහල</span>
-            <p>
-              NKMovieHUB වඩාත් පහසුවෙන් භාවිතා කිරීමට{' '}
-              <strong>uBlock Origin Lite</strong> භාවිතා කිරීම අපි නිර්දේශ
-              කරනවා. එය අනවශ්‍ය දැන්වීම් අඩු කර browsing / streaming එක
-              පහසු කරයි.
+              Unwanted ads adu karala, movies &amp; TV shows comfortable widiyata enjoy
+              karanna පුළුවන්.
             </p>
             <p>
-              දැනටමත් install කර තිබේ නම්, NKMovieHUB සඳහා enable කර ඇති බවට
-              වග බලා ගන්න.
+              <strong>
+                Install uBlock Origin Lite &amp; enjoy your movies with fewer
+                interruptions.
+              </strong>{' '}
+              🍿
             </p>
           </section>
         </div>
@@ -243,13 +219,13 @@ const UBlockRecommendationModal = () => {
             </span>
             <span className="ubm-cta-copy">
               <span className="ubm-cta-label">Install uBlock Origin Lite</span>
-              <span className="ubm-cta-sub">uBlock Origin Lite ස්ථාපනය කරන්න</span>
+              <span className="ubm-cta-sub">Extension eka ethanin install karanna</span>
             </span>
           </a>
 
           <button type="button" className="ubm-skip" onClick={handleContinue}>
-            <span className="ubm-skip-label">Continue Without It</span>
-            <span className="ubm-skip-sub">uBlock Origin Lite නොමැතිව ඉදිරියට යන්න</span>
+            <span className="ubm-skip-label">Continue without it</span>
+            <span className="ubm-skip-sub">Passe install karanna puluwan</span>
           </button>
         </div>
       </div>

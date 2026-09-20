@@ -11,6 +11,7 @@ import {
   ManualSubtitlesControls,
   ManualSubtitlesOverlay
 } from './ManualSubtitles';
+import { getUBlockLiteStoreUrl } from './UBlockRecommendationModal';
 import './TVWatchPage.css';
 import './MovieWatchPage.css';
 
@@ -272,7 +273,7 @@ const MovieWatchPage = () => {
             <div className="tv-watch-player-empty">
               <p>
                 {usingManualPlay
-                  ? 'Manual play URL is not embeddable. Use a YouTube watch/share link or a direct embed URL — not google.com or Drive homepage links.'
+                  ? 'Use a YouTube link.'
                   : 'No playable stream found for this movie.'}
               </p>
             </div>
@@ -342,12 +343,32 @@ const MovieWatchPage = () => {
                 </button>
               ))}
             </div>
-            <p className="tv-watch-server-tip">
-              If a server doesn&apos;t load, try another.{' '}
-              <span className="tv-watch-server-tip-alert">
-                Install uBlock Origin to block ads.
-              </span>
-            </p>
+            <div className="tv-watch-ublock-promo">
+              <p className="tv-watch-ublock-title">🎬 Enjoy Movies Without Ads!</p>
+              <p className="tv-watch-ublock-body">
+                Better viewing experience ekak sandaha <strong>uBlock Origin Lite</strong>{' '}
+                extension eka use karanna. Unwanted ads adu karala, movies &amp; TV shows
+                comfortable widiyata enjoy karanna පුළුවන්.
+              </p>
+              <p className="tv-watch-ublock-body">
+                <strong>
+                  Install uBlock Origin Lite &amp; enjoy your movies with fewer
+                  interruptions.
+                </strong>{' '}
+                🍿
+              </p>
+              <a
+                className="tv-watch-ublock-install"
+                href={getUBlockLiteStoreUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Install uBlock Origin Lite
+              </a>
+              <p className="tv-watch-server-tip">
+                If a server doesn&apos;t load, try another.
+              </p>
+            </div>
           </div>
         )}
       </main>

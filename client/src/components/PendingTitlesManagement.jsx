@@ -599,24 +599,21 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
                             }}
                           />
                           <span>
-                            Use manual play URL <em>(optional — only if servers don&apos;t work)</em>
+                            Use manual play URL <em>(optional)</em>
                           </span>
                         </label>
                         {approvalForm.useManualPlayUrl && (
                           <label className="pending-manual-play-field">
-                            Manual play URL (YouTube / direct)
+                            Manual play URL
                             <input
                               type="url"
                               value={approvalForm.manualPlayUrl}
                               onChange={(e) =>
                                 handleApprovalChange('manualPlayUrl', e.target.value)
                               }
-                              placeholder="https://www.youtube.com/watch?v=... or embed URL"
+                              placeholder="https://www.youtube.com/watch?v=..."
                             />
-                            <small>
-                              Plays inside the site player (YouTube opens in-player, not a popup).
-                              Leave empty to keep normal servers.
-                            </small>
+                            <small>YouTube link eken daganna.</small>
                           </label>
                         )}
                       </div>
