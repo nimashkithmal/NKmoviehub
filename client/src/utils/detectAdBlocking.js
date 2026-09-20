@@ -1,13 +1,22 @@
 /**
- * Detect active ad filtering — tuned for uBlock Origin Lite (MV3).
+ * Ad-filter detection for the uBlock Origin Lite recommendation modal.
  *
- * uBOL default mode blocks network requests (EasyList) but often does NOT
- * apply cosmetic (DOM hide) filters. We primarily use script-tag probes to
- * known ad hosts (onerror = blocked).
+ * GOAL
+ * - uBOL (or similar) ENABLED  → return true  → hide modal
+ * - No extension / disabled    → return false → show modal
+ *
+ * WHY PREVIOUS LOGIC FAILED
+ * - Treating ANY script onerror / fetch failure as "adblock" caused false
+ *   positives (DNS, ISP, firewall, tracking prevention, flaky network).
+ * - Caching active=true + marking the session dismissed locked the modal off
+ *   even when the user had no extension.
+ *
+ * FIX
+ * - Differential probe: ad host fails AND a normal CDN control succeeds.
+ * - Require a clear majority of ad probes to fail (not a single flaky URL).
+ * - If the control also fails → uncertain → return false (SHOW the modal).
+ * - Never treat ambiguity as "blocker is on".
  */
-
-const BAIT_CLASS =
-  'adsbox adads adsbygoogle ad-placement banner_ad textAd text_ad';
 
 const AD_SCRIPT_URLS = [
   'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js',
@@ -15,44 +24,24 @@ const AD_SCRIPT_URLS = [
   'https://securepubads.g.doubleclick.net/tag/js/gpt.js'
 ];
 
-const CACHE_KEY = 'nk_adblock_active_v2';
-const CACHE_MS = 10 * 60 * 1000;
+/** Non-ad CDN script — must stay off EasyList so uBOL does not block it. */
+const CONTROL_SCRIPT_URL =
+  'https://cdn.jsdelivr.net/npm/js-cookie@3.0.5/dist/js.cookie.min.js';
 
-const readCache = () => {
-  try {
-    const raw = sessionStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed.active !== 'boolean') return null;
-    if (Date.now() - Number(parsed.at || 0) > CACHE_MS) return null;
-    return parsed.active;
-  } catch {
-    return null;
-  }
-};
+const BAIT_CLASS =
+  'adsbox adads adsbygoogle ad-placement banner_ad textAd text_ad';
 
-const writeCache = (active) => {
-  try {
-    sessionStorage.setItem(
-      CACHE_KEY,
-      JSON.stringify({ active: Boolean(active), at: Date.now() })
-    );
-  } catch {
-    /* ignore */
-  }
-};
-
-/** Script tag probe — onerror when uBOL / EasyList blocks the host. */
-const probeScriptBlocked = (url) =>
+const probeScript = (url, timeoutMs = 3000) =>
   new Promise((resolve) => {
     if (typeof document === 'undefined') {
-      resolve(false);
+      resolve({ ok: false, reason: 'no-document' });
       return;
     }
 
     const script = document.createElement('script');
     let settled = false;
-    const finish = (blocked) => {
+
+    const finish = (ok) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timer);
@@ -63,15 +52,15 @@ const probeScriptBlocked = (url) =>
       } catch {
         /* ignore */
       }
-      resolve(blocked);
+      resolve({ ok });
     };
 
-    // Slow CDN without a blocker should still load well under 2.5s
-    const timer = window.setTimeout(() => finish(false), 2500);
+    // Timeout ⇒ treat as failure for this URL (not automatically "adblock")
+    const timer = window.setTimeout(() => finish(false), timeoutMs);
     script.src = `${url}${url.includes('?') ? '&' : '?'}nk=${Date.now()}`;
     script.async = true;
-    script.onload = () => finish(false);
-    script.onerror = () => finish(true);
+    script.onload = () => finish(true);
+    script.onerror = () => finish(false);
 
     try {
       (document.head || document.documentElement).appendChild(script);
@@ -80,29 +69,7 @@ const probeScriptBlocked = (url) =>
     }
   });
 
-/** fetch no-cors — extension block usually rejects with Failed to fetch. */
-const probeFetchBlocked = (url) =>
-  new Promise((resolve) => {
-    let settled = false;
-    const finish = (blocked) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timer);
-      resolve(blocked);
-    };
-    const timer = window.setTimeout(() => finish(false), 2500);
-
-    fetch(`${url}${url.includes('?') ? '&' : '?'}nk=${Date.now()}`, {
-      method: 'GET',
-      mode: 'no-cors',
-      cache: 'no-store',
-      credentials: 'omit'
-    })
-      .then(() => finish(false))
-      .catch(() => finish(true));
-  });
-
-const measureBlocked = (el) => {
+const measureHidden = (el) => {
   if (!el || !document.body.contains(el)) return true;
   const style = window.getComputedStyle(el);
   if (style.display === 'none' || style.visibility === 'hidden') return true;
@@ -110,6 +77,7 @@ const measureBlocked = (el) => {
   return false;
 };
 
+/** Cosmetic filter check — only positive when bait dies and control lives. */
 const detectCosmeticBlocking = () =>
   new Promise((resolve) => {
     if (typeof document === 'undefined' || !document.body) {
@@ -119,17 +87,16 @@ const detectCosmeticBlocking = () =>
 
     const bait = document.createElement('div');
     bait.className = BAIT_CLASS;
-    bait.id = 'nk-ad-bait';
     bait.setAttribute('aria-hidden', 'true');
     bait.style.cssText =
-      'width:50px!important;height:50px!important;position:absolute!important;left:-9999px!important;top:-9999px!important;';
+      'width:50px!important;height:50px!important;position:absolute!important;left:-10000px!important;top:-10000px!important;';
     bait.textContent = 'ad';
 
     const control = document.createElement('div');
-    control.id = 'nk-ad-control';
+    control.className = 'nk-ubm-control-probe';
     control.setAttribute('aria-hidden', 'true');
     control.style.cssText =
-      'width:50px!important;height:50px!important;position:absolute!important;left:-9999px!important;top:-9999px!important;';
+      'width:50px!important;height:50px!important;position:absolute!important;left:-10000px!important;top:-10000px!important;';
     control.textContent = 'ok';
 
     try {
@@ -142,10 +109,10 @@ const detectCosmeticBlocking = () =>
 
     window.setTimeout(() => {
       try {
-        const blocking = measureBlocked(bait) && !measureBlocked(control);
+        const positive = measureHidden(bait) && !measureHidden(control);
         bait.remove();
         control.remove();
-        resolve(blocking);
+        resolve(positive);
       } catch {
         try {
           bait.remove();
@@ -155,55 +122,66 @@ const detectCosmeticBlocking = () =>
         }
         resolve(false);
       }
-    }, 200);
+    }, 180);
   });
 
 /**
- * @returns {Promise<boolean>} true when uBlock Origin Lite (or similar) is filtering
+ * @returns {Promise<boolean>}
+ *   true  = filtering clearly active (hide recommendation)
+ *   false = no reliable blocker signal (show recommendation)
  */
 export const detectAdBlockingActive = async () => {
   if (typeof window === 'undefined') return false;
 
-  const cached = readCache();
-  if (cached === true) return true;
-
-  // Primary: script onerror on Google ad hosts (works with uBOL enabled)
-  try {
-    const scriptResults = await Promise.all(
-      AD_SCRIPT_URLS.map((url) => probeScriptBlocked(url))
-    );
-    const blockedScripts = scriptResults.filter(Boolean).length;
-    // At least one ad script blocked ⇒ filtering is active
-    if (blockedScripts >= 1) {
-      writeCache(true);
-      return true;
-    }
-  } catch {
-    /* continue */
+  // 1) Control must load. If it fails, network/CDN is broken — NOT adblock.
+  const control = await probeScript(CONTROL_SCRIPT_URL);
+  if (!control.ok) {
+    return false;
   }
 
-  // Secondary: fetch probe on first host
-  try {
-    const fetchBlocked = await probeFetchBlocked(AD_SCRIPT_URLS[0]);
-    if (fetchBlocked) {
-      writeCache(true);
-      return true;
-    }
-  } catch {
-    /* continue */
+  // 2) Probe known ad hosts. uBOL blocks these; a healthy network does not.
+  const adResults = await Promise.all(
+    AD_SCRIPT_URLS.map((url) => probeScript(url))
+  );
+  const adBlockedCount = adResults.filter((r) => !r.ok).length;
+
+  // Need a clear majority so one flaky URL cannot hide the modal.
+  // 3 probes → require at least 2 failures while control CDN succeeded.
+  if (adBlockedCount >= 2) {
+    return true;
   }
 
-  // Tertiary: cosmetic bait (classic uBO / complete mode)
+  // 3) Cosmetic-only blockers (rare for default uBOL, useful for classic uBO)
   try {
-    const cosmetic = await detectCosmeticBlocking();
-    if (cosmetic) {
-      writeCache(true);
+    if (await detectCosmeticBlocking()) {
       return true;
     }
   } catch {
     /* ignore */
   }
 
-  writeCache(false);
+  // Uncertain or no blocker → show the recommendation
   return false;
+};
+
+/** Clear stale detection / dismiss flags from older buggy builds. */
+export const clearAdblockDetectionState = () => {
+  try {
+    [
+      'nk_adblock_active_v1',
+      'nk_adblock_active_v2',
+      'ublockRecommendationSessionDismissed',
+      'ublockRecommendationSessionDismissed_v2',
+      'ublockRecommendationSessionDismissed_v3',
+      'ublockRecommendationSessionDismissed_v4',
+      'ublockAlreadyUsing',
+      'ublockRecommendationDismissed',
+      'ublockRecommendationDismissedAt'
+    ].forEach((key) => {
+      sessionStorage.removeItem(key);
+      localStorage.removeItem(key);
+    });
+  } catch {
+    /* ignore */
+  }
 };
