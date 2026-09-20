@@ -17,6 +17,7 @@ const {
   fetchPopularTmdbIds,
   fetchTopRatedTmdbIds
 } = require('../utils/tmdb');
+const { normalizePlayableUrl } = require('../utils/playableUrl');
 const {
   promoteReleasedComingSoon,
   sortComingSoon,
@@ -64,17 +65,7 @@ const parseMoneyInput = (value) => {
   return Math.max(0, amount * mult);
 };
 
-const normalizeTrailerUrl = (value) => {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  const id =
-    raw.match(/youtube\.com\/watch\?[^#]*v=([A-Za-z0-9_-]{6,})/i)?.[1] ||
-    raw.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
-    raw.match(/youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
-    null;
-  if (id) return `https://www.youtube.com/embed/${id}`;
-  return raw.slice(0, 500);
-};
+const normalizeTrailerUrl = (value) => normalizePlayableUrl(value, { preferNocookie: true });
 
 const pickMetaFields = (body = {}) => {
   const meta = {};
@@ -85,7 +76,7 @@ const pickMetaFields = (body = {}) => {
   if (body.releaseDate !== undefined) meta.releaseDate = String(body.releaseDate || '').trim().slice(0, 40);
   if (body.trailerUrl !== undefined) meta.trailerUrl = normalizeTrailerUrl(body.trailerUrl);
   if (body.manualPlayUrl !== undefined) {
-    meta.manualPlayUrl = String(body.manualPlayUrl || '').trim().slice(0, 500);
+    meta.manualPlayUrl = normalizePlayableUrl(body.manualPlayUrl, { preferNocookie: true });
   }
   if (body.runtime !== undefined && body.runtime !== null && body.runtime !== '') {
     const runtime = parseInt(body.runtime, 10);

@@ -20,7 +20,7 @@ const PRECONNECT_HOSTS = [
   'https://player.videasy.net',
   'https://moviesapi.to',
   'https://vidlink.pro',
-  'https://www.youtube.com',
+  'https://www.youtube-nocookie.com',
   'https://image.tmdb.org'
 ];
 
@@ -270,7 +270,11 @@ const MovieWatchPage = () => {
 
           {!embedUrl ? (
             <div className="tv-watch-player-empty">
-              <p>No playable stream found for this movie.</p>
+              <p>
+                {usingManualPlay
+                  ? 'Manual play URL is not embeddable. Use a YouTube watch/share link or a direct embed URL — not google.com or Drive homepage links.'
+                  : 'No playable stream found for this movie.'}
+              </p>
             </div>
           ) : (
             <iframe

@@ -13,6 +13,7 @@ const {
   getEmbedSyncStatus,
   fetchEmbedMetadata
 } = require('../utils/embedSyncIndexer');
+const { normalizePlayableUrl } = require('../utils/playableUrl');
 
 const router = express.Router();
 
@@ -71,7 +72,9 @@ async function approvePendingTitle(pending, userId, payload = {}) {
       throw new Error('Poster URL is required');
     }
 
-    const manualPlayUrl = String(payload.manualPlayUrl || '').trim().slice(0, 500);
+    const manualPlayUrl = normalizePlayableUrl(payload.manualPlayUrl || '', {
+      preferNocookie: true
+    });
 
     const movie = await Movie.create({
       title,
@@ -84,7 +87,10 @@ async function approvePendingTitle(pending, userId, payload = {}) {
       imageUrl: posterUrl,
       images: [posterUrl],
       bannerUrl: backdropUrl,
-      trailerUrl: String(payload.trailerUrl ?? pending.trailerUrl ?? '').trim(),
+      trailerUrl: normalizePlayableUrl(
+        String(payload.trailerUrl ?? pending.trailerUrl ?? '').trim(),
+        { preferNocookie: true }
+      ),
       tagline: String(payload.tagline ?? pending.tagline ?? '').trim(),
       director: String(payload.director ?? pending.director ?? '').trim(),
       language: String(payload.language ?? pending.language ?? '').trim(),
