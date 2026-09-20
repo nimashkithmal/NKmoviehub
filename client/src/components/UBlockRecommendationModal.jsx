@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { detectAdBlockingActive } from '../utils/detectAdBlocking';
 import './UBlockRecommendationModal.css';
 
-const SESSION_DISMISSED = 'ublockRecommendationSessionDismissed_v3';
-const OPEN_DELAY_MS = 400;
+const SESSION_DISMISSED = 'ublockRecommendationSessionDismissed_v4';
+const OPEN_DELAY_MS = 500;
 const CLOSE_MS = 220;
 
 const UBLOCK_LITE_CHROME =
@@ -96,7 +96,12 @@ const UBlockRecommendationModal = () => {
       }
 
       if (runId !== runIdRef.current) return;
-      if (blocking) return;
+
+      // uBlock Origin Lite (or similar) is ON → never show this message
+      if (blocking) {
+        markSessionDismissed();
+        return;
+      }
 
       openTimer = window.setTimeout(() => {
         if (runId !== runIdRef.current) return;
