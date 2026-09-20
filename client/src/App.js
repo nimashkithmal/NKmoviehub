@@ -16,7 +16,6 @@ import Collections from './components/Collections';
 import CastCollection from './components/CastCollection';
 import LegalPage, { ContactPage } from './components/LegalPage';
 import ErrorBoundary from './components/ErrorBoundary';
-import UBlockRecommendationModal from './components/UBlockRecommendationModal';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { trackPageView } from './utils/analytics';
 import { updatePageSeo } from './utils/seo';
@@ -100,7 +99,6 @@ const AppShell = () => {
         </Routes>
       </main>
       {!isDetailPage && <Footer />}
-      <UBlockRecommendationModal />
     </div>
   );
 };

@@ -1,13 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  clearAdblockDetectionState,
-  detectAdBlockingActive
-} from '../utils/detectAdBlocking';
+import { detectAdBlockingActive } from '../utils/detectAdBlocking';
 import './UBlockRecommendationModal.css';
 
-const SESSION_DISMISSED = 'ublockRecommendationSessionDismissed_v5';
-const OPEN_DELAY_MS = 450;
+const SESSION_DISMISSED = 'ublockRecommendationSessionDismissed_v3';
+const OPEN_DELAY_MS = 400;
 const CLOSE_MS = 220;
 
 const UBLOCK_LITE_CHROME =
@@ -78,25 +75,27 @@ const UBlockRecommendationModal = () => {
     const runId = ++runIdRef.current;
     let openTimer = null;
 
-    // Wipe older buggy caches that permanently hid the modal
-    clearAdblockDetectionState();
+    try {
+      localStorage.removeItem('ublockAlreadyUsing');
+      localStorage.removeItem('ublockRecommendationDismissedAt');
+      localStorage.removeItem('ublockRecommendationDismissed');
+      sessionStorage.removeItem('ublockRecommendationSessionDismissed');
+      sessionStorage.removeItem('ublockRecommendationSessionDismissed_v2');
+    } catch {
+      /* ignore */
+    }
 
     const run = async () => {
-      // Only skip if user already closed/continued in THIS tab visit
       if (isSessionDismissed()) return;
 
       let blocking = false;
       try {
         blocking = await detectAdBlockingActive();
       } catch {
-        // On detector errors → show the recommendation
         blocking = false;
       }
 
       if (runId !== runIdRef.current) return;
-
-      // Extension filtering ON → do not show (do NOT permanently dismiss —
-      // a later visit without the extension should still see the modal)
       if (blocking) return;
 
       openTimer = window.setTimeout(() => {
@@ -212,7 +211,9 @@ const UBlockRecommendationModal = () => {
               <strong>uBlock Origin Lite</strong>. It helps reduce unwanted ads
               for a cleaner, smoother browse &amp; stream.
             </p>
-            <p>Already installed? Make sure it is enabled for NKMovieHUB.</p>
+            <p>
+              Already installed? Make sure it is enabled for NKMovieHUB.
+            </p>
           </section>
 
           <section className="ubm-lang" aria-label="Sinhala">

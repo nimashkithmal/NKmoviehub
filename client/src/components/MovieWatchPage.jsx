@@ -272,7 +272,7 @@ const MovieWatchPage = () => {
             <div className="tv-watch-player-empty">
               <p>
                 {usingManualPlay
-                  ? 'Manual play URL is not embeddable. Use a YouTube watch/share link or a direct embed URL — not google.com or Drive homepage links.'
+                  ? 'Use a YouTube link.'
                   : 'No playable stream found for this movie.'}
               </p>
             </div>
@@ -345,7 +345,7 @@ const MovieWatchPage = () => {
             <p className="tv-watch-server-tip">
               If a server doesn&apos;t load, try another.{' '}
               <span className="tv-watch-server-tip-alert">
-                Install uBlock Origin to block ads.
+                Extension add karanna one ne — site eka normal use karanna puluwan.
               </span>
             </p>
           </div>
