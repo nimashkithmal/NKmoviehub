@@ -18,6 +18,7 @@ import {
   ManualSubtitlesControls,
   ManualSubtitlesOverlay
 } from './ManualSubtitles';
+import { getUBlockLiteStoreUrl } from './UBlockRecommendationModal';
 import './TVWatchPage.css';
 
 const PLAYER_LOADING_TIMEOUT_MS = 10000;
@@ -397,12 +398,32 @@ const TVWatchPage = () => {
                 </button>
               ))}
             </div>
-            <p className="tv-watch-server-tip">
-              If a server doesn&apos;t load, try another.{' '}
-              <span className="tv-watch-server-tip-alert">
-                Extension add karanna one ne — site eka normal use karanna puluwan.
-              </span>
-            </p>
+            <div className="tv-watch-ublock-promo">
+              <p className="tv-watch-ublock-title">🎬 Enjoy Movies Without Ads!</p>
+              <p className="tv-watch-ublock-body">
+                Better viewing experience ekak sandaha <strong>uBlock Origin Lite</strong>{' '}
+                extension eka use karanna. Unwanted ads adu karala, movies &amp; TV shows
+                comfortable widiyata enjoy karanna පුළුවන්.
+              </p>
+              <p className="tv-watch-ublock-body">
+                <strong>
+                  Install uBlock Origin Lite &amp; enjoy your movies with fewer
+                  interruptions.
+                </strong>{' '}
+                🍿
+              </p>
+              <a
+                className="tv-watch-ublock-install"
+                href={getUBlockLiteStoreUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Install uBlock Origin Lite
+              </a>
+              <p className="tv-watch-server-tip">
+                If a server doesn&apos;t load, try another.
+              </p>
+            </div>
           </div>
         </main>
 

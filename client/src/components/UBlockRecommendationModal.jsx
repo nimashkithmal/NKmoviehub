@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { detectAdBlockingActive } from '../utils/detectAdBlocking';
 import './UBlockRecommendationModal.css';
 
-const SESSION_DISMISSED = 'ublockRecommendationSessionDismissed_v3';
+const SESSION_DISMISSED = 'ublockRecommendationSessionDismissed_v4';
 const OPEN_DELAY_MS = 400;
 const CLOSE_MS = 220;
 
@@ -33,10 +33,6 @@ const markSessionDismissed = () => {
   } catch {
     /* ignore */
   }
-};
-
-const persistContinueThisVisit = () => {
-  markSessionDismissed();
 };
 
 const ShieldIcon = ({ size = 24 }) => (
@@ -74,16 +70,6 @@ const UBlockRecommendationModal = () => {
   useEffect(() => {
     const runId = ++runIdRef.current;
     let openTimer = null;
-
-    try {
-      localStorage.removeItem('ublockAlreadyUsing');
-      localStorage.removeItem('ublockRecommendationDismissedAt');
-      localStorage.removeItem('ublockRecommendationDismissed');
-      sessionStorage.removeItem('ublockRecommendationSessionDismissed');
-      sessionStorage.removeItem('ublockRecommendationSessionDismissed_v2');
-    } catch {
-      /* ignore */
-    }
 
     const run = async () => {
       if (isSessionDismissed()) return;
@@ -141,7 +127,7 @@ const UBlockRecommendationModal = () => {
 
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
-        closeModal(persistContinueThisVisit);
+        closeModal(markSessionDismissed);
       }
     };
 
@@ -153,11 +139,11 @@ const UBlockRecommendationModal = () => {
   }, [visible, closeModal]);
 
   const handleContinue = useCallback(() => {
-    closeModal(persistContinueThisVisit);
+    closeModal(markSessionDismissed);
   }, [closeModal]);
 
   const handleInstall = useCallback(() => {
-    closeModal(persistContinueThisVisit);
+    closeModal(markSessionDismissed);
   }, [closeModal]);
 
   if (!visible || typeof document === 'undefined') return null;
@@ -196,37 +182,26 @@ const UBlockRecommendationModal = () => {
             <ShieldIcon size={26} />
           </div>
           <h2 id="ubm-title" className="ubm-title">
-            Enjoy a Cleaner NKMovieHUB Experience
+            🎬 Enjoy Movies Without Ads!
           </h2>
           <p className="ubm-subtitle">
-            For the best experience, we recommend <strong>uBlock Origin Lite</strong>
+            Better viewing experience ekak sandaha <strong>uBlock Origin Lite</strong>{' '}
+            extension eka use karanna.
           </p>
         </header>
 
         <div className="ubm-sections">
-          <section className="ubm-lang" aria-label="English">
-            <span className="ubm-pill">English</span>
+          <section className="ubm-lang" aria-label="Message">
             <p>
-              For the best viewing experience on NKMovieHUB, we recommend using{' '}
-              <strong>uBlock Origin Lite</strong>. It helps reduce unwanted ads
-              for a cleaner, smoother browse &amp; stream.
+              Unwanted ads adu karala, movies &amp; TV shows comfortable widiyata enjoy
+              karanna පුළුවන්.
             </p>
             <p>
-              Already installed? Make sure it is enabled for NKMovieHUB.
-            </p>
-          </section>
-
-          <section className="ubm-lang" aria-label="Sinhala">
-            <span className="ubm-pill">සිංහල</span>
-            <p>
-              NKMovieHUB වඩාත් පහසුවෙන් භාවිතා කිරීමට{' '}
-              <strong>uBlock Origin Lite</strong> භාවිතා කිරීම අපි නිර්දේශ
-              කරනවා. එය අනවශ්‍ය දැන්වීම් අඩු කර browsing / streaming එක
-              පහසු කරයි.
-            </p>
-            <p>
-              දැනටමත් install කර තිබේ නම්, NKMovieHUB සඳහා enable කර ඇති බවට
-              වග බලා ගන්න.
+              <strong>
+                Install uBlock Origin Lite &amp; enjoy your movies with fewer
+                interruptions.
+              </strong>{' '}
+              🍿
             </p>
           </section>
         </div>
@@ -244,13 +219,13 @@ const UBlockRecommendationModal = () => {
             </span>
             <span className="ubm-cta-copy">
               <span className="ubm-cta-label">Install uBlock Origin Lite</span>
-              <span className="ubm-cta-sub">uBlock Origin Lite ස්ථාපනය කරන්න</span>
+              <span className="ubm-cta-sub">Extension eka ethanin install karanna</span>
             </span>
           </a>
 
           <button type="button" className="ubm-skip" onClick={handleContinue}>
-            <span className="ubm-skip-label">Continue Without It</span>
-            <span className="ubm-skip-sub">uBlock Origin Lite නොමැතිව ඉදිරියට යන්න</span>
+            <span className="ubm-skip-label">Continue without it</span>
+            <span className="ubm-skip-sub">Passe install karanna puluwan</span>
           </button>
         </div>
       </div>
