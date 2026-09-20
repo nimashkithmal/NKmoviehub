@@ -1,0 +1,443 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* Premium uBlock modal — fits viewport with NO internal scroll */
+
+.ubm-overlay,
+.ubm-card,
+.ubm-close,
+.ubm-cta,
+.ubm-skip {
+  --ubm-bg-0: #16161a;
+  --ubm-bg-1: #0f0f12;
+  --ubm-overlay: rgba(8, 8, 10, 0.75);
+  --ubm-border: rgba(255, 255, 255, 0.08);
+  --ubm-border-soft: rgba(255, 255, 255, 0.06);
+  --ubm-inset: rgba(255, 255, 255, 0.05);
+  --ubm-surface: rgba(255, 255, 255, 0.03);
+  --ubm-text: #f5f5f7;
+  --ubm-text-muted: rgba(255, 255, 255, 0.5);
+  --ubm-text-body: rgba(255, 255, 255, 0.65);
+  --ubm-text-strong: rgba(255, 255, 255, 0.9);
+  --ubm-text-faint: rgba(255, 255, 255, 0.4);
+  --ubm-text-dim: rgba(255, 255, 255, 0.3);
+  --ubm-red-1: #ff3b3b;
+  --ubm-red-2: #b8102b;
+  --ubm-red-3: #ff4444;
+  --ubm-red-4: #c81e3a;
+  --ubm-red-soft: rgba(255, 59, 59, 0.15);
+  --ubm-red-text: #ff6b6b;
+  --ubm-radius-card: 20px;
+  --ubm-radius-box: 12px;
+  --ubm-radius-pill: 6px;
+  --ubm-font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+  --ubm-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ubm-z: 20000;
+}
+
+.ubm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ubm-z);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--ubm-overlay);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-family: var(--ubm-font);
+  animation: ubmOverlayIn 200ms ease-out;
+  overflow: hidden;
+}
+
+.ubm-overlay.is-closing {
+  animation: ubmOverlayOut 200ms ease-in forwards;
+}
+
+.ubm-card {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  /* Grow with content — never scroll inside the card */
+  max-height: none;
+  overflow: visible;
+  padding: 20px 20px 16px;
+  border-radius: var(--ubm-radius-card);
+  background: linear-gradient(180deg, var(--ubm-bg-0), var(--ubm-bg-1));
+  border: 1px solid var(--ubm-border);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 0 1px var(--ubm-inset) inset;
+  color: var(--ubm-text);
+  animation: ubmCardIn 250ms var(--ubm-ease);
+}
+
+.ubm-card.is-closing {
+  animation: ubmCardOut 200ms ease-in forwards;
+}
+
+.ubm-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ubm-text-faint);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.ubm-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ubm-text);
+}
+
+.ubm-close:focus-visible {
+  outline: 2px solid var(--ubm-red-3);
+  outline-offset: 2px;
+}
+
+.ubm-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 0 24px;
+}
+
+.ubm-badge {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--ubm-red-1), var(--ubm-red-2));
+  box-shadow:
+    0 8px 24px rgba(184, 16, 43, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+}
+
+.ubm-badge svg {
+  width: 22px;
+  height: 22px;
+}
+
+.ubm-title {
+  margin: 0;
+  max-width: 24ch;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--ubm-text);
+}
+
+.ubm-subtitle {
+  margin: 0;
+  max-width: 36ch;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ubm-text-muted);
+}
+
+.ubm-subtitle strong {
+  color: var(--ubm-text-strong);
+  font-weight: 600;
+}
+
+.ubm-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ubm-lang {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ubm-surface);
+  border: 1px solid var(--ubm-border-soft);
+}
+
+.ubm-pill {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 7px;
+  border-radius: var(--ubm-radius-pill);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ubm-red-text);
+  background: var(--ubm-red-soft);
+}
+
+.ubm-lang p {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--ubm-text-body);
+}
+
+.ubm-lang p:last-child {
+  margin-bottom: 0;
+}
+
+.ubm-lang strong {
+  color: var(--ubm-text-strong);
+  font-weight: 600;
+}
+
+.ubm-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.ubm-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: none;
+  text-decoration: none;
+  color: #fff;
+  background: linear-gradient(135deg, var(--ubm-red-3), var(--ubm-red-4));
+  box-shadow: 0 10px 28px rgba(200, 30, 58, 0.35);
+  cursor: pointer;
+  transition: transform 150ms ease, filter 150ms ease, box-shadow 150ms ease;
+}
+
+.ubm-cta:hover {
+  filter: brightness(1.08);
+  transform: scale(1.02);
+  box-shadow: 0 12px 32px rgba(200, 30, 58, 0.42);
+}
+
+.ubm-cta:active {
+  transform: scale(0.98);
+  filter: brightness(0.98);
+}
+
+.ubm-cta:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.ubm-cta-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0.95;
+}
+
+.ubm-cta-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.ubm-cta-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  text-align: left;
+}
+
+.ubm-cta-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.ubm-cta-sub {
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.ubm-skip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 100%;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 150ms ease;
+}
+
+.ubm-skip-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ubm-text-faint);
+  transition: color 150ms ease;
+}
+
+.ubm-skip-sub {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--ubm-text-dim);
+  transition: color 150ms ease;
+}
+
+.ubm-skip:hover .ubm-skip-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.ubm-skip:hover .ubm-skip-sub {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.ubm-skip:focus-visible {
+  outline: 2px solid var(--ubm-red-3);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+@keyframes ubmOverlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ubmOverlayOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ubmCardIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes ubmCardOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+}
+
+/* Short screens: keep everything visible, still no scroll */
+@media (max-height: 760px) {
+  .ubm-card {
+    padding: 16px 16px 12px;
+  }
+
+  .ubm-badge {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+  }
+
+  .ubm-badge svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .ubm-header {
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .ubm-title {
+    font-size: 16.5px;
+  }
+
+  .ubm-subtitle {
+    font-size: 12px;
+  }
+
+  .ubm-sections {
+    gap: 6px;
+  }
+
+  .ubm-lang {
+    padding: 8px 10px;
+  }
+
+  .ubm-lang p {
+    font-size: 12px;
+    line-height: 1.4;
+    margin-bottom: 3px;
+  }
+
+  .ubm-actions {
+    margin-top: 10px;
+    gap: 6px;
+  }
+
+  .ubm-cta {
+    height: 44px;
+  }
+}
+
+@media (max-width: 540px) {
+  .ubm-overlay {
+    padding: 12px;
+  }
+
+  .ubm-card {
+    max-width: none;
+    width: calc(100vw - 24px);
+    padding: 16px 14px 12px;
+    border-radius: 18px;
+  }
+
+  .ubm-header {
+    padding: 0 20px 0 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ubm-overlay,
+  .ubm-card,
+  .ubm-overlay.is-closing,
+  .ubm-card.is-closing,
+  .ubm-cta,
+  .ubm-close,
+  .ubm-skip {
+    animation: none !important;
+    transition: none !important;
+  }
+}
