@@ -1,5 +1,12 @@
 /** Build multi-server embed URLs for movies and TV (MovieAI-style). */
 
+import {
+  extractYouTubeId,
+  isNonFrameableHostUrl,
+  toYoutubeEmbedUrl,
+  unwrapGoogleRedirect
+} from './trailerUrl';
+
 export const getEmbedPlayableUrl = (url) => {
   if (!url) return null;
 
@@ -125,18 +132,14 @@ export const buildEmbedSourcesFromUrl = (url) => {
 
 /** Normalize admin manual override URL for in-site iframe (YouTube → embed). */
 export const getManualPlayEmbedUrl = (url) => {
-  const raw = String(url || '').trim();
+  const raw = unwrapGoogleRedirect(String(url || '').trim());
   if (!raw) return null;
 
-  const youtubeId =
-    raw.match(/youtube\.com\/watch\?[^#]*v=([A-Za-z0-9_-]{6,})/i)?.[1] ||
-    raw.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
-    raw.match(/youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/i)?.[1] ||
-    null;
+  const youtube = toYoutubeEmbedUrl(raw, { autoplay: true });
+  if (youtube) return youtube;
 
-  if (youtubeId) {
-    return `https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1`;
-  }
+  // Never put google.com / youtube watch pages in an iframe (X-Frame-Options).
+  if (isNonFrameableHostUrl(raw)) return null;
 
   return getEmbedPlayableUrl(raw) || raw;
 };
@@ -146,14 +149,26 @@ export const getManualPlayEmbedUrl = (url) => {
  * use only that — otherwise the usual multi-server list from movieUrl.
  */
 export const buildMovieWatchSources = (movie) => {
-  const manual = getManualPlayEmbedUrl(movie?.manualPlayUrl);
-  if (manual) {
-    return [{ id: 'server-1', label: 'Manual', url: manual }];
+  const manualRaw = String(movie?.manualPlayUrl || '').trim();
+  if (manualRaw) {
+    const manual = getManualPlayEmbedUrl(manualRaw);
+    if (manual && !isNonFrameableHostUrl(manual)) {
+      return [{ id: 'server-1', label: 'Manual', url: manual }];
+    }
+    // Manual URL set but not frameable — surface empty so UI can show an error
+    // instead of loading google.com and throwing X-Frame-Options.
+    return [];
   }
 
   const sources = buildEmbedSourcesFromUrl(movie?.movieUrl);
   if (sources.length) return sources;
 
   const playable = getEmbedPlayableUrl(movie?.movieUrl) || movie?.movieUrl;
-  return playable ? withServerLabels([{ url: playable }]) : [];
+  if (playable && !isNonFrameableHostUrl(playable) && !extractYouTubeId(playable)) {
+    return withServerLabels([{ url: playable }]);
+  }
+  if (playable && extractYouTubeId(playable)) {
+    return [{ id: 'server-1', label: 'Manual', url: toYoutubeEmbedUrl(playable) }];
+  }
+  return [];
 };

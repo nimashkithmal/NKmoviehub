@@ -92,6 +92,7 @@ const getEmbedPlayableUrl = (url) => {
 };
 
 import { buildEmbedSourcesFromUrl, getManualPlayEmbedUrl } from '../utils/embedSources';
+import { toYoutubeEmbedUrl } from '../utils/trailerUrl';
 
 // Helper function to extract Google Drive file ID and convert to playable URL
 const getGoogleDrivePlayableUrl = (url) => {
@@ -139,13 +140,6 @@ const getGoogleDrivePlayableUrl = (url) => {
   }
   
   return null;
-};
-
-// Helper function to extract YouTube video ID
-const getYouTubeId = (url) => {
-  const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[7].length === 11) ? match[7] : null;
 };
 
 // Helper function to extract Vimeo video ID
@@ -233,9 +227,9 @@ const MoviePlayer = ({ movie, onClose }) => {
     } else if (type === 'youtube') {
       setEmbedSources([]);
       setActiveSourceId('');
-      const videoId = getYouTubeId(playUrl);
-      if (videoId) {
-        setEmbedUrl(`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`);
+      const embed = toYoutubeEmbedUrl(playUrl, { autoplay: true });
+      if (embed) {
+        setEmbedUrl(embed);
         setIsLoading(false);
         setIsPlaying(true);
       } else {
