@@ -47,7 +47,8 @@ const AdminDashboard = () => {
     runtime: '',
     releaseDate: '',
     tagline: '',
-    trailerUrl: ''
+    trailerUrl: '',
+    matureContent: false
   });
   const [movieImageFiles, setMovieImageFiles] = useState([]);
   const [movieImagePreviews, setMovieImagePreviews] = useState([]);
@@ -282,7 +283,8 @@ const AdminDashboard = () => {
       runtime: movie.runtime != null ? String(movie.runtime) : '',
       releaseDate: movie.releaseDate || '',
       tagline: movie.tagline || '',
-      trailerUrl: movie.trailerUrl || ''
+      trailerUrl: movie.trailerUrl || '',
+      matureContent: !!movie.matureContent
     });
     // Gallery posters only — never include the detail banner
     const gallery = (movie.images && movie.images.length > 0)
@@ -321,7 +323,8 @@ const AdminDashboard = () => {
         runtime: movieFormData.runtime,
         releaseDate: movieFormData.releaseDate,
         tagline: movieFormData.tagline,
-        trailerUrl: movieFormData.trailerUrl
+        trailerUrl: movieFormData.trailerUrl,
+        matureContent: !!movieFormData.matureContent
       };
       
       // Always include imdbRating in the update
@@ -426,7 +429,8 @@ const AdminDashboard = () => {
           runtime: '',
           releaseDate: '',
           tagline: '',
-          trailerUrl: ''
+          trailerUrl: '',
+          matureContent: false
         });
         setMovieImageFiles([]);
         setMovieImagePreviews([]);
@@ -1883,6 +1887,18 @@ const AdminDashboard = () => {
                 onChange={(e) => setMovieFormData({...movieFormData, tagline: e.target.value})}
                 placeholder="Optional short tagline"
               />
+            </div>
+            <div className="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!!movieFormData.matureContent}
+                  onChange={(e) => setMovieFormData({ ...movieFormData, matureContent: e.target.checked })}
+                  style={{ marginRight: '0.5rem' }}
+                />
+                18+ mature content
+              </label>
+              <small>Shows an 18+ badge and asks viewers to confirm their age. Also set automatically from TMDB certifications.</small>
             </div>
             <div className="form-group">
               <label>Trailer URL (Watch Trailer)</label>

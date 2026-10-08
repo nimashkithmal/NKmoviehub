@@ -6,7 +6,7 @@ const { escapeRegex, parseCatalogSearch, tokenRegex } = require('../utils/catalo
 
 const router = express.Router();
 
-const SUGGEST_FIELDS = 'title year imageUrl status';
+const SUGGEST_FIELDS = 'title year imageUrl status matureContent';
 const MAX_PER_TYPE = 6;
 const MAX_TOTAL = 8;
 

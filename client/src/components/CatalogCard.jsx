@@ -1,5 +1,6 @@
 import React from 'react';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
+import { getDisplayRating } from '../utils/rating';
 
 const getPosterSrc = (item) => {
   if (item.images && item.images.length > 0) return item.images[0];
@@ -7,11 +8,6 @@ const getPosterSrc = (item) => {
   return getMoviePlaceholder(item.title || 'Poster');
 };
 
-const getRating = (item) => {
-  const value = item.imdbRating ?? item.averageRating;
-  if (value == null || Number.isNaN(Number(value))) return null;
-  return Number(value).toFixed(1);
-};
 
 const truncate = (text, max = 90) => {
   if (!text) return '';
@@ -24,7 +20,7 @@ const truncate = (text, max = 90) => {
  * Browse-page poster card: title + year under image, hover reveal for play/rating.
  */
 const CatalogCard = ({ item, kind = 'movie', onClick }) => {
-  const rating = getRating(item);
+  const rating = getDisplayRating(item);
   const blurb = truncate(item.description || item.overview || '');
 
   return (
@@ -42,18 +38,22 @@ const CatalogCard = ({ item, kind = 'movie', onClick }) => {
           onError={(e) => handleImageError(e, item.title)}
         />
 
-        {kind === 'tvshow' && <span className="catalog-card-badge">TV</span>}
-        {item.matureContent && <span className="catalog-card-badge catalog-card-badge-mature">18+</span>}
+        {(kind === 'tvshow' || item.matureContent) && (
+          <span className="catalog-card-badges">
+            {item.matureContent && (
+              <span className="catalog-card-badge catalog-card-badge-mature" title="18+ — adults only">18+</span>
+            )}
+            {kind === 'tvshow' && <span className="catalog-card-badge">TV</span>}
+          </span>
+        )}
 
         <div className="catalog-card-overlay">
-          {rating && (
-            <span className="catalog-card-rating">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 2l2.9 6.9L22 9.2l-5.5 4.8L18.2 22 12 18.3 5.8 22l1.7-8L2 9.2l7.1-.3L12 2z" />
-              </svg>
-              {rating}
-            </span>
-          )}
+          <span className={`catalog-card-rating${rating ? '' : ' catalog-card-rating-na'}`}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2l2.9 6.9L22 9.2l-5.5 4.8L18.2 22 12 18.3 5.8 22l1.7-8L2 9.2l7.1-.3L12 2z" />
+            </svg>
+            {rating || 'N/A'}
+          </span>
 
           {blurb && <p className="catalog-card-blurb">{blurb}</p>}
 

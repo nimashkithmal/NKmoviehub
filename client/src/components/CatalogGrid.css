@@ -73,11 +73,17 @@
   display: block;
 }
 
-.catalog-card-badge {
+.catalog-card-badges {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
   z-index: 2;
+  display: flex;
+  gap: 0.3rem;
+  pointer-events: none;
+}
+
+.catalog-card-badge {
   background: #e50914;
   color: #fff;
   font-size: 0.62rem;
@@ -88,10 +94,10 @@
 }
 
 .catalog-card-badge-mature {
-  top: auto;
-  bottom: 0.5rem;
-  right: 0.5rem;
-  background: #b91c1c;
+  background: rgba(0, 0, 0, 0.78);
+  border: 1px solid #ef4444;
+  color: #fca5a5;
+  letter-spacing: 0.02em;
 }
 
 .catalog-card-overlay {
@@ -130,6 +136,14 @@
   color: #fff;
   font-size: 0.68rem;
   font-weight: 700;
+}
+
+.catalog-card-rating-na {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.catalog-card-rating-na svg {
+  fill: rgba(255, 255, 255, 0.45) !important;
 }
 
 .catalog-card-rating svg {

@@ -25,6 +25,9 @@ const {
   getComingSoonCatalog
 } = require('../utils/comingSoon');
 const { invalidateOnCatalogWrite } = require('../utils/publicCatalogCache');
+
+/** Virtual genre: titles flagged 18+ (admin or TMDB certification). */
+const MATURE_GENRE = '18+';
 const {
   applyPublicCatalogFilter,
   filterPublicItems,
@@ -87,6 +90,7 @@ const pickMetaFields = (body = {}) => {
   }
   if (body.budget !== undefined) meta.budget = parseMoneyInput(body.budget);
   if (body.revenue !== undefined) meta.revenue = parseMoneyInput(body.revenue);
+  if (body.matureContent !== undefined) meta.matureContent = body.matureContent === true || body.matureContent === 'true';
   return meta;
 };
 
@@ -128,7 +132,9 @@ router.get('/', async (req, res) => {
       applyCatalogTextSearch(filter, search);
     }
     
-    if (genre) {
+    if (genre === MATURE_GENRE) {
+      filter.matureContent = true;
+    } else if (genre) {
       const escaped = String(genre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.genre = {
         $regex: `(^|[,|/]\\s*)${escaped}(?=\\s*[,|/]|$)`,
@@ -213,7 +219,7 @@ router.get('/', async (req, res) => {
       const tmdbTopIds = await fetchTopRatedTmdbIds({ pages: 3, limit: 80, language: 'en-US' });
       const candidates = await Movie.find(filter)
         .select(
-          '_id title year imdbRating averageRating totalRatings genre imageUrl images releaseDate status policyRestricted movieUrl'
+          '_id title year imdbRating averageRating totalRatings genre imageUrl images releaseDate status policyRestricted movieUrl matureContent'
         )
         .lean();
       const publicDocs = candidates.filter((doc) => isPubliclyAccessible(doc));
@@ -232,7 +238,7 @@ router.get('/', async (req, res) => {
         const ratedFilter = buildTopRatedMongoFilter(filter);
         const ratedCandidates = await Movie.find(ratedFilter)
           .select(
-            '_id title year imdbRating averageRating totalRatings genre imageUrl images releaseDate status policyRestricted movieUrl'
+            '_id title year imdbRating averageRating totalRatings genre imageUrl images releaseDate status policyRestricted movieUrl matureContent'
           )
           .lean();
         orderedIds = rankTopRatedDocs(filterPublicItems(ratedCandidates)).map(
@@ -388,6 +394,7 @@ router.get('/filters', async (req, res) => {
         });
     }
     const genres = Array.from(genreSet).sort((a, b) => a.localeCompare(b));
+    if (await Movie.exists(applyPublicCatalogFilter({ status: 'active', matureContent: true }))) genres.push(MATURE_GENRE);
     
     // Get unique years, sorted descending
     const years = await Movie.distinct('year', applyPublicCatalogFilter({ status: 'active' }));
@@ -629,7 +636,7 @@ router.get('/:id/watch', async (req, res) => {
 
     const movie = await Movie.findById(req.params.id)
       .select(
-        'title year description imageUrl bannerUrl images movieUrl manualPlayUrl trailerUrl imdbRating genre runtime status language'
+        'title year description imageUrl bannerUrl images movieUrl manualPlayUrl trailerUrl imdbRating genre runtime status language matureContent'
       )
       .lean();
 

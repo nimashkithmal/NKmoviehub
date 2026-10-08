@@ -22,6 +22,7 @@ const AddMovie = () => {
     releaseDate: '',
     tagline: '',
     trailerUrl: '',
+    matureContent: false,
     imageFiles: []
   });
   const [imagePreviews, setImagePreviews] = useState([]);
@@ -185,6 +186,7 @@ const AddMovie = () => {
         releaseDate: formData.releaseDate,
         tagline: formData.tagline,
         trailerUrl: formData.trailerUrl,
+        matureContent: formData.matureContent,
         imageFiles: base64Images // Send array of base64 images
       };
       
@@ -529,6 +531,20 @@ const AddMovie = () => {
               placeholder="Optional short tagline"
               maxLength="300"
             />
+          </div>
+
+          <div className="form-group">
+            <label>
+              <input
+                type="checkbox"
+                name="matureContent"
+                checked={formData.matureContent}
+                onChange={(e) => setFormData((prev) => ({ ...prev, matureContent: e.target.checked }))}
+                style={{ marginRight: '0.5rem' }}
+              />
+              18+ mature content
+            </label>
+            <small>Leave unchecked to let TMDB certifications decide automatically.</small>
           </div>
 
           <div className="form-group">

@@ -604,6 +604,23 @@
   pointer-events: none;
 }
 
+.poster-card-mature {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 2;
+  padding: 0.18rem 0.42rem;
+  border-radius: 0.25rem;
+  border: 1px solid #ef4444;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fca5a5;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
 .poster-card-overlay {
   position: absolute;
   inset: 0;
@@ -634,6 +651,14 @@
   color: #fff;
   font-size: 0.65rem;
   font-weight: 700;
+}
+
+.poster-card-rating-na {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.poster-card-rating-na svg {
+  fill: rgba(255, 255, 255, 0.45) !important;
 }
 
 .poster-card-rating svg {

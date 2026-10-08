@@ -12,6 +12,7 @@ import {
   ManualSubtitlesOverlay
 } from './ManualSubtitles';
 import { getUBlockLiteStoreUrl } from './UBlockRecommendationModal';
+import AgeGate from './AgeGate';
 import './TVWatchPage.css';
 import './MovieWatchPage.css';
 
@@ -216,163 +217,165 @@ const MovieWatchPage = () => {
     movie.imageUrl || movie.images?.[0] || getMoviePlaceholder(movie.title);
   const ratingValue = Number(movie.imdbRating) || 0;
   return (
-    <div className="tv-watch-page movie-watch-page">
-      <header className="tv-watch-topbar">
-        <button type="button" className="tv-watch-back-btn" onClick={handleBack}>
-          ← Back
-        </button>
-
-        <div className="tv-watch-topbar-center">
-          <h1>{movie.title}</h1>
-          <p>
-            {movie.year || ''}
-            {movie.genre ? ` · ${movie.genre}` : ''}
-          </p>
-        </div>
-
-        <div className="tv-watch-topbar-right">
-          {embedSources.length > 1 && (
-            <label className="tv-watch-server-select">
-              <span>Server:</span>
-              <select
-                value={activeSourceId}
-                onChange={(e) => {
-                  const source = embedSources.find((s) => s.id === e.target.value);
-                  if (source) switchSource(source);
-                }}
-              >
-                {embedSources.map((source) => (
-                  <option key={source.id} value={source.id}>
-                    {source.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <button
-            type="button"
-            className="tv-watch-refresh-btn"
-            onClick={reloadPlayer}
-            aria-label="Reload player"
-          >
-            ↻
+    <AgeGate active={Boolean(movie.matureContent)} titleId={movie._id}>
+      <div className="tv-watch-page movie-watch-page">
+        <header className="tv-watch-topbar">
+          <button type="button" className="tv-watch-back-btn" onClick={handleBack}>
+            ← Back
           </button>
-        </div>
-      </header>
 
-      <main className="movie-watch-main">
-        <div className="tv-watch-player-shell">
-          {playerLoading && embedUrl && (
-            <div className="tv-watch-player-loading">
-              <div className="loading-spinner" />
-              <p>Loading player…</p>
-            </div>
-          )}
-
-          {!embedUrl ? (
-            <div className="tv-watch-player-empty">
-              <p>
-                {usingManualPlay
-                  ? 'Use a YouTube link.'
-                  : 'No playable stream found for this movie.'}
-              </p>
-            </div>
-          ) : (
-            <iframe
-              key={`${activeSourceId}-${reloadToken}`}
-              title={`${movie.title} player`}
-              src={embedUrl}
-              className={`tv-watch-iframe${playerLoading ? ' is-loading' : ''}`}
-              allowFullScreen
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen *"
-              referrerPolicy="strict-origin-when-cross-origin"
-              onLoad={() => setPlayerLoading(false)}
-            />
-          )}
-          <ManualSubtitlesOverlay subtitles={subtitles} />
-        </div>
-
-        <ManualSubtitlesControls subtitles={subtitles} />
-
-        <div className="tv-watch-show-bar">
-          <div>
-            <h2>{movie.title}</h2>
+          <div className="tv-watch-topbar-center">
+            <h1>{movie.title}</h1>
             <p>
               {movie.year || ''}
-              {ratingValue > 0 && (
-                <>
-                  {' '}
-                  · ★ {ratingValue.toFixed(1)}
-                </>
-              )}
-              {movie.runtime ? ` · ${movie.runtime} min` : ''}
+              {movie.genre ? ` · ${movie.genre}` : ''}
             </p>
           </div>
-          <button type="button" className="tv-watch-details-btn" onClick={handleBack}>
-            View Details
-          </button>
-        </div>
 
-        <article className="tv-watch-episode-card movie-watch-info-card">
-          <img
-            src={posterSrc}
-            alt=""
-            onError={(e) => handleImageError(e, movie.title)}
-          />
-          <div>
-            <h3>{movie.title}</h3>
-            <p>{movie.description}</p>
-          </div>
-        </article>
-
-        {embedSources.length > 0 && !usingManualPlay && (
-          <div className="tv-watch-server-panel">
-            <p className="tv-watch-server-try">Try another server:</p>
-            <div className="tv-watch-server-list">
-              {embedSources.map((source) => (
-                <button
-                  key={source.id}
-                  type="button"
-                  className={`tv-watch-server-btn${
-                    activeSourceId === source.id ? ' is-active' : ''
-                  }`}
-                  onClick={() => switchSource(source)}
+          <div className="tv-watch-topbar-right">
+            {embedSources.length > 1 && (
+              <label className="tv-watch-server-select">
+                <span>Server:</span>
+                <select
+                  value={activeSourceId}
+                  onChange={(e) => {
+                    const source = embedSources.find((s) => s.id === e.target.value);
+                    if (source) switchSource(source);
+                  }}
                 >
-                  {activeSourceId === source.id ? '★ ' : ''}
-                  {source.label}
-                </button>
-              ))}
-            </div>
-            <div className="tv-watch-ublock-promo">
-              <p className="tv-watch-ublock-title">🎬 Enjoy Movies Without Ads!</p>
-              <p className="tv-watch-ublock-body">
-                Better viewing experience ekak sandaha <strong>uBlock Origin Lite</strong>{' '}
-                extension eka use karanna. Unwanted ads adu karala, movies &amp; TV shows
-                comfortable widiyata enjoy karanna පුළුවන්.
-              </p>
-              <p className="tv-watch-ublock-body">
-                <strong>
-                  Install uBlock Origin Lite &amp; enjoy your movies with fewer
-                  interruptions.
-                </strong>{' '}
-                🍿
-              </p>
-              <a
-                className="tv-watch-ublock-install"
-                href={getUBlockLiteStoreUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Install uBlock Origin Lite
-              </a>
-              <p className="tv-watch-server-tip">
-                If a server doesn&apos;t load, try another.
-              </p>
-            </div>
+                  {embedSources.map((source) => (
+                    <option key={source.id} value={source.id}>
+                      {source.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button
+              type="button"
+              className="tv-watch-refresh-btn"
+              onClick={reloadPlayer}
+              aria-label="Reload player"
+            >
+              ↻
+            </button>
           </div>
-        )}
-      </main>
-    </div>
+        </header>
+
+        <main className="movie-watch-main">
+          <div className="tv-watch-player-shell">
+            {playerLoading && embedUrl && (
+              <div className="tv-watch-player-loading">
+                <div className="loading-spinner" />
+                <p>Loading player…</p>
+              </div>
+            )}
+
+            {!embedUrl ? (
+              <div className="tv-watch-player-empty">
+                <p>
+                  {usingManualPlay
+                    ? 'Use a YouTube link.'
+                    : 'No playable stream found for this movie.'}
+                </p>
+              </div>
+            ) : (
+              <iframe
+                key={`${activeSourceId}-${reloadToken}`}
+                title={`${movie.title} player`}
+                src={embedUrl}
+                className={`tv-watch-iframe${playerLoading ? ' is-loading' : ''}`}
+                allowFullScreen
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen *"
+                referrerPolicy="strict-origin-when-cross-origin"
+                onLoad={() => setPlayerLoading(false)}
+              />
+            )}
+            <ManualSubtitlesOverlay subtitles={subtitles} />
+          </div>
+
+          <ManualSubtitlesControls subtitles={subtitles} />
+
+          <div className="tv-watch-show-bar">
+            <div>
+              <h2>{movie.title}</h2>
+              <p>
+                {movie.year || ''}
+                {ratingValue > 0 && (
+                  <>
+                    {' '}
+                    · ★ {ratingValue.toFixed(1)}
+                  </>
+                )}
+                {movie.runtime ? ` · ${movie.runtime} min` : ''}
+              </p>
+            </div>
+            <button type="button" className="tv-watch-details-btn" onClick={handleBack}>
+              View Details
+            </button>
+          </div>
+
+          <article className="tv-watch-episode-card movie-watch-info-card">
+            <img
+              src={posterSrc}
+              alt=""
+              onError={(e) => handleImageError(e, movie.title)}
+            />
+            <div>
+              <h3>{movie.title}</h3>
+              <p>{movie.description}</p>
+            </div>
+          </article>
+
+          {embedSources.length > 0 && !usingManualPlay && (
+            <div className="tv-watch-server-panel">
+              <p className="tv-watch-server-try">Try another server:</p>
+              <div className="tv-watch-server-list">
+                {embedSources.map((source) => (
+                  <button
+                    key={source.id}
+                    type="button"
+                    className={`tv-watch-server-btn${
+                      activeSourceId === source.id ? ' is-active' : ''
+                    }`}
+                    onClick={() => switchSource(source)}
+                  >
+                    {activeSourceId === source.id ? '★ ' : ''}
+                    {source.label}
+                  </button>
+                ))}
+              </div>
+              <div className="tv-watch-ublock-promo">
+                <p className="tv-watch-ublock-title">🎬 Enjoy Movies Without Ads!</p>
+                <p className="tv-watch-ublock-body">
+                  Better viewing experience ekak sandaha <strong>uBlock Origin Lite</strong>{' '}
+                  extension eka use karanna. Unwanted ads adu karala, movies &amp; TV shows
+                  comfortable widiyata enjoy karanna පුළුවන්.
+                </p>
+                <p className="tv-watch-ublock-body">
+                  <strong>
+                    Install uBlock Origin Lite &amp; enjoy your movies with fewer
+                    interruptions.
+                  </strong>{' '}
+                  🍿
+                </p>
+                <a
+                  className="tv-watch-ublock-install"
+                  href={getUBlockLiteStoreUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Install uBlock Origin Lite
+                </a>
+                <p className="tv-watch-server-tip">
+                  If a server doesn&apos;t load, try another.
+                </p>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    </AgeGate>
   );
 };
 

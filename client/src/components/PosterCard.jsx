@@ -1,5 +1,6 @@
 import React from 'react';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
+import { getDisplayRating } from '../utils/rating';
 
 const getPosterSrc = (item) => {
   if (item.images && item.images.length > 0) return item.images[0];
@@ -7,19 +8,12 @@ const getPosterSrc = (item) => {
   return getMoviePlaceholder(item.title || 'Poster');
 };
 
-const getRating = (item) => {
-  const value = item.imdbRating ?? item.averageRating;
-  if (value == null || Number.isNaN(Number(value))) return null;
-  return Number(value).toFixed(1);
-};
 
 /**
  * Compact Netflix/MovieAI-style poster used inside horizontal rows.
  */
 const PosterCard = ({ item, onClick, badge }) => {
-  const rating = getRating(item);
-  const matureBadge = item.matureContent ? '18+' : null;
-  const displayBadge = badge || matureBadge;
+  const rating = getDisplayRating(item);
 
   return (
     <button
@@ -35,20 +29,21 @@ const PosterCard = ({ item, onClick, badge }) => {
           loading="lazy"
           onError={(e) => handleImageError(e, item.title)}
         />
-        {displayBadge && <span className="poster-card-badge">{displayBadge}</span>}
+        {badge && <span className="poster-card-badge">{badge}</span>}
+        {item.matureContent && (
+          <span className="poster-card-mature" title="18+ — adults only">18+</span>
+        )}
         <div className="poster-card-overlay">
-          {rating && (
-            <span className="poster-card-rating">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 2l2.9 6.9L22 9.2l-5.5 4.8L18.2 22 12 18.3 5.8 22l1.7-8L2 9.2l7.1-.3L12 2z" />
-              </svg>
-              {rating}
-            </span>
-          )}
+          <span className={`poster-card-rating${rating ? '' : ' poster-card-rating-na'}`}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2l2.9 6.9L22 9.2l-5.5 4.8L18.2 22 12 18.3 5.8 22l1.7-8L2 9.2l7.1-.3L12 2z" />
+            </svg>
+            {rating || 'N/A'}
+          </span>
           <div className="poster-card-actions">
             <span className="poster-card-play">
-              {displayBadge ? (
-                displayBadge
+              {badge ? (
+                badge
               ) : (
                 <>
                   <svg viewBox="0 0 24 24" aria-hidden="true">
