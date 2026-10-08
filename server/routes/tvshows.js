@@ -19,6 +19,9 @@ const {
   getComingSoonCatalog
 } = require('../utils/comingSoon');
 const { invalidateOnCatalogWrite } = require('../utils/publicCatalogCache');
+
+/** Virtual genre: titles flagged 18+ (admin or TMDB certification). */
+const MATURE_GENRE = '18+';
 const {
   applyPublicCatalogFilter,
   filterPublicItems,
@@ -140,7 +143,9 @@ router.get('/', async (req, res) => {
       applyCatalogTextSearch(filter, search);
     }
     
-    if (genre) {
+    if (genre === MATURE_GENRE) {
+      filter.matureContent = true;
+    } else if (genre) {
       const escaped = String(genre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.genre = {
         $regex: `(^|[,|/]\\s*)${escaped}(?=\\s*[,|/]|$)`,
@@ -330,6 +335,7 @@ router.get('/filters', async (req, res) => {
         });
     }
     const genres = Array.from(genreSet).sort((a, b) => a.localeCompare(b));
+    if (await TVShow.exists({ status: 'active', matureContent: true })) genres.push(MATURE_GENRE);
     
     // Get unique years, sorted descending
     const years = await TVShow.distinct('year', { status: 'active' });
@@ -396,7 +402,7 @@ router.get('/:id/watch', async (req, res) => {
 
     const tvShow = await TVShow.findById(req.params.id)
       .select(
-        'title year description imageUrl bannerUrl images showUrl tmdbId imdbRating numberOfSeasons episodeCount status episodes'
+        'title year description imageUrl bannerUrl images showUrl tmdbId imdbRating numberOfSeasons episodeCount status episodes matureContent'
       )
       .lean();
 

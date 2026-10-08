@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { ageClassificationPlugin } = require('../utils/ageClassification');
 
 const tvShowSchema = new mongoose.Schema({
   title: {
@@ -183,6 +184,18 @@ const tvShowSchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: ''
+  },
+  /** e.g. "US:TV-MA" — the TMDB content rating used for the 18+ decision */
+  ageCertification: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  /** When the show was last checked against TMDB (null = pending) */
+  ageCheckedAt: {
+    type: Date,
+    default: null,
+    index: true
   }
 }, {
   timestamps: true
@@ -254,6 +267,8 @@ tvShowSchema.methods.getUserRating = async function(userId) {
   const rating = await Rating.findOne({ user: userId, tvShow: this._id });
   return rating ? rating.rating : null;
 };
+
+tvShowSchema.plugin(ageClassificationPlugin, { kind: 'tv' });
 
 module.exports = mongoose.model('TVShow', tvShowSchema);
 

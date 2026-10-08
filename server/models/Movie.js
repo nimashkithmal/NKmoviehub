@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { ageClassificationPlugin } = require('../utils/ageClassification');
 
 const movieSchema = new mongoose.Schema({
   title: {
@@ -145,6 +146,29 @@ const movieSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
     index: true
+  },
+  /** 18+ — set by admin or auto from TMDB certifications (utils/ageClassification) */
+  matureContent: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  tmdbId: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  /** e.g. "US:NC-17" — the TMDB certification used for the 18+ decision */
+  ageCertification: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  /** When the title was last checked against TMDB (null = pending) */
+  ageCheckedAt: {
+    type: Date,
+    default: null,
+    index: true
   }
 }, {
   timestamps: true
@@ -217,4 +241,6 @@ movieSchema.methods.getUserRating = async function(userId) {
   return rating ? rating.rating : null;
 };
 
-module.exports = mongoose.model('Movie', movieSchema); 
+movieSchema.plugin(ageClassificationPlugin, { kind: 'movie' });
+
+module.exports = mongoose.model('Movie', movieSchema);

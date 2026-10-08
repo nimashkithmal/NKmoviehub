@@ -55,6 +55,7 @@ const castRoutes = require('./routes/cast');
 const syncRoutes = require('./routes/sync');
 const { startCastIndexer } = require('./utils/castIndexer');
 const { startEmbedSyncIndexer } = require('./utils/embedSyncIndexer');
+const { startAgeClassificationIndexer } = require('./utils/ageClassification');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -74,6 +75,7 @@ mongoose.connect(process.env.MONGODB_URI, {
   console.log(`📊 Database: ${process.env.MONGODB_URI}`);
   startCastIndexer();
   startEmbedSyncIndexer();
+  startAgeClassificationIndexer();
 })
 .catch((err) => {
   console.error('❌ MongoDB connection error:', err);

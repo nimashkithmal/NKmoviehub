@@ -6,6 +6,7 @@ import { setDetailPageMeta } from '../utils/seo';
 import { toTrailerEmbedUrl } from '../utils/trailerUrl';
 import { getTvShowTmdbId } from '../utils/tvEpisodes';
 import { goBackOr, withReturnPath } from '../utils/navigation';
+import AgeGate from './AgeGate';
 import './MovieDetail.css';
 
 const formatDate = (value) => {
@@ -196,177 +197,179 @@ const TVShowDetail = () => {
   };
 
   return (
-    <>
-      {showTrailer && trailerUrl && (
-        <div className="md-trailer-overlay" onClick={() => setShowTrailer(false)}>
-          <div className="md-trailer-modal" onClick={(e) => e.stopPropagation()}>
+    <AgeGate active={Boolean(tvShow.matureContent)}>
+      <>
+        {showTrailer && trailerUrl && (
+          <div className="md-trailer-overlay" onClick={() => setShowTrailer(false)}>
+            <div className="md-trailer-modal" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                className="md-trailer-close"
+                onClick={() => setShowTrailer(false)}
+                aria-label="Close trailer"
+              >
+                ×
+              </button>
+              <iframe
+                title={`${tvShow.title} trailer`}
+                src={toTrailerEmbedUrl(trailerUrl)}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="md-page">
+          <section className="md-hero" aria-hidden="true">
+            <img className="md-hero-img" src={backdropSrc} alt="" />
+            <div className="md-hero-fade" />
+          </section>
+
+          <header className="md-topbar">
             <button
               type="button"
-              className="md-trailer-close"
-              onClick={() => setShowTrailer(false)}
-              aria-label="Close trailer"
+              className="md-icon-btn"
+              onClick={handleBack}
+              aria-label="Go back"
             >
-              ×
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+              </svg>
             </button>
-            <iframe
-              title={`${tvShow.title} trailer`}
-              src={toTrailerEmbedUrl(trailerUrl)}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-        </div>
-      )}
 
-      <div className="md-page">
-        <section className="md-hero" aria-hidden="true">
-          <img className="md-hero-img" src={backdropSrc} alt="" />
-          <div className="md-hero-fade" />
-        </section>
+            <Link to="/" className="md-brand" aria-label="NK Movie Hub home">
+              NK Movie Hub
+            </Link>
 
-        <header className="md-topbar">
-          <button
-            type="button"
-            className="md-icon-btn"
-            onClick={handleBack}
-            aria-label="Go back"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-            </svg>
-          </button>
+            <div className="md-topbar-actions" />
+          </header>
 
-          <Link to="/" className="md-brand" aria-label="NK Movie Hub home">
-            NK Movie Hub
-          </Link>
-
-          <div className="md-topbar-actions" />
-        </header>
-
-        <section className="md-body">
-          <div className="md-body-inner">
-            <div className="md-poster-col">
-              <div className="md-poster md-poster-tv">
-                <span className="md-poster-badge">TV SHOW</span>
-                <img
-                  src={posterSrc}
-                  alt={tvShow.title}
-                  onError={(e) => handleImageError(e, tvShow.title)}
-                />
-              </div>
-            </div>
-
-            <div className="md-copy">
-              <h1 className="md-title">
-                {tvShow.title}
-                {tvShow.matureContent && (
-                  <span className="mature-badge" title="Mature content — 18+">18+</span>
-                )}
-              </h1>
-              {tagline && <p className="md-tagline">{tagline}</p>}
-
-              <div className="md-meta-row">
-                {ratingValue > 0 && (
-                  <span className="md-meta-item">
-                    <svg className="md-meta-star" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 2l2.9 6.9L22 9.2l-5.5 4.8L18.2 22 12 18.3 5.8 22l1.7-8L2 9.2l7.1-.3L12 2z" />
-                    </svg>
-                    {Number(ratingValue).toFixed(1)}
-                    {tvShow.totalRatings > 0 ? ` (${tvShow.totalRatings.toLocaleString()})` : ''}
-                  </span>
-                )}
-                {releaseLabel && (
-                  <span className="md-meta-item">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
-                    </svg>
-                    {releaseLabel}
-                  </span>
-                )}
-              </div>
-
-              {metaPills.length > 0 && (
-                <div className="md-genres">
-                  {metaPills.map((pill) => (
-                    <span key={pill} className="md-genre-pill">
-                      {pill}
-                    </span>
-                  ))}
+          <section className="md-body">
+            <div className="md-body-inner">
+              <div className="md-poster-col">
+                <div className="md-poster md-poster-tv">
+                  <span className="md-poster-badge">TV SHOW</span>
+                  <img
+                    src={posterSrc}
+                    alt={tvShow.title}
+                    onError={(e) => handleImageError(e, tvShow.title)}
+                  />
                 </div>
-              )}
+              </div>
 
-              <div className="md-actions">
-                {tvShow.status === 'coming_soon' ? (
-                  <button type="button" className="md-btn md-btn-coming-soon" disabled>
-                    Coming Soon
-                  </button>
-                ) : (
-                  canWatch && (
-                    <button type="button" className="md-btn md-btn-primary" onClick={handleWatchNow}>
+              <div className="md-copy">
+                <h1 className="md-title">
+                  {tvShow.title}
+                  {tvShow.matureContent && (
+                    <span className="mature-badge" title="Mature content — 18+">18+</span>
+                  )}
+                </h1>
+                {tagline && <p className="md-tagline">{tagline}</p>}
+
+                <div className="md-meta-row">
+                  {ratingValue > 0 && (
+                    <span className="md-meta-item">
+                      <svg className="md-meta-star" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 2l2.9 6.9L22 9.2l-5.5 4.8L18.2 22 12 18.3 5.8 22l1.7-8L2 9.2l7.1-.3L12 2z" />
+                      </svg>
+                      {Number(ratingValue).toFixed(1)}
+                      {tvShow.totalRatings > 0 ? ` (${tvShow.totalRatings.toLocaleString()})` : ''}
+                    </span>
+                  )}
+                  {releaseLabel && (
+                    <span className="md-meta-item">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
+                      </svg>
+                      {releaseLabel}
+                    </span>
+                  )}
+                </div>
+
+                {metaPills.length > 0 && (
+                  <div className="md-genres">
+                    {metaPills.map((pill) => (
+                      <span key={pill} className="md-genre-pill">
+                        {pill}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="md-actions">
+                  {tvShow.status === 'coming_soon' ? (
+                    <button type="button" className="md-btn md-btn-coming-soon" disabled>
+                      Coming Soon
+                    </button>
+                  ) : (
+                    canWatch && (
+                      <button type="button" className="md-btn md-btn-primary" onClick={handleWatchNow}>
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                        Watch Now
+                      </button>
+                    )
+                  )}
+                  {trailerUrl && (
+                    <button
+                      type="button"
+                      className="md-btn md-btn-secondary"
+                      onClick={() => setShowTrailer(true)}
+                    >
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M8 5v14l11-7z" />
                       </svg>
-                      Watch Now
+                      Watch Trailer
                     </button>
-                  )
-                )}
-                {trailerUrl && (
-                  <button
-                    type="button"
-                    className="md-btn md-btn-secondary"
-                    onClick={() => setShowTrailer(true)}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                    Watch Trailer
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {overview && (
-            <div className="md-overview">
-              <h2 className="md-section-title">Overview</h2>
-              <p>{overview}</p>
-            </div>
-          )}
+            {overview && (
+              <div className="md-overview">
+                <h2 className="md-section-title">Overview</h2>
+                <p>{overview}</p>
+              </div>
+            )}
 
-          {detailItems.length > 0 && (
-            <div className="md-facts">
-              {detailItems.map((item) => (
-                <div key={item.label} className="md-fact">
-                  <span className="md-fact-label">{item.label}</span>
-                  <span className="md-fact-value">{item.value}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {cast.length > 0 && (
-            <div className="md-cast">
-              <h2 className="md-section-title">Cast</h2>
-              <div className="md-cast-grid">
-                {cast.map((person) => (
-                  <article key={`${person.name}-${person.character}`} className="md-cast-card">
-                    <div className="md-cast-photo">
-                      {person.profile ? (
-                        <img src={person.profile} alt={person.name} loading="lazy" />
-                      ) : (
-                        <span aria-hidden="true">👤</span>
-                      )}
-                    </div>
-                    <h3 className="md-cast-name">{person.name}</h3>
-                    {person.character && <p className="md-cast-role">{person.character}</p>}
-                  </article>
+            {detailItems.length > 0 && (
+              <div className="md-facts">
+                {detailItems.map((item) => (
+                  <div key={item.label} className="md-fact">
+                    <span className="md-fact-label">{item.label}</span>
+                    <span className="md-fact-value">{item.value}</span>
+                  </div>
                 ))}
               </div>
-            </div>
-          )}
-        </section>
-      </div>
-    </>
+            )}
+
+            {cast.length > 0 && (
+              <div className="md-cast">
+                <h2 className="md-section-title">Cast</h2>
+                <div className="md-cast-grid">
+                  {cast.map((person) => (
+                    <article key={`${person.name}-${person.character}`} className="md-cast-card">
+                      <div className="md-cast-photo">
+                        {person.profile ? (
+                          <img src={person.profile} alt={person.name} loading="lazy" />
+                        ) : (
+                          <span aria-hidden="true">👤</span>
+                        )}
+                      </div>
+                      <h3 className="md-cast-name">{person.name}</h3>
+                      {person.character && <p className="md-cast-role">{person.character}</p>}
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      </>
+    </AgeGate>
   );
 };
 
