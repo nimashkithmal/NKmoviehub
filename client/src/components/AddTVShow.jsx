@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { clearHomeCaches } from '../utils/homeCache';
 
 const AddTVShow = () => {
   const navigate = useNavigate();
@@ -338,6 +339,7 @@ const AddTVShow = () => {
       }
 
       if (result.success) {
+        clearHomeCaches();
         showNotification('TV Show added successfully!', 'success');
         setTimeout(() => {
           navigate('/admin');

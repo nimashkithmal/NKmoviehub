@@ -25,8 +25,10 @@ const {
 
 const router = express.Router();
 
-const HOME_CACHE_TTL_MS = 10 * 60 * 1000;
-const TMDB_MAP_TTL_MS = 5 * 60 * 1000;
+// Short TTLs so new titles show quickly even if an invalidation is missed
+// (TMDB list order itself is cached separately in utils/tmdb).
+const HOME_CACHE_TTL_MS = 2 * 60 * 1000;
+const TMDB_MAP_TTL_MS = 2 * 60 * 1000;
 
 let homeResponseCache = { payload: null, at: 0 };
 let movieTmdbMapCache = { map: null, at: 0 };
@@ -165,12 +167,12 @@ const getMovieTmdbMap = async () => {
   }
 
   const candidates = await Movie.find({ status: 'active', policyRestricted: { $ne: true } })
-    .select('_id movieUrl')
+    .select('_id movieUrl tmdbId')
     .lean();
 
   const map = new Map();
   for (const doc of candidates) {
-    const tmdbId = extractTmdbId(doc.movieUrl);
+    const tmdbId = extractTmdbId(doc.movieUrl) || doc.tmdbId;
     if (tmdbId) map.set(String(tmdbId), doc._id);
   }
 
@@ -185,12 +187,12 @@ const getTvTmdbMap = async () => {
   }
 
   const candidates = await TVShow.find({ status: 'active', policyRestricted: { $ne: true } })
-    .select('_id showUrl episodes.episodeUrl')
+    .select('_id showUrl tmdbId episodes.episodeUrl')
     .lean();
 
   const map = new Map();
   for (const doc of candidates) {
-    const tmdbId = extractTvTmdbId(doc);
+    const tmdbId = extractTvTmdbId(doc) || doc.tmdbId;
     if (tmdbId) map.set(String(tmdbId), doc._id);
   }
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getMoviePlaceholder, handleImageError } from '../utils/placeholderImage';
+import { clearHomeCaches } from '../utils/homeCache';
 import './PendingTitlesManagement.css';
 
 const API_URL = '/api/sync';
@@ -245,6 +246,7 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
       });
       const result = await response.json();
       if (result.success) {
+        clearHomeCaches();
         showNotification?.(result.message, 'success');
         closeApproval();
         fetchPending();

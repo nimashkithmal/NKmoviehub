@@ -21,7 +21,7 @@ const DISCOVERY_CACHE_TTL_MS = 10 * 60 * 1000;
 const COMING_SOON_CACHE_KEY = 'nk-home-coming-soon-v1';
 const COMING_SOON_CACHE_TTL_MS = 15 * 60 * 1000;
 /** How often home rows refetch while the discovery page stays open */
-const HOME_LIVE_REFRESH_MS = 8 * 60 * 1000;
+const HOME_LIVE_REFRESH_MS = 2 * 60 * 1000;
 
 /** Drop older discovery session caches so fixed Top Rated / Now Playing show up. */
 const purgeStaleDiscoveryCaches = () => {

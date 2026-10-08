@@ -162,7 +162,8 @@ async function classifyAndSave(Model, kind, id) {
     }
   }
   await Model.updateOne({ _id: id }, { $set: update });
-  return Boolean(update.matureContent || update.imdbRating);
+  // tmdbId lets home rows (discovery TMDB map) match the title
+  return Boolean(update.matureContent || update.imdbRating || update.tmdbId);
 }
 
 const targets = () => [
