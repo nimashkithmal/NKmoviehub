@@ -196,6 +196,11 @@ const tvShowSchema = new mongoose.Schema({
     type: Date,
     default: null,
     index: true
+  },
+  /** utils/ageClassification AGE_POLICY_VERSION used for the last check */
+  agePolicyVersion: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true

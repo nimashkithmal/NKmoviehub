@@ -11,9 +11,12 @@
 const { fetchTmdbJson, hasTmdbAuth } = require('./tmdb');
 const { extractTmdbId, extractTvTmdbId } = require('./trendingPopular');
 
-/** Adults-only certifications per country (movies + TV). Compared upper-case, spaces stripped. */
+/**
+ * Certifications this site treats as 18+ (movies + TV). Compared upper-case, spaces stripped.
+ * Site policy: US R counts as 18+ even though R legally means 17+ with a guardian.
+ */
 const ADULT_CERTS = {
-  US: ['NC-17', 'X', 'TV-MA'],
+  US: ['R', 'NC-17', 'X', 'TV-MA'],
   GB: ['18', 'R18'],
   AU: ['R18+', 'X18+'],
   IN: ['A'],
@@ -27,6 +30,9 @@ const ADULT_CERTS = {
   KR: ['18', '19', '청소년관람불가']
 };
 const PRIORITY = Object.keys(ADULT_CERTS);
+
+/** Bump when ADULT_CERTS / the decision rule changes — the backfill then re-checks every title. */
+const AGE_POLICY_VERSION = 2;
 
 const BACKFILL_STARTUP_DELAY_MS = 90 * 1000;
 const BACKFILL_INTERVAL_MS = 30 * 60 * 1000;
@@ -145,7 +151,7 @@ async function classifyAndSave(Model, kind, id) {
   if (!doc) return false;
 
   const result = await classifyTitle(kind, doc);
-  const update = { ageCheckedAt: new Date() };
+  const update = { ageCheckedAt: new Date(), agePolicyVersion: AGE_POLICY_VERSION };
   if (result) {
     update.ageCertification = result.certification;
     if (result.mature && !doc.matureContent) update.matureContent = true;
@@ -166,7 +172,7 @@ const targets = () => [
 
 let running = false;
 
-/** Process titles never checked against TMDB (existing catalog + anything new). */
+/** Process titles never checked, or checked under an older AGE_POLICY_VERSION. */
 async function runBackfill() {
   if (running || !hasTmdbAuth()) return;
   running = true;
@@ -177,7 +183,7 @@ async function runBackfill() {
       const failed = new Set();
       for (;;) {
         const batch = await Model.find({
-          ageCheckedAt: null,
+          $or: [{ ageCheckedAt: null }, { agePolicyVersion: { $ne: AGE_POLICY_VERSION } }],
           _id: { $nin: [...failed] }
         })
           .select('_id')

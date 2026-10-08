@@ -197,7 +197,7 @@ const TVShowDetail = () => {
   };
 
   return (
-    <AgeGate active={Boolean(tvShow.matureContent)}>
+    <AgeGate active={Boolean(tvShow.matureContent)} titleId={tvShow._id}>
       <>
         {showTrailer && trailerUrl && (
           <div className="md-trailer-overlay" onClick={() => setShowTrailer(false)}>

@@ -217,7 +217,7 @@ const MovieWatchPage = () => {
     movie.imageUrl || movie.images?.[0] || getMoviePlaceholder(movie.title);
   const ratingValue = Number(movie.imdbRating) || 0;
   return (
-    <AgeGate active={Boolean(movie.matureContent)}>
+    <AgeGate active={Boolean(movie.matureContent)} titleId={movie._id}>
       <div className="tv-watch-page movie-watch-page">
         <header className="tv-watch-topbar">
           <button type="button" className="tv-watch-back-btn" onClick={handleBack}>

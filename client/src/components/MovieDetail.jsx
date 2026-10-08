@@ -403,7 +403,7 @@ const MovieDetail = () => {
   ].filter((item) => item && (item.spacer || item.value));
 
   return (
-    <AgeGate active={Boolean(movie.matureContent)}>
+    <AgeGate active={Boolean(movie.matureContent)} titleId={movie._id}>
       <>
         {showTrailer && trailerUrl && (
           <div className="md-trailer-overlay" onClick={() => setShowTrailer(false)}>

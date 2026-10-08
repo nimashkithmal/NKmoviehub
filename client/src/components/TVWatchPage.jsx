@@ -278,7 +278,7 @@ const TVWatchPage = () => {
   const ratingValue = Number(tvShow.imdbRating) || 0;
 
   return (
-    <AgeGate active={Boolean(tvShow.matureContent)}>
+    <AgeGate active={Boolean(tvShow.matureContent)} titleId={tvShow._id}>
       <div className="tv-watch-page">
         <header className="tv-watch-topbar">
           <button

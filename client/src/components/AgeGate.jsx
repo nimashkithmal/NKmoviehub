@@ -2,22 +2,27 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './AgeGate.css';
 
-/** Self-declared answers are remembered for this browser tab session only. */
-const CONFIRMED_KEY = 'nk-age-confirmed';
-const DECLINED_KEY = 'nk-age-declined';
+/**
+ * Self-declared answers are remembered for this browser tab session only.
+ * "Yes" is per title (detail → watch of the same title asks once).
+ * "No" sends the viewer home — nothing is stored, so the next visit asks again.
+ */
+const CONFIRMED_KEY = 'nk-age-confirmed-ids';
 const LANG_KEY = 'nk-age-gate-lang';
 
-const readFlag = (key) => {
+const readConfirmedIds = () => {
   try {
-    return sessionStorage.getItem(key) === '1';
+    const ids = JSON.parse(sessionStorage.getItem(CONFIRMED_KEY) || '[]');
+    return Array.isArray(ids) ? ids : [];
   } catch {
-    return false;
+    return [];
   }
 };
 
-const writeFlag = (key) => {
+const writeConfirmedId = (titleId) => {
   try {
-    sessionStorage.setItem(key, '1');
+    const ids = readConfirmedIds().filter((x) => x !== titleId);
+    sessionStorage.setItem(CONFIRMED_KEY, JSON.stringify([...ids, titleId].slice(-200)));
   } catch {
     // Ignore private mode errors — gate simply asks again
   }
@@ -38,10 +43,7 @@ const COPY = {
       'This movie or TV show is intended for viewers aged 18 and above. Please confirm that you are at least 18 years old to continue.',
     yes: 'Yes, I am 18 or older',
     no: 'No, I am under 18',
-    note: 'This is a self-declared age confirmation, not verified proof of age.',
-    blockedTitle: 'Content not available',
-    blockedMessage: 'You indicated that you are under 18, so this title is not available.',
-    home: 'Back to home'
+    note: 'This is a self-declared age confirmation, not verified proof of age.'
   },
   si: {
     title: 'වයස තහවුරු කිරීම අවශ්‍යයි (18+)',
@@ -49,10 +51,7 @@ const COPY = {
       'මෙම චිත්‍රපටය හෝ රූපවාහිනී කතා මාලාව වයස අවුරුදු 18 හෝ ඊට වැඩි ප්‍රේක්ෂකයින් සඳහා පමණක් සුදුසු වේ. ඉදිරියට යාමට ඔබගේ වයස අවුරුදු 18 හෝ ඊට වැඩි බව තහවුරු කරන්න.',
     yes: 'ඔව්, මට වයස අවුරුදු 18 හෝ ඊට වැඩියි',
     no: 'නැහැ, මට තවම අවුරුදු 18 සම්පූර්ණ වී නැහැ',
-    note: 'මෙය ඔබ විසින්ම ලබා දෙන වයස තහවුරු කිරීමක් මිස, වයස සනාථ කරන සාක්ෂියක් නොවේ.',
-    blockedTitle: 'මෙම අන්තර්ගතය ලබා ගත නොහැක',
-    blockedMessage: 'ඔබ වයස අවුරුදු 18 ට අඩු බව සඳහන් කළ නිසා මෙම මාතෘකාව ලබා ගත නොහැක.',
-    home: 'මුල් පිටුවට'
+    note: 'මෙය ඔබ විසින්ම ලබා දෙන වයස තහවුරු කිරීමක් මිස, වයස සනාථ කරන සාක්ෂියක් නොවේ.'
   }
 };
 
@@ -60,10 +59,11 @@ const COPY = {
  * Wraps an 18+ movie / TV page. Children (incl. the player) only mount after the
  * viewer confirms they are 18+, so opening the URL directly cannot skip it.
  */
-const AgeGate = ({ active, children }) => {
+const AgeGate = ({ active, titleId, children }) => {
   const navigate = useNavigate();
-  const [confirmed, setConfirmed] = useState(() => readFlag(CONFIRMED_KEY));
-  const [declined, setDeclined] = useState(() => readFlag(DECLINED_KEY));
+  const key = String(titleId || '');
+  const [confirmedId, setConfirmedId] = useState(null);
+  const confirmed = confirmedId === key || readConfirmedIds().includes(key);
   const [lang, setLang] = useState(readLang);
   const blocking = active && !confirmed;
 
@@ -89,15 +89,11 @@ const AgeGate = ({ active, children }) => {
   };
 
   const confirm = () => {
-    writeFlag(CONFIRMED_KEY);
-    setConfirmed(true);
+    writeConfirmedId(key);
+    setConfirmedId(key);
   };
 
-  const decline = () => {
-    writeFlag(DECLINED_KEY);
-    setDeclined(true);
-    navigate('/', { replace: true });
-  };
+  const decline = () => navigate('/', { replace: true });
 
   return (
     <div className="age-gate" role="dialog" aria-modal="true" aria-labelledby="age-gate-title">
@@ -121,35 +117,17 @@ const AgeGate = ({ active, children }) => {
 
         <div className="age-gate-icon" aria-hidden="true">18+</div>
 
-        {declined ? (
-          <>
-            <h2 id="age-gate-title" className="age-gate-title">{t.blockedTitle}</h2>
-            <p className="age-gate-message">{t.blockedMessage}</p>
-            <div className="age-gate-actions">
-              <button
-                type="button"
-                className="age-gate-btn age-gate-btn-primary"
-                onClick={() => navigate('/', { replace: true })}
-              >
-                {t.home}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <h2 id="age-gate-title" className="age-gate-title">{t.title}</h2>
-            <p className="age-gate-message">{t.message}</p>
-            <div className="age-gate-actions">
-              <button type="button" className="age-gate-btn age-gate-btn-primary" onClick={confirm}>
-                {t.yes}
-              </button>
-              <button type="button" className="age-gate-btn age-gate-btn-secondary" onClick={decline}>
-                {t.no}
-              </button>
-            </div>
-            <p className="age-gate-note">{t.note}</p>
-          </>
-        )}
+        <h2 id="age-gate-title" className="age-gate-title">{t.title}</h2>
+        <p className="age-gate-message">{t.message}</p>
+        <div className="age-gate-actions">
+          <button type="button" className="age-gate-btn age-gate-btn-primary" onClick={confirm}>
+            {t.yes}
+          </button>
+          <button type="button" className="age-gate-btn age-gate-btn-secondary" onClick={decline}>
+            {t.no}
+          </button>
+        </div>
+        <p className="age-gate-note">{t.note}</p>
       </div>
     </div>
   );
