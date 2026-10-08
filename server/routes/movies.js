@@ -24,6 +24,7 @@ const {
   filterUpcomingOnly,
   getComingSoonCatalog
 } = require('../utils/comingSoon');
+const { invalidateOnCatalogWrite } = require('../utils/publicCatalogCache');
 const {
   applyPublicCatalogFilter,
   filterPublicItems,
@@ -47,6 +48,8 @@ const { applyCatalogTextSearch } = require('../utils/catalogSearch');
 const { findExistingMovieDuplicate } = require('../utils/deduplicateMovies');
 
 const router = express.Router();
+
+router.use(invalidateOnCatalogWrite);
 
 const parseMoneyInput = (value) => {
   if (value === undefined || value === null || value === '') return null;

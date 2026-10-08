@@ -18,6 +18,7 @@ const {
   filterUpcomingOnly,
   getComingSoonCatalog
 } = require('../utils/comingSoon');
+const { invalidateOnCatalogWrite } = require('../utils/publicCatalogCache');
 const {
   applyPublicCatalogFilter,
   filterPublicItems,
@@ -50,6 +51,8 @@ const processEpisodeList = (episodes = [], tmdbId = '') =>
     .sort((a, b) => a.episodeNumber - b.episodeNumber);
 
 const router = express.Router();
+
+router.use(invalidateOnCatalogWrite);
 
 const parseMoneyInput = (value) => {
   if (value === undefined || value === null || value === '') return null;

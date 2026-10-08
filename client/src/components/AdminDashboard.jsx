@@ -7,6 +7,7 @@ import BannerManagement from './BannerManagement';
 import CollectionManagement from './CollectionManagement';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import PendingTitlesManagement from './PendingTitlesManagement';
+import { clearHomeCaches } from '../utils/homeCache';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -535,6 +536,7 @@ const AdminDashboard = () => {
         const result = await response.json();
         
         if (result.success) {
+          clearHomeCaches();
           await fetchMovies(moviesPage, movieSearchTerm);
           showNotification('Movie deleted successfully!', 'success');
         }
@@ -564,6 +566,7 @@ const AdminDashboard = () => {
       const result = await response.json();
       
       if (result.success) {
+        clearHomeCaches();
         await fetchMovies(moviesPage, movieSearchTerm);
         showNotification(`Movie status updated successfully!`, 'success');
       }
@@ -1083,6 +1086,7 @@ const AdminDashboard = () => {
         const result = await response.json();
         
         if (result.success) {
+          clearHomeCaches();
           await fetchTVShows();
           showNotification('TV Show deleted successfully!', 'success');
         }
@@ -1112,6 +1116,7 @@ const AdminDashboard = () => {
       const result = await response.json();
       
       if (result.success) {
+        clearHomeCaches();
         await fetchTVShows();
         showNotification(`TV Show status updated successfully!`, 'success');
       }
