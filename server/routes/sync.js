@@ -8,6 +8,7 @@ const { uploadPoster } = require('../utils/cloudinaryUpload');
 const { evaluateContentPolicy } = require('../utils/contentPolicy');
 const { buildEpisodeUrl } = require('../utils/tvEpisodeUrls');
 const { buildAllSeasonEpisodes, summarizeEpisodes } = require('../utils/tvSeasonEpisodes');
+const { invalidateOnCatalogWrite } = require('../utils/publicCatalogCache');
 const {
   triggerEmbedSync,
   getEmbedSyncStatus,
@@ -16,6 +17,9 @@ const {
 const { normalizePlayableUrl } = require('../utils/playableUrl');
 
 const router = express.Router();
+
+// Approve / dismiss / sync change the public catalog — refresh home rows right away
+router.use(invalidateOnCatalogWrite);
 
 const escapeRegex = (value = '') =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

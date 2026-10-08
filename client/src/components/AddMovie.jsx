@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { clearHomeCaches } from '../utils/homeCache';
 
 const AddMovie = () => {
   const navigate = useNavigate();
@@ -215,6 +216,7 @@ const AddMovie = () => {
       console.log('Response data:', result);
 
       if (result.success) {
+        clearHomeCaches();
         showNotification('Movie added successfully!', 'success');
         setTimeout(() => {
           navigate('/admin');
