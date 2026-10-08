@@ -14,6 +14,7 @@ const {
 } = require('../utils/tmdb');
 const { filterPublicItems, applyPublicCatalogFilter } = require('../utils/contentPolicy');
 const { getComingSoonCatalog } = require('../utils/comingSoon');
+const { onPublicCatalogChange } = require('../utils/publicCatalogCache');
 const {
   hasPoster,
   isCatalogJunk,
@@ -30,6 +31,12 @@ const TMDB_MAP_TTL_MS = 5 * 60 * 1000;
 let homeResponseCache = { payload: null, at: 0 };
 let movieTmdbMapCache = { map: null, at: 0 };
 let tvTmdbMapCache = { map: null, at: 0 };
+
+onPublicCatalogChange(() => {
+  homeResponseCache = { payload: null, at: 0 };
+  movieTmdbMapCache = { map: null, at: 0 };
+  tvTmdbMapCache = { map: null, at: 0 };
+});
 
 const hydrateMovies = async (orderedIds, limit = 20) => {
   const pageIds = orderedIds.slice(0, limit);
