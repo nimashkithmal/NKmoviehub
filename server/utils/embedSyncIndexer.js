@@ -36,6 +36,9 @@ const state = {
   lastSkipMessage: ''
 };
 
+/** Last 2embed search error in the current run — tells "blocked/down" apart from "no match". */
+let lastSearchError = '';
+
 let runChain = Promise.resolve();
 let autoSyncTimer = null;
 
@@ -190,13 +193,13 @@ function mapEmbedToPending(type, tmdbId, data = {}, source = 'trending') {
   const description = descriptionFromEmbed(data);
   const genre = genreFromEmbed(data);
 
+  // Adult-content rules never drop a title — they mark it 18+ (age-gated on the site)
   const policy = evaluateContentPolicy({
     title,
     description,
     genre,
     adult: data.adult === true || data.is_adult === true
   });
-  if (policy.restricted) return null;
 
   const catalogStatus = resolveCatalogStatus(data);
   const releaseStatus = String(data.status || '').trim().slice(0, 80);
@@ -225,7 +228,8 @@ function mapEmbedToPending(type, tmdbId, data = {}, source = 'trending') {
     episodeCount: Math.max(0, Number(data.number_of_episodes) || 0),
     source,
     catalogStatus,
-    releaseStatus
+    releaseStatus,
+    matureContent: policy.mature
   };
 }
 
@@ -244,6 +248,9 @@ async function upsertPending(doc, { requeueDismissed = false } = {}) {
       : false;
     if (stillExists) {
       state.skipped += 1;
+      state.lastSkipReason = 'already_in_catalog';
+      state.lastSkipMessage = `"${existing.title || doc.title || 'This title'}" is already in your catalog.`;
+      state.currentTitle = existing.title || doc.title || state.currentTitle;
       return false;
     }
   }
@@ -307,6 +314,10 @@ async function runPool(items, worker) {
         await worker(item);
       } catch (err) {
         state.failed += 1;
+        if (state.lastQuery) {
+          state.lastSkipReason = 'failed';
+          state.lastSkipMessage = `Could not load details for "${state.lastQuery}" from 2embed (${err.message || 'request failed'}). Try Sync Now again.`;
+        }
         console.warn(`Embed sync failed for ${item.type}:${item.tmdbId}:`, err.message);
       } finally {
         state.processed += 1;
@@ -507,6 +518,7 @@ async function fetchSearchPage(itemType, query) {
     );
     return data.results || [];
   } catch (err) {
+    lastSearchError = String(err.message || err);
     // Cloudflare often blocks api.2embed.cc — fall back to www.2embed.skin HTML.
     if (!/HTTP 403|HTTP 429|Cloudflare|circuit open/i.test(String(err.message || ''))) {
       console.warn(`2embed API search failed (${path}):`, err.message || err);
@@ -549,6 +561,7 @@ async function fetchSearchResults(itemType, query) {
       );
     }
   } catch (err) {
+    lastSearchError = String(err.message || err);
     console.warn(`2embed.skin search failed (${itemType}):`, err.message || err);
   }
 
@@ -628,6 +641,7 @@ async function runIndexer(options = {}) {
   state.lastSyncedTitle = '';
   state.lastSkipReason = '';
   state.lastSkipMessage = '';
+  lastSearchError = '';
 
   try {
     const [candidates, catalog] = await Promise.all([
@@ -658,10 +672,12 @@ async function runIndexer(options = {}) {
         }
       }
 
-      state.lastSkipReason = 'not_found';
-      state.lastSkipMessage = query
-        ? `No match on 2embed for "${query}". Try a shorter name (e.g. without "The"), or paste an IMDb id (tt…).`
-        : '';
+      state.lastSkipReason = lastSearchError ? 'source_unavailable' : 'not_found';
+      state.lastSkipMessage = !query
+        ? ''
+        : lastSearchError
+          ? `2embed could not be reached while searching for "${query}" (${lastSearchError}). Try Sync Now again in a few minutes.`
+          : `No match on 2embed for "${query}". Try a shorter name (e.g. without "The"), or paste an IMDb id (tt…).`;
       console.log(
         query
           ? `ℹ️ 2embed found no match for "${query}"`
@@ -698,7 +714,12 @@ async function runIndexer(options = {}) {
         : await fetchEmbedMetadata(type, tmdbId);
       const pending = mapEmbedToPending(type, tmdbId, data, source);
       if (!pending) {
+        // Only possible when 2embed returned no title for this TMDB id
         state.skipped += 1;
+        if (query) {
+          state.lastSkipReason = 'no_metadata';
+          state.lastSkipMessage = `2embed returned no details for "${query}" (TMDB ${tmdbId}). Try again later or add it manually.`;
+        }
         return;
       }
 

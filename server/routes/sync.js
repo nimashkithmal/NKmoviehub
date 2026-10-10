@@ -55,10 +55,13 @@ async function approvePendingTitle(pending, userId, payload = {}) {
           : 'active';
   const siteStatus = catalogStatus === 'coming_soon' ? 'coming_soon' : 'active';
 
+  // Adult-content matches are not blocked — they are added as 18+ (age-gated)
   const policy = evaluateContentPolicy({ title, description, genre });
-  if (policy.restricted) {
-    throw new Error('This title is blocked by content policy');
-  }
+  const matureContent =
+    payload.matureContent === true ||
+    payload.matureContent === 'true' ||
+    pending.matureContent === true ||
+    policy.mature;
 
   if (!title || !year || !description || !genre) {
     throw new Error('Title, year, description, and genre are required');
@@ -105,7 +108,8 @@ async function approvePendingTitle(pending, userId, payload = {}) {
       status: siteStatus,
       policyRestricted: false,
       policyRestrictedReason: '',
-      adsenseSafe: true
+      adsenseSafe: true,
+      matureContent
     });
 
     return { kind: 'movie', id: movie._id };
@@ -149,7 +153,8 @@ async function approvePendingTitle(pending, userId, payload = {}) {
     status: siteStatus,
     policyRestricted: false,
     policyRestrictedReason: '',
-    adsenseSafe: true
+    adsenseSafe: true,
+    matureContent
   });
 
   return { kind: 'tvshow', id: tvShow._id, numberOfSeasons: resolvedSeasons, episodeCount: episodes.length };

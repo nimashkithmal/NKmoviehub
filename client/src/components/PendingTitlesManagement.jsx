@@ -337,7 +337,9 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
                   ? 'pending-sync-status--info'
                   : syncStatus.lastSkipReason === 'already_pending'
                     ? 'pending-sync-status--done'
-                    : syncStatus.lastSkipReason === 'not_found'
+                    : ['not_found', 'source_unavailable', 'no_metadata', 'failed'].includes(
+                          syncStatus.lastSkipReason
+                        )
                       ? 'pending-sync-status--warn'
                       : 'pending-sync-status--done'
           }`}
@@ -417,6 +419,7 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
                 {item.catalogStatus === 'coming_soon' && (
                   <span className="pending-coming-soon-badge">Coming Soon</span>
                 )}
+                {item.matureContent && <span className="pending-mature-badge">18+</span>}
               </div>
               <div className="pending-card-body">
                 <h3>{item.title}</h3>

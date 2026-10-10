@@ -537,13 +537,6 @@ router.post('/', protect, restrictToAdmin, [
       genre,
       tagline: req.body.tagline
     });
-    if (policyCheck.restricted) {
-      return res.status(400).json({
-        success: false,
-        message: 'This title cannot be published due to content policy.',
-        reason: policyCheck.reason
-      });
-    }
 
     // Upload images to Cloudinary
     let imageUrl;
@@ -636,6 +629,7 @@ router.post('/', protect, restrictToAdmin, [
       imageUrl,
       images: images, // Store array of images
       ...meta,
+      ...(policyCheck.mature ? { matureContent: true } : {}),
       addedBy: req.user.id
     };
     
@@ -872,10 +866,10 @@ router.put('/:id', protect, restrictToAdmin, [
       tagline: updateData.tagline ?? existing.tagline,
       policyRestricted: existing.policyRestricted
     });
-    Object.assign(
-      updateData,
-      policyUpdateFields(policyCheck, updateData.status || existing.status)
-    );
+    const policyFields = policyUpdateFields(policyCheck);
+    // An explicit 18+ choice from the admin form wins over the automatic flag
+    if (updateData.matureContent !== undefined) delete policyFields.matureContent;
+    Object.assign(updateData, policyFields);
 
     const tvShow = await TVShow.findByIdAndUpdate(
       req.params.id,

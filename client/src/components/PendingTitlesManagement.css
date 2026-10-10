@@ -153,6 +153,18 @@
   color: #fff;
 }
 
+.pending-mature-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(229, 9, 20, 0.92);
+  color: #fff;
+}
+
 .pending-card-body {
   min-width: 0;
   flex: 1;
