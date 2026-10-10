@@ -222,11 +222,32 @@ const isThinContent = (item = {}) => {
   return false;
 };
 
-/** Safe for public catalogs + sitemap (policy + quality). */
+/**
+ * Safe for sitemap + crawler prerender (policy + quality).
+ * 18+ titles are shown to visitors behind the age gate but kept out of search indexing.
+ */
 const isIndexableContent = (item = {}) =>
-  isAdsenseSafeContent(item) && !isThinContent(item);
+  item.matureContent !== true &&
+  !detectAdultSignals(item).restricted &&
+  !isThinContent(item);
 
+/**
+ * Site policy: titles are never blocked or hidden. A title that matches the
+ * adult / sexual-content signals is shown behind the 18+ age gate instead —
+ * `mature: true` tells callers to set matureContent.
+ */
 const evaluateContentPolicy = (item = {}) => {
+  const signal = detectAdultSignals(item);
+  return {
+    restricted: false,
+    adsenseSafe: true,
+    mature: signal.restricted,
+    reason: signal.reason
+  };
+};
+
+/** Raw adult / sexual-content signal check (drives the automatic 18+ flag). */
+const detectAdultSignals = (item = {}) => {
   const fields = normalizeContentFields(item);
   const { title } = fields;
   const text = getSearchText(fields);
@@ -241,28 +262,6 @@ const evaluateContentPolicy = (item = {}) => {
 
   if (title && matchesAny(title, TITLE_ALLOWLIST)) {
     return { restricted: false, adsenseSafe: true, reason: '' };
-  }
-
-  // Persist flag from DB — still re-check live text so cleaned titles can recover
-  if (fields.policyRestricted) {
-    const live = evaluateContentPolicy({
-      ...item,
-      policyRestricted: false,
-      adult: false,
-      isAdult: false,
-      is_adult: false
-    });
-    if (!live.restricted) {
-      return { restricted: false, adsenseSafe: true, reason: '' };
-    }
-    return {
-      restricted: true,
-      adsenseSafe: false,
-      reason:
-        fields.policyRestrictedReason ||
-        live.reason ||
-        'Marked as policy restricted'
-    };
   }
 
   if (title && matchesAny(title, BLOCKED_TITLE_PATTERNS)) {
@@ -315,6 +314,7 @@ const applyIndexableCatalogFilter = (filter = {}) => {
   const base = applyPublicCatalogFilter(filter);
   return {
     ...base,
+    matureContent: { $ne: true },
     description: { $exists: true, $type: 'string', $regex: /[\s\S]{40,}/ },
     $and: [
       ...(base.$and ? (Array.isArray(base.$and) ? base.$and : [base.$and]) : []),
@@ -442,26 +442,44 @@ const sanitizeEmbedMetadata = (data = {}) => {
 
 /**
  * Build Mongo update fields after a policy evaluation.
- * Restricted titles are deactivated so they leave public surfaces.
+ * Titles are never restricted — adult signals only add the 18+ flag
+ * (an 18+ flag set by an admin or TMDB is never cleared here).
  */
-const policyUpdateFields = (policyCheck, currentStatus) => {
-  if (policyCheck.restricted) {
-    const next = {
-      policyRestricted: true,
-      policyRestrictedReason: policyCheck.reason || 'Blocked by content policy',
-      adsenseSafe: false
-    };
-    if (['active', 'coming_soon'].includes(currentStatus)) {
-      next.status = 'inactive';
+const policyUpdateFields = (policyCheck) => ({
+  policyRestricted: false,
+  policyRestrictedReason: '',
+  adsenseSafe: true,
+  ...(policyCheck?.mature ? { matureContent: true } : {})
+});
+
+/** Policy reasons this module wrote when it used to block titles. */
+const LEGACY_POLICY_REASON = /^(Blocked (adult-flagged title|title|genre|keywords)\b|Marked as policy restricted)/;
+
+/**
+ * One-time repair: titles hidden by the old blocklist become visible again.
+ * Only touches records restricted by this module (known reason or matching signal).
+ * They get the 18+ flag only when adult signals still match — false positives of
+ * the old keyword rules stay all-ages. The old policy also set status "inactive",
+ * so those are re-activated. Pass { dryRun: true } to only report.
+ */
+async function unblockLegacyRestrictedTitles(Model, { dryRun = false } = {}) {
+  const docs = await Model.find({ policyRestricted: true })
+    .select('title year description tagline genre status policyRestrictedReason matureContent')
+    .lean();
+  const changes = [];
+  for (const doc of docs) {
+    const mature = detectAdultSignals(doc).restricted;
+    const fromPolicy = LEGACY_POLICY_REASON.test(doc.policyRestrictedReason || '') || mature;
+    if (!fromPolicy) continue;
+    const set = policyUpdateFields({ mature });
+    if (doc.status === 'inactive') set.status = 'active';
+    changes.push({ id: String(doc._id), title: doc.title, year: doc.year, set });
+    if (!dryRun) {
+      await Model.updateOne({ _id: doc._id, policyRestricted: true }, { $set: set });
     }
-    return next;
   }
-  return {
-    policyRestricted: false,
-    policyRestrictedReason: '',
-    adsenseSafe: true
-  };
-};
+  return changes;
+}
 
 const personPolicyUpdateFields = (policyCheck) => {
   if (policyCheck.restricted) {
@@ -497,5 +515,6 @@ module.exports = {
   sanitizeEmbedMetadata,
   isPubliclyAccessible,
   policyUpdateFields,
-  personPolicyUpdateFields
+  personPolicyUpdateFields,
+  unblockLegacyRestrictedTitles
 };

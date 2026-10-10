@@ -35,6 +35,8 @@ const pendingTitleSchema = new mongoose.Schema(
       default: 'active'
     },
     releaseStatus: { type: String, default: '' },
+    /** 18+ — from adult-content signals / TMDB adult flag; copied to the catalog on approve */
+    matureContent: { type: Boolean, default: false },
     status: {
       type: String,
       enum: ['pending', 'approved', 'dismissed'],
