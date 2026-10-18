@@ -224,7 +224,7 @@ const isThinContent = (item = {}) => {
 
 /**
  * Safe for sitemap + crawler prerender (policy + quality).
- * 18+ titles are shown to visitors behind the age gate but kept out of search indexing.
+ * 18+ (mature, age-gated) titles are kept out of search indexing.
  */
 const isIndexableContent = (item = {}) =>
   item.matureContent !== true &&
@@ -232,21 +232,14 @@ const isIndexableContent = (item = {}) =>
   !isThinContent(item);
 
 /**
- * Site policy: titles are never blocked or hidden. A title that matches the
- * adult / sexual-content signals is shown behind the 18+ age gate instead —
- * `mature: true` tells callers to set matureContent.
+ * Site policy (AdSense "Adult: Sexual content"): titles with adult / sexual
+ * signals are blocked from every public surface — an age gate is not enough.
+ * Mainstream mature titles (R / TV-MA) use matureContent + the 18+ gate instead,
+ * which is set by ageClassification, not here.
  */
-const evaluateContentPolicy = (item = {}) => {
-  const signal = detectAdultSignals(item);
-  return {
-    restricted: false,
-    adsenseSafe: true,
-    mature: signal.restricted,
-    reason: signal.reason
-  };
-};
+const evaluateContentPolicy = (item = {}) => detectAdultSignals(item);
 
-/** Raw adult / sexual-content signal check (drives the automatic 18+ flag). */
+/** Raw adult / sexual-content signal check. */
 const detectAdultSignals = (item = {}) => {
   const fields = normalizeContentFields(item);
   const { title } = fields;
@@ -442,44 +435,26 @@ const sanitizeEmbedMetadata = (data = {}) => {
 
 /**
  * Build Mongo update fields after a policy evaluation.
- * Titles are never restricted — adult signals only add the 18+ flag
- * (an 18+ flag set by an admin or TMDB is never cleared here).
+ * Restricted titles are deactivated so they leave public surfaces.
  */
-const policyUpdateFields = (policyCheck) => ({
-  policyRestricted: false,
-  policyRestrictedReason: '',
-  adsenseSafe: true,
-  ...(policyCheck?.mature ? { matureContent: true } : {})
-});
-
-/** Policy reasons this module wrote when it used to block titles. */
-const LEGACY_POLICY_REASON = /^(Blocked (adult-flagged title|title|genre|keywords)\b|Marked as policy restricted)/;
-
-/**
- * One-time repair: titles hidden by the old blocklist become visible again.
- * Only touches records restricted by this module (known reason or matching signal).
- * They get the 18+ flag only when adult signals still match — false positives of
- * the old keyword rules stay all-ages. The old policy also set status "inactive",
- * so those are re-activated. Pass { dryRun: true } to only report.
- */
-async function unblockLegacyRestrictedTitles(Model, { dryRun = false } = {}) {
-  const docs = await Model.find({ policyRestricted: true })
-    .select('title year description tagline genre status policyRestrictedReason matureContent')
-    .lean();
-  const changes = [];
-  for (const doc of docs) {
-    const mature = detectAdultSignals(doc).restricted;
-    const fromPolicy = LEGACY_POLICY_REASON.test(doc.policyRestrictedReason || '') || mature;
-    if (!fromPolicy) continue;
-    const set = policyUpdateFields({ mature });
-    if (doc.status === 'inactive') set.status = 'active';
-    changes.push({ id: String(doc._id), title: doc.title, year: doc.year, set });
-    if (!dryRun) {
-      await Model.updateOne({ _id: doc._id, policyRestricted: true }, { $set: set });
+const policyUpdateFields = (policyCheck, currentStatus) => {
+  if (policyCheck.restricted) {
+    const next = {
+      policyRestricted: true,
+      policyRestrictedReason: policyCheck.reason || 'Blocked by content policy',
+      adsenseSafe: false
+    };
+    if (['active', 'coming_soon'].includes(currentStatus)) {
+      next.status = 'inactive';
     }
+    return next;
   }
-  return changes;
-}
+  return {
+    policyRestricted: false,
+    policyRestrictedReason: '',
+    adsenseSafe: true
+  };
+};
 
 const personPolicyUpdateFields = (policyCheck) => {
   if (policyCheck.restricted) {
@@ -515,6 +490,5 @@ module.exports = {
   sanitizeEmbedMetadata,
   isPubliclyAccessible,
   policyUpdateFields,
-  personPolicyUpdateFields,
-  unblockLegacyRestrictedTitles
+  personPolicyUpdateFields
 };

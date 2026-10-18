@@ -55,13 +55,16 @@ async function approvePendingTitle(pending, userId, payload = {}) {
           : 'active';
   const siteStatus = catalogStatus === 'coming_soon' ? 'coming_soon' : 'active';
 
-  // Adult-content matches are not blocked — they are added as 18+ (age-gated)
+  // Sexual / adult content is never published (AdSense policy). 18+ here only
+  // means mainstream mature titles (R / TV-MA), which stay age-gated.
   const policy = evaluateContentPolicy({ title, description, genre });
+  if (policy.restricted) {
+    throw new Error('This title is blocked by content policy');
+  }
   const matureContent =
     payload.matureContent === true ||
     payload.matureContent === 'true' ||
-    pending.matureContent === true ||
-    policy.mature;
+    pending.matureContent === true;
 
   if (!title || !year || !description || !genre) {
     throw new Error('Title, year, description, and genre are required');

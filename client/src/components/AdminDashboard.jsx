@@ -28,6 +28,8 @@ const AdminDashboard = () => {
     moviesPerPage: 30
   });
   const [tvShowSearchTerm, setTVShowSearchTerm] = useState('');
+  const [showBlockedMovies, setShowBlockedMovies] = useState(false);
+  const [showBlockedTVShows, setShowBlockedTVShows] = useState(false);
   const MOVIES_PAGE_SIZE = 30;
   const [editingMovie, setEditingMovie] = useState(null);
   const [editingTVShow, setEditingTVShow] = useState(null);
@@ -139,6 +141,7 @@ const AdminDashboard = () => {
         limit: String(MOVIES_PAGE_SIZE)
       });
       if (search && search.trim()) params.set('search', search.trim());
+      if (showBlockedMovies) params.set('status', 'blocked');
       
       const response = await fetch(`/api/movies/admin?${params.toString()}`, {
         headers: {
@@ -171,7 +174,7 @@ const AdminDashboard = () => {
     } finally {
       setMoviesLoading(false);
     }
-  }, [token]);
+  }, [token, showBlockedMovies]);
 
   const fetchMovieStats = useCallback(async () => {
     try {
@@ -723,9 +726,10 @@ const AdminDashboard = () => {
   const filteredMovies = movies;
 
   const filteredTVShows = tvShows.filter(tvShow =>
-    tvShow.title.toLowerCase().includes(tvShowSearchTerm.toLowerCase()) ||
-    tvShow.year.toString().includes(tvShowSearchTerm) ||
-    tvShow.genre.toLowerCase().includes(tvShowSearchTerm.toLowerCase())
+    (!showBlockedTVShows || tvShow.policyRestricted) &&
+    (tvShow.title.toLowerCase().includes(tvShowSearchTerm.toLowerCase()) ||
+      tvShow.year.toString().includes(tvShowSearchTerm) ||
+      tvShow.genre.toLowerCase().includes(tvShowSearchTerm.toLowerCase()))
   );
 
   const goToMoviesPage = (page) => {
@@ -1259,6 +1263,17 @@ const AdminDashboard = () => {
                 setMoviesPage(1);
               }}
             />
+            <label className="admin-blocked-filter">
+              <input
+                type="checkbox"
+                checked={showBlockedMovies}
+                onChange={(e) => {
+                  setShowBlockedMovies(e.target.checked);
+                  setMoviesPage(1);
+                }}
+              />
+              Blocked only
+            </label>
           </div>
 
           <div className="user-actions">
@@ -1414,6 +1429,14 @@ const AdminDashboard = () => {
                       }}>
                         {movie.status === 'coming_soon' ? 'coming soon' : movie.status}
                       </span>
+                      {movie.policyRestricted && (
+                        <span
+                          className="admin-blocked-badge"
+                          title={movie.policyRestrictedReason || 'Blocked by content policy'}
+                        >
+                          Blocked
+                        </span>
+                      )}
                     </td>
                     <td>{movie.addedBy?.name || 'Unknown'}</td>
                     <td>
@@ -1498,6 +1521,14 @@ const AdminDashboard = () => {
               value={tvShowSearchTerm}
               onChange={(e) => setTVShowSearchTerm(e.target.value)}
             />
+            <label className="admin-blocked-filter">
+              <input
+                type="checkbox"
+                checked={showBlockedTVShows}
+                onChange={(e) => setShowBlockedTVShows(e.target.checked)}
+              />
+              Blocked only
+            </label>
           </div>
 
           <div className="user-actions">
@@ -1632,6 +1663,14 @@ const AdminDashboard = () => {
                       }}>
                         {tvShow.status === 'coming_soon' ? 'coming soon' : tvShow.status}
                       </span>
+                      {tvShow.policyRestricted && (
+                        <span
+                          className="admin-blocked-badge"
+                          title={tvShow.policyRestrictedReason || 'Blocked by content policy'}
+                        >
+                          Blocked
+                        </span>
+                      )}
                     </td>
                     <td>{tvShow.addedBy?.name || 'Unknown'}</td>
                     <td>

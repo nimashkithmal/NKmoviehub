@@ -448,3 +448,24 @@
     padding: calc(72px + 1rem) 1rem 2rem;
   }
 }
+
+.admin-dashboard .admin-blocked-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: #b02a37;
+  color: #fff;
+  font-size: 12px;
+  cursor: help;
+}
+
+.admin-dashboard .admin-blocked-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--ad-ink);
+  font-size: 14px;
+  cursor: pointer;
+}

@@ -10,6 +10,7 @@
  */
 const { fetchTmdbJson, hasTmdbAuth } = require('./tmdb');
 const { extractTmdbId, extractTvTmdbId } = require('./trendingPopular');
+const { policyUpdateFields } = require('./contentPolicy');
 
 /**
  * Certifications this site treats as 18+ (movies + TV). Compared upper-case, spaces stripped.
@@ -32,7 +33,7 @@ const ADULT_CERTS = {
 const PRIORITY = Object.keys(ADULT_CERTS);
 
 /** Bump when ADULT_CERTS / the decision rule changes — the backfill then re-checks every title. */
-const AGE_POLICY_VERSION = 2;
+const AGE_POLICY_VERSION = 3;
 
 const BACKFILL_STARTUP_DELAY_MS = 90 * 1000;
 const BACKFILL_INTERVAL_MS = 30 * 60 * 1000;
@@ -155,6 +156,16 @@ async function classifyAndSave(Model, kind, id) {
   if (result) {
     update.ageCertification = result.certification;
     if (result.mature && !doc.matureContent) update.matureContent = true;
+    // TMDB adult = sexual content — blocked from the site, not just age-gated
+    if (result.adult && !doc.policyRestricted) {
+      Object.assign(
+        update,
+        policyUpdateFields(
+          { restricted: true, reason: 'Blocked adult-flagged title for AdSense compliance' },
+          doc.status
+        )
+      );
+    }
     if (!doc.tmdbId) update.tmdbId = result.tmdbId;
     const stored = Number(doc.imdbRating) || 0;
     if (stored <= 0 && result.voteCount >= MIN_VOTES_FOR_RATING && result.voteAverage > 0) {
@@ -163,7 +174,7 @@ async function classifyAndSave(Model, kind, id) {
   }
   await Model.updateOne({ _id: id }, { $set: update });
   // tmdbId lets home rows (discovery TMDB map) match the title
-  return Boolean(update.matureContent || update.imdbRating || update.tmdbId);
+  return Boolean(update.matureContent || update.policyRestricted || update.imdbRating || update.tmdbId);
 }
 
 const targets = () => [

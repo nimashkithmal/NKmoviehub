@@ -8,7 +8,7 @@
     "dev": "nodemon server.js",
     "adsense:audit": "node scripts/adsenseAudit.js",
     "adsense:cleanup": "node scripts/adsenseAudit.js --cleanup",
-    "unblock:legacy": "node scripts/unblockLegacyTitles.js"
+    "delete:blocked": "node scripts/deleteBlockedMovies.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
