@@ -15,6 +15,11 @@ const cache = {
   topRated: { ids: [], at: 0 }
 };
 
+const safeTmdbErrorMessage = (error) =>
+  String(error?.message || error || 'TMDB request failed')
+    .replace(/([?&]api_key=)[^&\s]+/gi, '$1<redacted>')
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+\/-]+/gi, '$1<redacted>');
+
 function getTmdbAuth() {
   const apiKey = String(process.env.TMDB_API_KEY || '').trim();
   const token = String(
@@ -78,6 +83,131 @@ function mapTmdbRowToEmbedShape(row = {}, kind = 'movie') {
     original_language: row.original_language || '',
     adult: row.adult === true
   };
+}
+
+const MOVIE_GENRES = new Map([
+  [28, 'Action'],
+  [12, 'Adventure'],
+  [16, 'Animation'],
+  [35, 'Comedy'],
+  [80, 'Crime'],
+  [99, 'Documentary'],
+  [18, 'Drama'],
+  [10751, 'Family'],
+  [14, 'Fantasy'],
+  [36, 'History'],
+  [27, 'Horror'],
+  [10402, 'Music'],
+  [9648, 'Mystery'],
+  [10749, 'Romance'],
+  [878, 'Science Fiction'],
+  [10770, 'TV Movie'],
+  [53, 'Thriller'],
+  [10752, 'War'],
+  [37, 'Western']
+]);
+
+const TV_GENRES = new Map([
+  [10759, 'Action & Adventure'],
+  [16, 'Animation'],
+  [35, 'Comedy'],
+  [80, 'Crime'],
+  [99, 'Documentary'],
+  [18, 'Drama'],
+  [10751, 'Family'],
+  [10762, 'Kids'],
+  [9648, 'Mystery'],
+  [10763, 'News'],
+  [10764, 'Reality'],
+  [10765, 'Sci-Fi & Fantasy'],
+  [10766, 'Soap'],
+  [10767, 'Talk'],
+  [10768, 'War & Politics'],
+  [37, 'Western']
+]);
+
+/**
+ * Search TMDB directly and return rows compatible with the 2embed sync mapper.
+ * This lets an admin queue a title by name even when 2embed search has not
+ * indexed it yet or is unavailable. Playback still uses the configured embed
+ * URL after the pending title is approved.
+ */
+async function searchTmdbTitles(
+  kind = 'movie',
+  query = '',
+  { limit = 8, language = 'en-US', includeAdult = true } = {}
+) {
+  if (!hasTmdbAuth()) return [];
+  const q = String(query || '').trim();
+  if (!q) return [];
+
+  const isTv = kind === 'tv' || kind === 'tvshow';
+  const searchPath = isTv ? '/search/tv' : '/search/movie';
+  const genreMap = isTv ? TV_GENRES : MOVIE_GENRES;
+
+  try {
+    const data = await fetchTmdbJson(searchPath, {
+      query: q,
+      language,
+      include_adult: includeAdult ? 'true' : 'false',
+      page: 1
+    });
+
+    const results = (Array.isArray(data?.results) ? data.results : [])
+      .slice(0, Math.max(1, Math.min(20, limit)));
+
+    return Promise.all(results.map(async (row) => {
+        const releaseDate = String(
+          isTv ? row.first_air_date || '' : row.release_date || ''
+        ).trim();
+        const genres = (Array.isArray(row.genre_ids) ? row.genre_ids : [])
+          .map((id) => genreMap.get(Number(id)))
+          .filter(Boolean);
+        let alternativeTitles = [];
+
+        try {
+          const aliases = await fetchTmdbJson(
+            `${isTv ? '/tv' : '/movie'}/${row.id}/alternative_titles`
+          );
+          const aliasRows = isTv ? aliases?.results : aliases?.titles;
+          alternativeTitles = (Array.isArray(aliasRows) ? aliasRows : [])
+            .map((item) => String(item?.title || '').trim())
+            .filter(Boolean);
+        } catch {
+          // Search metadata is still enough to queue the title.
+        }
+
+        return {
+          title: row.title || row.name || '',
+          name: row.name || row.title || '',
+          original_title: row.original_title || row.original_name || '',
+          alternative_titles: alternativeTitles,
+          year: releaseDate.slice(0, 4) || '',
+          release_date: releaseDate,
+          first_air_date: isTv ? releaseDate : undefined,
+          status: 'Released',
+          tmdb_id: row.id,
+          poster: row.poster_path
+            ? `https://image.tmdb.org/t/p/w500${row.poster_path}`
+            : '',
+          backdrops: row.backdrop_path
+            ? [`https://image.tmdb.org/t/p/w1280${row.backdrop_path}`]
+            : [],
+          plot: row.overview || '',
+          overview: row.overview || '',
+          vote_average: row.vote_average,
+          vote_count: row.vote_count,
+          popularity: row.popularity,
+          original_language: row.original_language || '',
+          adult: row.adult === true,
+          genres,
+          source: 'tmdb'
+        };
+      })).then((rows) => rows.filter((row) => row.tmdb_id && (row.title || row.name)));
+  } catch (err) {
+    console.warn('TMDB title search failed:', safeTmdbErrorMessage(err));
+    return [];
+  }
 }
 
 /**
@@ -153,7 +283,7 @@ async function fetchTmdbMovieListIds(
       return ids.slice(0, limit);
     }
   } catch (err) {
-    console.warn(`TMDB ${pathname} unavailable:`, err.message || err);
+    console.warn(`TMDB ${pathname} unavailable:`, safeTmdbErrorMessage(err));
   }
 
   return hit.ids.length && now - hit.at < STALE_TTL_MS
@@ -246,7 +376,7 @@ async function fetchTmdbAllTrendingEntries(
       return entries.slice(0, limit);
     }
   } catch (err) {
-    console.warn(`TMDB trending/all/${window} unavailable:`, err.message || err);
+    console.warn(`TMDB trending/all/${window} unavailable:`, safeTmdbErrorMessage(err));
   }
 
   return Array.isArray(hit.entries) && hit.entries.length && now - hit.at < STALE_TTL_MS
@@ -293,7 +423,7 @@ async function fetchTmdbTrendingRows(
       if (page >= (Number(data?.total_pages) || 1)) break;
     }
   } catch (err) {
-    console.warn('TMDB trending unavailable:', err.message || err);
+    console.warn('TMDB trending unavailable:', safeTmdbErrorMessage(err));
     return [];
   }
 
@@ -358,7 +488,7 @@ async function searchTmdbForImdbIds(
 
     return out;
   } catch (err) {
-    console.warn('TMDB title→IMDb lookup failed:', err.message || err);
+    console.warn('TMDB title→IMDb lookup failed:', safeTmdbErrorMessage(err));
     return [];
   }
 }
@@ -372,5 +502,6 @@ module.exports = {
   fetchNowPlayingTmdbIds,
   fetchTopRatedTmdbIds,
   fetchTmdbAllTrendingEntries,
-  searchTmdbForImdbIds
+  searchTmdbForImdbIds,
+  searchTmdbTitles
 };

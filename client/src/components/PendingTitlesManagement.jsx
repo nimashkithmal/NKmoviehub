@@ -153,8 +153,8 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
           }
           showNotification?.(
             type === 'tvshow' || typeFilter === 'tvshow'
-              ? `Searching TV series "${query}" on 2embed…`
-              : `Syncing "${query}" from 2embed…`,
+              ? `Searching TV series "${query}"…`
+              : `Searching for "${query}"…`,
             'success'
           );
         } else {
@@ -285,9 +285,9 @@ const PendingTitlesManagement = ({ token, showNotification }) => {
     <div className="pending-titles card">
       <div className="pending-titles-header">
         <div>
-          <h2>New from 2embed</h2>
+          <h2>New Titles</h2>
           <p className="pending-titles-sub">
-            Type a TV series name, click the <strong>TV Series</strong> filter, then Sync Now. Seasons and episodes load automatically.
+            Search by movie or TV title, then click Sync Now. TMDB is used as a fallback when the title is unavailable from 2embed.
           </p>
         </div>
         <div className="pending-titles-actions">

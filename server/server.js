@@ -9,7 +9,7 @@ dotenv.config({ path: path.join(__dirname, 'config.env') });
 
 // Debug environment variables
 console.log('🔍 Environment variables debug:');
-console.log('EMAIL_USER:', process.env.EMAIL_USER);
+console.log('EMAIL_USER:', process.env.EMAIL_USER ? 'Configured' : 'Missing');
 console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'Not set');
 console.log('Config file path:', path.join(__dirname, 'config.env'));
 
@@ -72,7 +72,7 @@ mongoose.connect(process.env.MONGODB_URI, {
 })
 .then(() => {
   console.log('✅ Connected to MongoDB successfully');
-  console.log(`📊 Database: ${process.env.MONGODB_URI}`);
+  console.log('📊 Database: Configured');
   startCastIndexer();
   startEmbedSyncIndexer();
   startAgeClassificationIndexer();
@@ -149,4 +149,4 @@ app.listen(PORT, () => {
   console.log(`📚 API Documentation: http://localhost:${PORT}/api/health`);
   console.log(`🔐 JWT Secret: ${process.env.JWT_SECRET ? 'Configured' : 'Missing'}`);
   console.log(`☁️  Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Configured' : 'Missing'}`);
-}); 
+});

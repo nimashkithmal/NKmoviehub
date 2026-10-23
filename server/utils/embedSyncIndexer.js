@@ -361,6 +361,16 @@ async function collectTrendingCandidates() {
 const searchRowTitle = (row, itemType) =>
   String(itemType === 'tvshow' ? row.name : row.title || '').trim();
 
+const searchRowTitles = (row, itemType) =>
+  [
+    searchRowTitle(row, itemType),
+    row?.original_title,
+    row?.original_name,
+    ...(Array.isArray(row?.alternative_titles) ? row.alternative_titles : [])
+  ]
+    .map((title) => String(title || '').trim())
+    .filter(Boolean);
+
 const searchRowYear = (row, itemType) => {
   const raw =
     itemType === 'tvshow'
@@ -458,6 +468,14 @@ const titleMatchScore = (query, title, yearHint, rowYear) => {
   return score;
 };
 
+const bestTitleMatchScore = (query, row, itemType, yearHint) =>
+  Math.max(
+    0,
+    ...searchRowTitles(row, itemType).map((title) =>
+      titleMatchScore(query, title, yearHint, searchRowYear(row, itemType))
+    )
+  );
+
 const querySuggestsTvShow = (query = '') =>
   /\b(tv\s*(series|show)|\bseries\b|\bseasons?\b)/i.test(String(query));
 
@@ -480,6 +498,11 @@ const adjustSearchPickScore = (pick, query) => {
     }
     const votes = Number(row.vote_count);
     if (Number.isFinite(votes) && votes <= 10) score -= 10;
+  }
+
+  if (row?.source === 'tmdb') {
+    if (!searchRowYear(row, pick.type)) score -= 15;
+    if (Number(row.vote_count) >= 10) score += 5;
   }
 
   return score;
@@ -565,6 +588,31 @@ async function fetchSearchResults(itemType, query) {
     console.warn(`2embed.skin search failed (${itemType}):`, err.message || err);
   }
 
+  if (rows.length) return rows;
+
+  // Final fallback: queue matching TMDB metadata even when 2embed has not
+  // indexed the title. The approved movie still receives its normal embed URL.
+  try {
+    const { searchTmdbTitles } = require('./tmdb');
+    const tmdbRows = await searchTmdbTitles(itemType, query, {
+      limit: 8,
+      includeAdult: true
+    });
+    for (const row of tmdbRows) {
+      const tmdbId = row?.tmdb_id != null ? String(row.tmdb_id) : '';
+      if (!tmdbId || seen.has(tmdbId)) continue;
+      seen.add(tmdbId);
+      rows.push(row);
+    }
+    if (rows.length) {
+      console.log(
+        `Title search "${query}" (${itemType}): using TMDB fallback (${rows.length})`
+      );
+    }
+  } catch (err) {
+    console.warn(`TMDB fallback search failed (${itemType}):`, err.message || err);
+  }
+
   return rows;
 }
 
@@ -584,14 +632,9 @@ async function collectSearchCandidates(query, typeFilter = '') {
       picks.push({
         type: 'movie',
         tmdbId: String(row.tmdb_id),
-        source: 'search',
+        source: row.source === 'tmdb' ? 'tmdb_search' : 'search',
         searchRow: row,
-        score: titleMatchScore(
-          normalized,
-          searchRowTitle(row, 'movie'),
-          yearHint,
-          searchRowYear(row, 'movie')
-        )
+        score: bestTitleMatchScore(normalized, row, 'movie', yearHint)
       });
     }
   }
@@ -603,14 +646,9 @@ async function collectSearchCandidates(query, typeFilter = '') {
       picks.push({
         type: 'tvshow',
         tmdbId: String(row.tmdb_id),
-        source: 'search',
+        source: row.source === 'tmdb' ? 'tmdb_search' : 'search',
         searchRow: row,
-        score: titleMatchScore(
-          normalized,
-          searchRowTitle(row, 'tvshow'),
-          yearHint,
-          searchRowYear(row, 'tvshow')
-        )
+        score: bestTitleMatchScore(normalized, row, 'tvshow', yearHint)
       });
     }
   }
