@@ -24,7 +24,8 @@ import './TVWatchPage.css';
 
 const PLAYER_LOADING_TIMEOUT_MS = 10000;
 const PRECONNECT_HOSTS = [
-  'https://vidsrc.to',
+  'https://autoembed.me',
+  'https://vidsrc.sh',
   'https://player.videasy.net',
   'https://moviesapi.to',
   'https://vidlink.pro',
@@ -342,6 +343,7 @@ const TVWatchPage = () => {
                   className={`tv-watch-iframe${playerLoading ? ' is-loading' : ''}`}
                   allowFullScreen
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen *"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   onLoad={() => setPlayerLoading(false)}
                 />
               )}

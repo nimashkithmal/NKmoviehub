@@ -177,8 +177,8 @@ router.post('/run', protect, restrictToAdmin, (req, res) => {
   res.json({
     success: true,
     message: query
-      ? `Searching 2embed for "${query}"`
-      : '2embed trending sync started',
+      ? `Searching catalog sources for "${query}"`
+      : 'Trending title sync started',
     data: { ...getEmbedSyncStatus(), ...result }
   });
 });

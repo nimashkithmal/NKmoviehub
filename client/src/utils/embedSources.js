@@ -7,6 +7,8 @@ import {
   unwrapGoogleRedirect
 } from './trailerUrl';
 
+const VIDSRC_EMBED_BASE = 'https://vidsrc.sh';
+
 export const getEmbedPlayableUrl = (url) => {
   if (!url) return null;
 
@@ -72,9 +74,11 @@ export const buildTvEmbedSources = ({ tmdbId, season = 1, episode = 1, episodeUr
   const e = Number(episode) || 1;
   if (!tmdbId) return [];
 
-  // VidSrc first (more reliable default). Videasy replaces flaky 2embed as #2.
+  // AutoEmbed provides its own provider switcher, so a single upstream outage
+  // does not leave Server 1 stuck on a dead nested player.
   const sources = [
-    { url: `https://vidsrc.to/embed/tv/${tmdbId}/${s}/${e}` },
+    { url: `https://autoembed.me/tv/tmdb/${tmdbId}-${s}-${e}` },
+    { url: `${VIDSRC_EMBED_BASE}/embed/tv/${tmdbId}/${s}/${e}` },
     { url: `https://player.videasy.net/tv/${tmdbId}/${s}/${e}` },
     { url: `https://moviesapi.to/tv/${tmdbId}-${s}-${e}` },
     { url: `https://vidlink.pro/tv/${tmdbId}/${s}/${e}` },
@@ -110,7 +114,7 @@ export const buildEmbedSourcesFromUrl = (url) => {
     const id = movieMatch[1];
     // Server 1 = former Server 2 (vidsrc). Server 2 = Videasy (2embed replacement).
     return uniqueLabeledSources([
-      { url: `https://vidsrc.to/embed/movie/${id}` },
+      { url: `${VIDSRC_EMBED_BASE}/embed/movie/${id}` },
       { url: `https://player.videasy.net/movie/${id}` },
       { url: `https://moviesapi.to/movie/${id}` },
       { url: `https://vidlink.pro/movie/${id}` },
@@ -122,7 +126,7 @@ export const buildEmbedSourcesFromUrl = (url) => {
 
   if (imdbMovie) {
     return uniqueLabeledSources([
-      { url: `https://vidsrc.to/embed/movie?imdb=${imdbMovie[1]}` },
+      { url: `${VIDSRC_EMBED_BASE}/embed/movie/${imdbMovie[1]}` },
       { url: `https://www.2embed.cc/embed/${imdbMovie[1]}` }
     ]);
   }
