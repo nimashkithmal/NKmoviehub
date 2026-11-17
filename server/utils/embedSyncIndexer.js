@@ -620,6 +620,21 @@ async function collectSearchCandidates(query, typeFilter = '') {
   const raw = String(query || '').trim();
   if (!raw) return collectTrendingCandidates();
 
+  // IMDb ids are external identifiers, not titles. Resolve them with TMDB's
+  // dedicated /find endpoint so an exact id such as tt32080876 cannot drift to
+  // a similarly named result such as "How to Train Your Dragon".
+  if (/^tt\d+$/i.test(raw)) {
+    const { findTmdbTitlesByImdbId } = require('./tmdb');
+    const rows = await findTmdbTitlesByImdbId(raw, typeFilter);
+    const picks = rows.map((row) => ({
+      type: row.type,
+      tmdbId: String(row.tmdb_id),
+      source: 'tmdb_search',
+      searchRow: row
+    }));
+    if (picks.length) return [picks[0]];
+  }
+
   const { query: normalized, year: yearHint } = normalizeSearchQuery(raw);
   if (!normalized) return [];
 

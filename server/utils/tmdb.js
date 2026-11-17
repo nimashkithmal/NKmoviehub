@@ -211,6 +211,100 @@ async function searchTmdbTitles(
 }
 
 /**
+ * Resolve an IMDb title id through TMDB's /find endpoint.
+ *
+ * Text search does not reliably understand values such as "tt32080876".
+ * The dedicated external-id endpoint does, and lets the admin sync screen
+ * queue the exact movie/TV title instead of guessing from a similar name.
+ */
+async function findTmdbTitlesByImdbId(imdbId = '', kind = '') {
+  if (!hasTmdbAuth()) return [];
+
+  const id = String(imdbId || '').trim().toLowerCase();
+  if (!/^tt\d+$/.test(id)) return [];
+
+  const requestedKind = kind === 'tvshow' || kind === 'tv' ? 'tvshow' :
+    kind === 'movie' ? 'movie' : '';
+
+  try {
+    const found = await fetchTmdbJson(`/find/${encodeURIComponent(id)}`, {
+      external_source: 'imdb_id'
+    });
+    const matches = [];
+
+    if (!requestedKind || requestedKind === 'movie') {
+      for (const row of Array.isArray(found?.movie_results) ? found.movie_results : []) {
+        if (row?.id) matches.push({ type: 'movie', row });
+      }
+    }
+    if (!requestedKind || requestedKind === 'tvshow') {
+      for (const row of Array.isArray(found?.tv_results) ? found.tv_results : []) {
+        if (row?.id) matches.push({ type: 'tvshow', row });
+      }
+    }
+
+    const rows = [];
+    for (const match of matches) {
+      const isTv = match.type === 'tvshow';
+      let details = match.row;
+      try {
+        details = await fetchTmdbJson(
+          `/${isTv ? 'tv' : 'movie'}/${match.row.id}`,
+          { append_to_response: 'credits,videos,external_ids' }
+        );
+      } catch {
+        // /find already contains enough metadata to queue a basic title.
+      }
+
+      const releaseDate = String(
+        isTv ? details.first_air_date || '' : details.release_date || ''
+      ).trim();
+      const trailer = (Array.isArray(details?.videos?.results) ? details.videos.results : [])
+        .find((video) => video?.site === 'YouTube' && video?.type === 'Trailer');
+
+      rows.push({
+        type: match.type,
+        title: details.title || details.name || '',
+        name: details.name || details.title || '',
+        original_title: details.original_title || details.original_name || '',
+        year: releaseDate.slice(0, 4) || '',
+        release_date: releaseDate,
+        first_air_date: isTv ? releaseDate : undefined,
+        status: details.status || 'Released',
+        tmdb_id: details.id || match.row.id,
+        imdb_id: details?.external_ids?.imdb_id || id,
+        poster: details.poster_path
+          ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
+          : '',
+        backdrops: details.backdrop_path
+          ? [`https://image.tmdb.org/t/p/w1280${details.backdrop_path}`]
+          : [],
+        plot: details.overview || '',
+        overview: details.overview || '',
+        vote_average: details.vote_average,
+        vote_count: details.vote_count,
+        original_language: details.original_language || '',
+        adult: details.adult === true,
+        genres: (Array.isArray(details.genres) ? details.genres : [])
+          .map((genre) => genre?.name)
+          .filter(Boolean),
+        runtime: isTv ? undefined : details.runtime,
+        number_of_seasons: isTv ? details.number_of_seasons : undefined,
+        number_of_episodes: isTv ? details.number_of_episodes : undefined,
+        trailer: trailer?.key || '',
+        cast_crew: { crew: details?.credits?.crew || [] },
+        source: 'tmdb'
+      });
+    }
+
+    return rows.filter((row) => row.tmdb_id && (row.title || row.name));
+  } catch (err) {
+    console.warn('TMDB IMDb-id lookup failed:', safeTmdbErrorMessage(err));
+    return [];
+  }
+}
+
+/**
  * Ordered TMDB movie ids from list endpoints (popular / now_playing / top_rated).
  * Skips adult titles. Cached briefly so home + browse stay live.
  */
@@ -502,6 +596,7 @@ module.exports = {
   fetchNowPlayingTmdbIds,
   fetchTopRatedTmdbIds,
   fetchTmdbAllTrendingEntries,
+  findTmdbTitlesByImdbId,
   searchTmdbForImdbIds,
   searchTmdbTitles
 };
