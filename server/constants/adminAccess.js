@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
 const getSuperAdminEmail = () =>
-  String(process.env.SUPER_ADMIN_EMAIL || 'qwe730375@gmail.com').trim().toLowerCase();
+  String(process.env.SUPER_ADMIN_EMAIL || 'nimashkithmal13@gmail.com').trim().toLowerCase();
 
 const isSuperAdmin = (user) =>
   Boolean(user?.email && String(user.email).trim().toLowerCase() === getSuperAdminEmail());

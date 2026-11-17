@@ -31,7 +31,7 @@ The preview above is pulled from the live URL when you view this README (no scre
 - **Cast** indexing from 2embed metadata
 
 ### Admin accounts
-- **Super admin** (`SUPER_ADMIN_EMAIL`, default `qwe730375@gmail.com`) can **invite new admins**
+- **Super admin** (`SUPER_ADMIN_EMAIL`, default `nimashkithmal13@gmail.com`) can **invite new admins**
 - Invite flow: enter name + email → system emails a **temporary password** → new admin logs in at `/login` → **OTP** to their email → set a **permanent password** → full admin access
 - Other admins see the admin list but **cannot** invite new admins
 - Admin login is separate from the public site (`/login` is admin-only)
@@ -91,7 +91,7 @@ JWT_SECRET=your_secret
 EMAIL_USER=your-gmail@gmail.com
 EMAIL_PASS=your-gmail-app-password
 
-SUPER_ADMIN_EMAIL=qwe730375@gmail.com
+SUPER_ADMIN_EMAIL=nimashkithmal13@gmail.com
 CLIENT_URL=http://localhost:3000
 SITE_URL=http://localhost:3000
 
