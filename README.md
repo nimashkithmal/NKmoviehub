@@ -89,7 +89,8 @@ MONGODB_URI=your_mongodb_uri
 JWT_SECRET=your_secret
 
 EMAIL_USER=your-gmail@gmail.com
-EMAIL_PASS=your-gmail-app-password
+# A Google App Password for the same EMAIL_USER account (not its login password)
+EMAIL_PASS=your-16-character-gmail-app-password
 
 SUPER_ADMIN_EMAIL=nimashkithmal13@gmail.com
 CLIENT_URL=http://localhost:3000
@@ -103,6 +104,11 @@ CLOUDINARY_API_SECRET=...
 TMDB_API_KEY=your_tmdb_v3_api_key
 # Also set the same value as GitHub Actions secret TMDB_API_KEY so EC2 deploys sync it.
 ```
+
+For the live EC2 deployment, add `EMAIL_USER` and `EMAIL_PASS` as GitHub
+repository Actions secrets. The deploy workflow writes them to
+`server/config.env` before restarting PM2. Gmail requires 2-Step Verification
+and a dedicated App Password; a normal Google account password will be rejected.
 
 ### Run
 

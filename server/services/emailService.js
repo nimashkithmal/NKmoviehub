@@ -7,38 +7,52 @@ class EmailService {
   }
 
   initializeTransporter() {
+    const emailUser = String(process.env.EMAIL_USER || '').trim();
+    // Google displays app passwords in four groups. SMTP expects the same
+    // 16-character password, so tolerate copied spaces/newlines here.
+    const emailPass = String(process.env.EMAIL_PASS || '').replace(/\s/g, '');
+
     // Check if we have valid email credentials
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || 
-        process.env.EMAIL_PASS === 'your-16-character-app-password-here' ||
-        process.env.EMAIL_PASS.trim() === '') {
-      console.log('⚠️  Email service disabled - Please configure EMAIL_USER and EMAIL_PASS in config.env');
-      console.log('Current EMAIL_USER:', process.env.EMAIL_USER);
-      console.log('Current EMAIL_PASS:', process.env.EMAIL_PASS ? 'Set' : 'Not set');
+    if (!emailUser || !emailPass ||
+        emailPass === 'your-16-character-app-password-here') {
+      console.log('⚠️  Email service disabled - configure EMAIL_USER and EMAIL_PASS');
+      console.log('Current EMAIL_USER:', emailUser || 'Not set');
+      console.log('Current EMAIL_PASS:', emailPass ? 'Set' : 'Not set');
       this.transporter = null;
       return;
     }
 
     // Gmail SMTP configuration
     this.transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
       auth: {
-        user: process.env.EMAIL_USER, // Your Gmail address
-        pass: process.env.EMAIL_PASS  // Your Gmail App Password
+        user: emailUser,
+        pass: emailPass
       }
     });
 
     // Verify connection configuration
     this.transporter.verify((error, success) => {
       if (error) {
-        console.error('❌ Email service configuration error:', error);
+        console.error('❌ Email service configuration error:', this.getSafeErrorMessage(error));
         console.log('💡 To fix this:');
         console.log('   1. Enable 2-Step Verification in your Google Account');
         console.log('   2. Generate an App Password');
-        console.log('   3. Update EMAIL_PASS in config.env with the App Password');
+        console.log('   3. Set EMAIL_USER and EMAIL_PASS to the matching Gmail account and App Password');
       } else {
         console.log('✅ Email service is ready to send messages');
       }
     });
+  }
+
+  getSafeErrorMessage(error) {
+    const detail = String(error?.message || 'Email delivery failed');
+    if (error?.responseCode === 535 || /535[ -]5\.7\.8|BadCredentials|Username and Password not accepted/i.test(detail)) {
+      return 'Gmail authentication failed. EMAIL_USER and EMAIL_PASS must be a matching Gmail address and current 16-character App Password.';
+    }
+    return detail;
   }
 
   async sendContactReply(contactData, replyMessage, adminName = 'NK Movie Hub Admin') {
@@ -63,7 +77,7 @@ class EmailService {
       return { success: true, messageId: result.messageId };
     } catch (error) {
       console.error('❌ Error sending email:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: this.getSafeErrorMessage(error) };
     }
   }
 
@@ -89,7 +103,7 @@ class EmailService {
       return { success: true, messageId: result.messageId };
     } catch (error) {
       console.error('❌ Error sending confirmation email:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: this.getSafeErrorMessage(error) };
     }
   }
 
@@ -115,7 +129,7 @@ class EmailService {
       return { success: true, messageId: result.messageId };
     } catch (error) {
       console.error('❌ Error sending password reset code:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: this.getSafeErrorMessage(error) };
     }
   }
 
@@ -164,7 +178,7 @@ class EmailService {
           error: `Could not deliver to ${recipient}. That email address does not exist or cannot receive mail.`
         };
       }
-      return { success: false, error: error.message || 'Failed to send welcome email' };
+      return { success: false, error: this.getSafeErrorMessage(error) };
     }
   }
 

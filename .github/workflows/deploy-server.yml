@@ -57,19 +57,23 @@ jobs:
           SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
         run: |
           missing=""
 
           [ -z "$EC2_HOST" ] && missing="$missing EC2_HOST"
           [ -z "$EC2_USER" ] && missing="$missing EC2_USER"
           [ -z "$SSH_KEY" ] && missing="$missing EC2_SSH_KEY"
+          [ -z "$EMAIL_USER" ] && missing="$missing EMAIL_USER"
+          [ -z "$EMAIL_PASS" ] && missing="$missing EMAIL_PASS"
 
           if [ -n "$missing" ]; then
             echo "Missing repository secret(s):$missing"
             exit 1
           fi
 
-          echo "All three secrets are present."
+          echo "All required deployment secrets are present."
 
       - name: Diagnose connectivity to the server
         env:
@@ -115,6 +119,8 @@ jobs:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
         run: |
           mkdir -p ~/.ssh
 
@@ -135,7 +141,7 @@ jobs:
               -o BatchMode=yes \
               -o ConnectTimeout=20 \
               "$EC2_USER@$EC2_HOST" \
-              APP_DIR="$APP_DIR" PM2_APP="$PM2_APP" TMDB_API_KEY="$TMDB_API_KEY" 'bash -s' <<'REMOTE'
+              APP_DIR="$APP_DIR" PM2_APP="$PM2_APP" TMDB_API_KEY="$TMDB_API_KEY" EMAIL_USER="$EMAIL_USER" EMAIL_PASS="$EMAIL_PASS" 'bash -s' <<'REMOTE'
 
             set -euo pipefail
 
@@ -163,8 +169,25 @@ jobs:
             cd server
             npm ci
 
-            echo "--- syncing TMDB_API_KEY into config.env ---"
+            echo "--- syncing email credentials into config.env ---"
             CONFIG="$APP_DIR/server/config.env"
+            touch "$CONFIG"
+            update_config_value() {
+              key="$1"
+              value="$2"
+              if grep -q "^${key}=" "$CONFIG" 2>/dev/null; then
+                escaped_value=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
+                sed -i "s|^${key}=.*$|${key}=${escaped_value}|" "$CONFIG"
+              else
+                printf '\n%s=%s\n' "$key" "$value" >> "$CONFIG"
+              fi
+            }
+            update_config_value EMAIL_USER "$EMAIL_USER"
+            update_config_value EMAIL_PASS "$EMAIL_PASS"
+            chmod 600 "$CONFIG"
+            echo "Email credentials synced to config.env"
+
+            echo "--- syncing TMDB_API_KEY into config.env ---"
             if [ -n "${TMDB_API_KEY:-}" ]; then
               touch "$CONFIG"
               if grep -q '^TMDB_API_KEY=' "$CONFIG" 2>/dev/null; then

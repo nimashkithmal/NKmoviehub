@@ -30,13 +30,6 @@ if (!process.env.CLOUDINARY_CLOUD_NAME) {
   console.log('⚠️  Using fallback Cloudinary environment variables');
 }
 
-// Fallback: manually set email environment variables if dotenv fails
-if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-  process.env.EMAIL_USER = 'qwe730375@gmail.com';
-  process.env.EMAIL_PASS = 'rvwp miid gpqr clri';
-  console.log('⚠️  Using fallback email environment variables');
-}
-
 // Import routes after environment variables are set
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
