@@ -5,7 +5,7 @@ const PendingTitle = require('../models/PendingTitle');
 const { protect, restrictToAdmin } = require('../middleware/auth');
 const { findExistingMovieDuplicate } = require('../utils/deduplicateMovies');
 const { uploadPoster } = require('../utils/cloudinaryUpload');
-const { evaluateContentPolicy } = require('../utils/contentPolicy');
+const { evaluateContentPolicy, policyUpdateFields } = require('../utils/contentPolicy');
 const { buildEpisodeUrl } = require('../utils/tvEpisodeUrls');
 const { buildAllSeasonEpisodes, summarizeEpisodes } = require('../utils/tvSeasonEpisodes');
 const { invalidateOnCatalogWrite } = require('../utils/publicCatalogCache');
@@ -55,13 +55,20 @@ async function approvePendingTitle(pending, userId, payload = {}) {
           : 'active';
   const siteStatus = catalogStatus === 'coming_soon' ? 'coming_soon' : 'active';
 
-  // Adult-content matches are not blocked — they are added as 18+ (age-gated)
-  const policy = evaluateContentPolicy({ title, description, genre });
-  const matureContent =
+  const requestedMature =
     payload.matureContent === true ||
     payload.matureContent === 'true' ||
-    pending.matureContent === true ||
+    pending.matureContent === true;
+  const policy = evaluateContentPolicy({
+    title,
+    description,
+    genre,
+    matureContent: requestedMature
+  });
+  const matureContent =
+    requestedMature ||
     policy.mature;
+  const policyFields = policyUpdateFields(policy);
 
   if (!title || !year || !description || !genre) {
     throw new Error('Title, year, description, and genre are required');
@@ -106,10 +113,8 @@ async function approvePendingTitle(pending, userId, payload = {}) {
       releaseStatus: String(payload.releaseStatus ?? pending.releaseStatus ?? '').trim(),
       addedBy: userId,
       status: siteStatus,
-      policyRestricted: false,
-      policyRestrictedReason: '',
-      adsenseSafe: true,
-      matureContent
+      matureContent,
+      ...policyFields
     });
 
     return { kind: 'movie', id: movie._id };
@@ -151,10 +156,8 @@ async function approvePendingTitle(pending, userId, payload = {}) {
     tmdbId,
     addedBy: userId,
     status: siteStatus,
-    policyRestricted: false,
-    policyRestrictedReason: '',
-    adsenseSafe: true,
-    matureContent
+    matureContent,
+    ...policyFields
   });
 
   return { kind: 'tvshow', id: tvShow._id, numberOfSeasons: resolvedSeasons, episodeCount: episodes.length };

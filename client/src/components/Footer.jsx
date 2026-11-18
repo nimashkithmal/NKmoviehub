@@ -62,6 +62,7 @@ const Footer = () => {
           
           <nav className="footer-links" aria-label="Site links">
             <Link to="/about">About</Link>
+            <Link to="/how-we-curate">How We Curate</Link>
             <Link to="/contact">Contact</Link>
             <Link to="/privacy">Privacy</Link>
             <Link to="/terms">Terms</Link>

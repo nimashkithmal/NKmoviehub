@@ -20,8 +20,6 @@ const {
 } = require('../utils/comingSoon');
 const { invalidateOnCatalogWrite } = require('../utils/publicCatalogCache');
 
-/** Virtual genre: titles flagged 18+ (admin or TMDB certification). */
-const MATURE_GENRE = '18+';
 const {
   applyPublicCatalogFilter,
   filterPublicItems,
@@ -143,9 +141,7 @@ router.get('/', async (req, res) => {
       applyCatalogTextSearch(filter, search);
     }
     
-    if (genre === MATURE_GENRE) {
-      filter.matureContent = true;
-    } else if (genre) {
+    if (genre) {
       const escaped = String(genre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.genre = {
         $regex: `(^|[,|/]\\s*)${escaped}(?=\\s*[,|/]|$)`,
@@ -324,7 +320,10 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
 router.get('/filters', async (req, res) => {
   try {
     // Split combined strings like "Action, Adventure, Comedy" into single genres
-    const rawGenres = await TVShow.distinct('genre', { status: 'active' });
+    const rawGenres = await TVShow.distinct(
+      'genre',
+      applyPublicCatalogFilter({ status: 'active' })
+    );
     const genreSet = new Set();
     for (const value of rawGenres) {
       String(value || '')
@@ -335,13 +334,17 @@ router.get('/filters', async (req, res) => {
         });
     }
     const genres = Array.from(genreSet).sort((a, b) => a.localeCompare(b));
-    if (await TVShow.exists({ status: 'active', matureContent: true })) genres.push(MATURE_GENRE);
-    
     // Get unique years, sorted descending
-    const years = await TVShow.distinct('year', { status: 'active' });
+    const years = await TVShow.distinct(
+      'year',
+      applyPublicCatalogFilter({ status: 'active' })
+    );
     const sortedYears = years.sort((a, b) => b - a);
 
-    const rawLanguages = await TVShow.distinct('language', { status: 'active' });
+    const rawLanguages = await TVShow.distinct(
+      'language',
+      applyPublicCatalogFilter({ status: 'active' })
+    );
     const languages = collectLanguageOptions(rawLanguages);
     
     res.json({
@@ -535,7 +538,8 @@ router.post('/', protect, restrictToAdmin, [
       title,
       description,
       genre,
-      tagline: req.body.tagline
+      tagline: req.body.tagline,
+      matureContent: req.body.matureContent === true || req.body.matureContent === 'true'
     });
 
     // Upload images to Cloudinary
@@ -629,7 +633,7 @@ router.post('/', protect, restrictToAdmin, [
       imageUrl,
       images: images, // Store array of images
       ...meta,
-      ...(policyCheck.mature ? { matureContent: true } : {}),
+      ...policyUpdateFields(policyCheck),
       addedBy: req.user.id
     };
     
@@ -850,7 +854,7 @@ router.put('/:id', protect, restrictToAdmin, [
     }
 
     const existing = await TVShow.findById(req.params.id).select(
-      'title description genre tagline status policyRestricted'
+      'title description genre tagline status policyRestricted matureContent'
     );
     if (!existing) {
       return res.status(404).json({
@@ -864,11 +868,12 @@ router.put('/:id', protect, restrictToAdmin, [
       description: updateData.description || existing.description,
       genre: updateData.genre || existing.genre,
       tagline: updateData.tagline ?? existing.tagline,
-      policyRestricted: existing.policyRestricted
+      matureContent:
+        updateData.matureContent !== undefined
+          ? updateData.matureContent
+          : existing.matureContent
     });
     const policyFields = policyUpdateFields(policyCheck);
-    // An explicit 18+ choice from the admin form wins over the automatic flag
-    if (updateData.matureContent !== undefined) delete policyFields.matureContent;
     Object.assign(updateData, policyFields);
 
     const tvShow = await TVShow.findByIdAndUpdate(

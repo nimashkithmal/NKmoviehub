@@ -16,7 +16,8 @@ const populateMovies = (query) =>
     match: {
       status: { $in: ['active', 'coming_soon'] },
       policyRestricted: { $ne: true },
-      adsenseSafe: { $ne: false }
+      adsenseSafe: { $ne: false },
+      matureContent: { $ne: true }
     }
   });
 

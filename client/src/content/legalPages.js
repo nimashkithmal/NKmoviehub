@@ -31,6 +31,46 @@ export const LEGAL_PAGES = {
       }
     ]
   },
+  curation: {
+    title: 'How We Curate',
+    subtitle: 'A practical guide to the signals behind our movie and TV discovery pages.',
+    sections: [
+      {
+        heading: 'What curation means here',
+        body: `NK Movie Hub is organised as a discovery guide, not a raw database dump. We combine release timing, audience ratings, catalogue availability, language, genre, and franchise order so visitors can move from a broad idea—such as “a recent science-fiction film”—to a useful shortlist. Automated signals help us find candidates, but they do not replace catalogue review.`
+      },
+      {
+        heading: 'How to read our discovery rows',
+        list: [
+          'Popular reflects current audience attention and is useful for finding widely discussed releases.',
+          'Top Rated favours stronger rating signals; very small vote counts are treated cautiously so a new title does not outrank an established favourite too easily.',
+          'Coming Soon is ordered by the nearest known release date and is revised when dates move.',
+          'Collections group related stories in a practical viewing order rather than repeating the same title across arbitrary keyword pages.',
+          'Language and genre filters are catalogue tools, not claims that every title belongs to only one category.'
+        ]
+      },
+      {
+        heading: 'Our catalogue checks',
+        body: `Before a title is eligible for public discovery, it must have a usable poster, a meaningful synopsis, a valid release year, and enough metadata to distinguish it from similarly named works. Duplicate records, broken pages, missing artwork, and incomplete descriptions are held back for correction. We also review banners, cast links, episode labels, and collection membership because an otherwise clean title can still surface unsuitable or misleading material through those routes.`
+      },
+      {
+        heading: 'General-audience standard',
+        body: `The public catalogue excludes titles and metadata centred on nudity, sexually suggestive entertainment, fetishes, sexual services, sexual merchandise, or sexual performance. A label or age gate is not used as a substitute for removal from the ad-supported public site. Records that trigger these checks remain unavailable unless an administrator corrects a genuine classification error.`
+      },
+      {
+        heading: 'Ratings are a starting point',
+        body: `A high score is not the same as a personal recommendation. Ratings tend to favour titles with an enthusiastic existing audience, while popularity can favour novelty. For a more balanced shortlist, compare the score with vote volume, release year, runtime, genre, language, and the title synopsis. Families should also verify the official local age classification because classifications differ by country.`
+      },
+      {
+        heading: 'Freshness and corrections',
+        body: `Release dates, availability, titles, and ratings can change. We revisit catalogue records as new metadata arrives and remove pages that no longer meet our quality or content standards. If you spot an incorrect date, duplicate, broken image, unsuitable title, or misleading description, send the exact page URL through the contact form so the record can be reviewed.`
+      },
+      {
+        heading: 'Editorial independence',
+        body: `Advertising does not determine which titles enter a row or collection. Placement is based on the catalogue rules described above. Posters, factual metadata, and third-party ratings remain attributable to their respective sources; our added value is the organisation, filtering, maintenance, and practical explanation of how to use those signals.`
+      }
+    ]
+  },
   disclaimer: {
     title: 'Disclaimer',
     subtitle: 'Important information about using NK Movie Hub.',

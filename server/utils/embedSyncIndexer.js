@@ -193,13 +193,13 @@ function mapEmbedToPending(type, tmdbId, data = {}, source = 'trending') {
   const description = descriptionFromEmbed(data);
   const genre = genreFromEmbed(data);
 
-  // Adult-content rules never drop a title — they mark it 18+ (age-gated on the site)
   const policy = evaluateContentPolicy({
     title,
     description,
     genre,
     adult: data.adult === true || data.is_adult === true
   });
+  if (policy.restricted) return null;
 
   const catalogStatus = resolveCatalogStatus(data);
   const releaseStatus = String(data.status || '').trim().slice(0, 80);

@@ -183,7 +183,9 @@ const normalizeContentFields = (item = {}) => {
     certification,
     adult: item.adult === true || item.isAdult === true || item.is_adult === true,
     policyRestricted: item.policyRestricted === true,
+    adsenseSafe: item.adsenseSafe !== false,
     policyRestrictedReason: item.policyRestrictedReason || '',
+    matureContent: item.matureContent === true,
     imageUrl: item.imageUrl || item.poster || item.poster_path || '',
     status: item.status
   };
@@ -203,7 +205,11 @@ const matchesAny = (text, patterns) =>
  * Primary AdSense safety check.
  * @returns {boolean} true when content is safe to show publicly for AdSense
  */
-const isAdsenseSafeContent = (item = {}) => !evaluateContentPolicy(item).restricted;
+const isAdsenseSafeContent = (item = {}) => {
+  const fields = normalizeContentFields(item);
+  if (fields.policyRestricted || !fields.adsenseSafe || fields.matureContent) return false;
+  return !evaluateContentPolicy(item).restricted;
+};
 
 /**
  * Thin / low-value page detection (missing overview or poster).
@@ -224,7 +230,7 @@ const isThinContent = (item = {}) => {
 
 /**
  * Safe for sitemap + crawler prerender (policy + quality).
- * 18+ titles are shown to visitors behind the age gate but kept out of search indexing.
+ * Mature and restricted titles are excluded from every ad-supported public surface.
  */
 const isIndexableContent = (item = {}) =>
   item.matureContent !== true &&
@@ -232,15 +238,15 @@ const isIndexableContent = (item = {}) =>
   !isThinContent(item);
 
 /**
- * Site policy: titles are never blocked or hidden. A title that matches the
- * adult / sexual-content signals is shown behind the 18+ age gate instead —
- * `mature: true` tells callers to set matureContent.
+ * Site policy: a title that matches adult / sexual-content signals is not
+ * published on the ad-supported public site. An age gate alone does not make
+ * restricted content eligible for Google-served ads.
  */
 const evaluateContentPolicy = (item = {}) => {
   const signal = detectAdultSignals(item);
   return {
-    restricted: false,
-    adsenseSafe: true,
+    restricted: signal.restricted,
+    adsenseSafe: !signal.restricted,
     mature: signal.restricted,
     reason: signal.reason
   };
@@ -251,6 +257,14 @@ const detectAdultSignals = (item = {}) => {
   const fields = normalizeContentFields(item);
   const { title } = fields;
   const text = getSearchText(fields);
+
+  if (fields.matureContent) {
+    return {
+      restricted: true,
+      adsenseSafe: false,
+      reason: 'Blocked mature title from the ad-supported public catalogue'
+    };
+  }
 
   if (fields.adult) {
     return {
@@ -306,7 +320,18 @@ const detectAdultSignals = (item = {}) => {
 const applyPublicCatalogFilter = (filter = {}) => ({
   ...filter,
   policyRestricted: { $ne: true },
-  adsenseSafe: { $ne: false }
+  adsenseSafe: { $ne: false },
+  matureContent: { $ne: true },
+  description: { $exists: true, $type: 'string', $regex: /[\s\S]{40,}/ },
+  $and: [
+    ...(filter.$and ? (Array.isArray(filter.$and) ? filter.$and : [filter.$and]) : []),
+    {
+      $or: [
+        { imageUrl: { $exists: true, $type: 'string', $ne: '' } },
+        { 'images.0': { $exists: true } }
+      ]
+    }
+  ]
 });
 
 /** Mongo filter for sitemap / SEO indexable pages. */
@@ -315,26 +340,18 @@ const applyIndexableCatalogFilter = (filter = {}) => {
   return {
     ...base,
     matureContent: { $ne: true },
-    description: { $exists: true, $type: 'string', $regex: /[\s\S]{40,}/ },
-    $and: [
-      ...(base.$and ? (Array.isArray(base.$and) ? base.$and : [base.$and]) : []),
-      {
-        $or: [
-          { imageUrl: { $exists: true, $type: 'string', $ne: '' } },
-          { 'images.0': { $exists: true } }
-        ]
-      }
-    ]
+    $and: base.$and
   };
 };
 
 const filterPublicItems = (items = []) =>
-  items.filter((item) => isAdsenseSafeContent(item));
+  items.filter((item) => isAdsenseSafeContent(item) && !isThinContent(item));
 
 const filterIndexableItems = (items = []) =>
   items.filter((item) => isIndexableContent(item));
 
-const isPubliclyAccessible = (item) => isAdsenseSafeContent(item);
+const isPubliclyAccessible = (item) =>
+  isAdsenseSafeContent(item) && !isThinContent(item);
 
 /**
  * Person / cast / crew AdSense safety.
@@ -441,26 +458,37 @@ const sanitizeEmbedMetadata = (data = {}) => {
 };
 
 /**
- * Build Mongo update fields after a policy evaluation.
- * Titles are never restricted — adult signals only add the 18+ flag
- * (an 18+ flag set by an admin or TMDB is never cleared here).
+ * Build Mongo update fields after a policy evaluation. Unsafe records remain
+ * available to admins for remediation but are inactive and cannot leak through
+ * public catalogue queries, direct URLs, search, banners, cast, or SEO routes.
  */
-const policyUpdateFields = (policyCheck) => ({
-  policyRestricted: false,
-  policyRestrictedReason: '',
-  adsenseSafe: true,
-  ...(policyCheck?.mature ? { matureContent: true } : {})
-});
+const policyUpdateFields = (policyCheck) => {
+  if (policyCheck?.restricted || policyCheck?.mature) {
+    return {
+      policyRestricted: true,
+      policyRestrictedReason:
+        policyCheck.reason || 'Blocked by the adult / sexual-content policy',
+      adsenseSafe: false,
+      matureContent: true,
+      status: 'inactive'
+    };
+  }
+
+  return {
+    policyRestricted: false,
+    policyRestrictedReason: '',
+    adsenseSafe: true,
+    matureContent: false
+  };
+};
 
 /** Policy reasons this module wrote when it used to block titles. */
 const LEGACY_POLICY_REASON = /^(Blocked (adult-flagged title|title|genre|keywords)\b|Marked as policy restricted)/;
 
 /**
- * One-time repair: titles hidden by the old blocklist become visible again.
- * Only touches records restricted by this module (known reason or matching signal).
- * They get the 18+ flag only when adult signals still match — false positives of
- * the old keyword rules stay all-ages. The old policy also set status "inactive",
- * so those are re-activated. Pass { dryRun: true } to only report.
+ * Legacy repair retained for the maintenance command. Records that still match
+ * the current rules stay restricted; false positives can be cleared after their
+ * metadata is corrected. Pass { dryRun: true } to only report.
  */
 async function unblockLegacyRestrictedTitles(Model, { dryRun = false } = {}) {
   const docs = await Model.find({ policyRestricted: true })
@@ -471,8 +499,12 @@ async function unblockLegacyRestrictedTitles(Model, { dryRun = false } = {}) {
     const mature = detectAdultSignals(doc).restricted;
     const fromPolicy = LEGACY_POLICY_REASON.test(doc.policyRestrictedReason || '') || mature;
     if (!fromPolicy) continue;
-    const set = policyUpdateFields({ mature });
-    if (doc.status === 'inactive') set.status = 'active';
+    const set = policyUpdateFields({
+      restricted: mature,
+      mature,
+      reason: mature ? 'Blocked by the adult / sexual-content policy' : ''
+    });
+    if (!mature && doc.status === 'inactive') set.status = 'active';
     changes.push({ id: String(doc._id), title: doc.title, year: doc.year, set });
     if (!dryRun) {
       await Model.updateOne({ _id: doc._id, policyRestricted: true }, { $set: set });
