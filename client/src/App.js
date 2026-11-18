@@ -59,6 +59,7 @@ const AppShell = () => {
           <Route path="/collections" element={<Collections />} />
           <Route path="/cast-collection" element={<CastCollection />} />
           <Route path="/about" element={<LegalPage slug="about" />} />
+          <Route path="/how-we-curate" element={<LegalPage slug="curation" />} />
           <Route path="/privacy" element={<LegalPage slug="privacy" />} />
           <Route path="/terms" element={<LegalPage slug="terms" />} />
           <Route path="/disclaimer" element={<LegalPage slug="disclaimer" />} />
@@ -120,4 +121,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

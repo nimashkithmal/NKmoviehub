@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import MovieGrid from './MovieGrid';
 import TVShowGrid from './TVShowGrid';
 import ContactSection from './ContactSection';
@@ -1121,6 +1121,34 @@ const Home = () => {
   return (
     <div>
       {isDiscoveryMode ? renderDiscovery() : renderBrowse()}
+      <section className="home-editorial" aria-labelledby="home-editorial-title">
+        <div className="home-editorial-inner">
+          <p className="home-editorial-kicker">A maintained discovery guide</p>
+          <h2 id="home-editorial-title">Choose with more context than a poster and a score</h2>
+          <p className="home-editorial-intro">
+            Popularity shows what people are discussing; ratings show how viewers responded;
+            neither tells the whole story. Compare vote strength, release timing, genre,
+            language, runtime, and synopsis before building your shortlist.
+          </p>
+          <div className="home-editorial-grid">
+            <article>
+              <h3>Use popularity for discovery</h3>
+              <p>Start with current attention, then narrow by the genres and languages you actually enjoy.</p>
+            </article>
+            <article>
+              <h3>Read ratings in context</h3>
+              <p>A stable score with many votes is usually more informative than an early score from a small audience.</p>
+            </article>
+            <article>
+              <h3>Check release information</h3>
+              <p>Coming-soon dates can move. We order known dates nearest first and revise records as details change.</p>
+            </article>
+          </div>
+          <Link className="home-editorial-link" to="/how-we-curate">
+            Read our full curation method
+          </Link>
+        </div>
+      </section>
       <ContactSection />
     </div>
   );

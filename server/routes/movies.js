@@ -26,8 +26,6 @@ const {
 } = require('../utils/comingSoon');
 const { invalidateOnCatalogWrite } = require('../utils/publicCatalogCache');
 
-/** Virtual genre: titles flagged 18+ (admin or TMDB certification). */
-const MATURE_GENRE = '18+';
 const {
   applyPublicCatalogFilter,
   filterPublicItems,
@@ -132,9 +130,7 @@ router.get('/', async (req, res) => {
       applyCatalogTextSearch(filter, search);
     }
     
-    if (genre === MATURE_GENRE) {
-      filter.matureContent = true;
-    } else if (genre) {
+    if (genre) {
       const escaped = String(genre).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.genre = {
         $regex: `(^|[,|/]\\s*)${escaped}(?=\\s*[,|/]|$)`,
@@ -397,7 +393,6 @@ router.get('/filters', async (req, res) => {
         });
     }
     const genres = Array.from(genreSet).sort((a, b) => a.localeCompare(b));
-    
     // Get unique years, sorted descending
     const years = await Movie.distinct('year', applyPublicCatalogFilter({ status: 'active' }));
     const sortedYears = years.sort((a, b) => b - a);
@@ -820,7 +815,8 @@ router.post('/', protect, restrictToAdmin, [
       title,
       description,
       genre,
-      tagline: req.body.tagline
+      tagline: req.body.tagline,
+      matureContent: req.body.matureContent === true || req.body.matureContent === 'true'
     });
     if (policyCheck.restricted) {
       return res.status(400).json({
@@ -1092,7 +1088,7 @@ router.put('/:id', protect, restrictToAdmin, [
     console.log('Has imdbRating in updateData?', 'imdbRating' in updateData);
 
     const existing = await Movie.findById(req.params.id).select(
-      'title description genre tagline status policyRestricted'
+      'title description genre tagline status policyRestricted matureContent'
     );
     if (!existing) {
       return res.status(404).json({
@@ -1106,7 +1102,10 @@ router.put('/:id', protect, restrictToAdmin, [
       description: updateData.description || existing.description,
       genre: updateData.genre || existing.genre,
       tagline: updateData.tagline ?? existing.tagline,
-      policyRestricted: existing.policyRestricted
+      matureContent:
+        updateData.matureContent !== undefined
+          ? updateData.matureContent
+          : existing.matureContent
     });
     Object.assign(
       updateData,
@@ -1697,4 +1696,4 @@ router.get('/:id/ratings', async (req, res) => {
   }
 });
 
-module.exports = router; 
+module.exports = router;

@@ -183,7 +183,9 @@ const normalizeContentFields = (item = {}) => {
     certification,
     adult: item.adult === true || item.isAdult === true || item.is_adult === true,
     policyRestricted: item.policyRestricted === true,
+    adsenseSafe: item.adsenseSafe !== false,
     policyRestrictedReason: item.policyRestrictedReason || '',
+    matureContent: item.matureContent === true,
     imageUrl: item.imageUrl || item.poster || item.poster_path || '',
     status: item.status
   };
@@ -203,7 +205,11 @@ const matchesAny = (text, patterns) =>
  * Primary AdSense safety check.
  * @returns {boolean} true when content is safe to show publicly for AdSense
  */
-const isAdsenseSafeContent = (item = {}) => !evaluateContentPolicy(item).restricted;
+const isAdsenseSafeContent = (item = {}) => {
+  const fields = normalizeContentFields(item);
+  if (fields.policyRestricted || !fields.adsenseSafe || fields.matureContent) return false;
+  return !evaluateContentPolicy(item).restricted;
+};
 
 /**
  * Thin / low-value page detection (missing overview or poster).
@@ -224,7 +230,7 @@ const isThinContent = (item = {}) => {
 
 /**
  * Safe for sitemap + crawler prerender (policy + quality).
- * 18+ (mature, age-gated) titles are kept out of search indexing.
+ * Mature and restricted titles are excluded from every ad-supported public surface.
  */
 const isIndexableContent = (item = {}) =>
   item.matureContent !== true &&
@@ -234,8 +240,8 @@ const isIndexableContent = (item = {}) =>
 /**
  * Site policy (AdSense "Adult: Sexual content"): titles with adult / sexual
  * signals are blocked from every public surface — an age gate is not enough.
- * Mainstream mature titles (R / TV-MA) use matureContent + the 18+ gate instead,
- * which is set by ageClassification, not here.
+ * Mainstream mature titles are classified separately, but are also excluded
+ * from this ad-supported public catalogue by applyPublicCatalogFilter.
  */
 const evaluateContentPolicy = (item = {}) => detectAdultSignals(item);
 
@@ -299,7 +305,18 @@ const detectAdultSignals = (item = {}) => {
 const applyPublicCatalogFilter = (filter = {}) => ({
   ...filter,
   policyRestricted: { $ne: true },
-  adsenseSafe: { $ne: false }
+  adsenseSafe: { $ne: false },
+  matureContent: { $ne: true },
+  description: { $exists: true, $type: 'string', $regex: /[\s\S]{40,}/ },
+  $and: [
+    ...(filter.$and ? (Array.isArray(filter.$and) ? filter.$and : [filter.$and]) : []),
+    {
+      $or: [
+        { imageUrl: { $exists: true, $type: 'string', $ne: '' } },
+        { 'images.0': { $exists: true } }
+      ]
+    }
+  ]
 });
 
 /** Mongo filter for sitemap / SEO indexable pages. */
@@ -308,26 +325,18 @@ const applyIndexableCatalogFilter = (filter = {}) => {
   return {
     ...base,
     matureContent: { $ne: true },
-    description: { $exists: true, $type: 'string', $regex: /[\s\S]{40,}/ },
-    $and: [
-      ...(base.$and ? (Array.isArray(base.$and) ? base.$and : [base.$and]) : []),
-      {
-        $or: [
-          { imageUrl: { $exists: true, $type: 'string', $ne: '' } },
-          { 'images.0': { $exists: true } }
-        ]
-      }
-    ]
+    $and: base.$and
   };
 };
 
 const filterPublicItems = (items = []) =>
-  items.filter((item) => isAdsenseSafeContent(item));
+  items.filter((item) => isAdsenseSafeContent(item) && !isThinContent(item));
 
 const filterIndexableItems = (items = []) =>
   items.filter((item) => isIndexableContent(item));
 
-const isPubliclyAccessible = (item) => isAdsenseSafeContent(item);
+const isPubliclyAccessible = (item) =>
+  isAdsenseSafeContent(item) && !isThinContent(item);
 
 /**
  * Person / cast / crew AdSense safety.

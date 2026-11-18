@@ -35,6 +35,7 @@ const {
 } = require('../utils/contentPolicy');
 
 const doCleanup = process.argv.includes('--cleanup');
+const repairCastOnly = process.argv.includes('--repair-cast');
 
 const connect = async () => {
   const uri = process.env.MONGODB_URI || process.env.MONGO_URI;
@@ -50,15 +51,16 @@ const livePolicy = (doc) =>
     genre: doc.genre,
     policyRestricted: false,
     adult: doc.adult,
-    isAdult: doc.isAdult
+    isAdult: doc.isAdult,
+    matureContent: doc.matureContent
   });
 
 async function scanTitles(Model, kind) {
   const docs = await Model.find({})
     .select(
       kind === 'tvshow'
-        ? 'title description tagline genre status imageUrl images bannerUrl episodes policyRestricted adsenseSafe'
-        : 'title description tagline genre status imageUrl images bannerUrl policyRestricted adsenseSafe'
+        ? 'title description tagline genre status imageUrl images bannerUrl episodes policyRestricted adsenseSafe matureContent'
+        : 'title description tagline genre status imageUrl images bannerUrl policyRestricted adsenseSafe matureContent'
     )
     .lean();
 
@@ -356,15 +358,47 @@ async function purgeCastCachesForRestricted() {
     ).map((d) => d._id)
   ];
 
-  if (!restrictedIds.length) return 0;
+  if (!restrictedIds.length) return { cachesDeleted: 0, peopleUpdated: 0, peopleDeleted: 0 };
+
+  // Capture only people whose credits will actually change. Recomputing
+  // creditCount for the entire castpeople collection (128K+ documents) causes
+  // large temporary write amplification on Atlas free-tier storage.
+  const affectedPeople = await CastPerson.find({
+    'credits.entityId': { $in: restrictedIds }
+  })
+    .select('_id')
+    .lean();
+  const affectedIds = affectedPeople.map((person) => person._id);
+  console.log(`Cast records linked to restricted titles: ${affectedIds.length}`);
+
   const result = await CastTitleCache.deleteMany({ entityId: { $in: restrictedIds } });
-  await CastPerson.updateMany(
-    { 'credits.entityId': { $in: restrictedIds } },
-    { $pull: { credits: { entityId: { $in: restrictedIds } } } }
-  );
-  await CastPerson.updateMany({}, [{ $set: { creditCount: { $size: '$credits' } } }]);
-  await CastPerson.deleteMany({ creditCount: { $lte: 0 } });
-  return result.deletedCount || 0;
+  if (!affectedIds.length) {
+    return { cachesDeleted: result.deletedCount || 0, peopleUpdated: 0, peopleDeleted: 0 };
+  }
+
+  const batchSize = 100;
+  let peopleDeleted = 0;
+  for (let start = 0; start < affectedIds.length; start += batchSize) {
+    const batchIds = affectedIds.slice(start, start + batchSize);
+    await CastPerson.updateMany(
+      { _id: { $in: batchIds } },
+      { $pull: { credits: { entityId: { $in: restrictedIds } } } }
+    );
+    await CastPerson.updateMany(
+      { _id: { $in: batchIds } },
+      [{ $set: { creditCount: { $size: '$credits' } } }]
+    );
+    const deleteResult = await CastPerson.deleteMany({
+      _id: { $in: batchIds },
+      creditCount: { $lte: 0 }
+    });
+    peopleDeleted += deleteResult.deletedCount || 0;
+  }
+  return {
+    cachesDeleted: result.deletedCount || 0,
+    peopleUpdated: affectedIds.length,
+    peopleDeleted
+  };
 }
 
 function printSection(label, lines) {
@@ -374,6 +408,16 @@ function printSection(label, lines) {
 
 (async () => {
   await connect();
+
+  if (repairCastOnly) {
+    console.log('NK Movie Hub — targeted cast/cache repair');
+    const repaired = await purgeCastCachesForRestricted();
+    console.log(`Restricted cast caches deleted: ${repaired.cachesDeleted}`);
+    console.log(`Affected cast records updated: ${repaired.peopleUpdated}`);
+    console.log(`Empty cast records deleted: ${repaired.peopleDeleted}`);
+    await mongoose.disconnect();
+    return;
+  }
 
   console.log('NK Movie Hub — FULL AdSense system audit');
   console.log(`Mode: ${doCleanup ? 'CLEANUP' : 'AUDIT'}`);
@@ -437,7 +481,8 @@ function printSection(label, lines) {
     removed.peopleDeleted = peopleCleanup.deleted;
     removed.pending = await cleanupPending(pending.unsafe);
     removed.banners = await cleanupBanners(banners.unsafe);
-    removed.caches = await purgeCastCachesForRestricted();
+    const castRepair = await purgeCastCachesForRestricted();
+    removed.caches = castRepair.cachesDeleted;
 
     console.log('\n=== Cleanup results ===');
     console.log(`Movies deactivated/flagged: ${removed.movies}`);
@@ -447,6 +492,8 @@ function printSection(label, lines) {
     console.log(`Pending titles dismissed: ${removed.pending}`);
     console.log(`Banners deactivated: ${removed.banners}`);
     console.log(`Cast title caches purged: ${removed.caches}`);
+    console.log(`Affected cast records updated: ${castRepair.peopleUpdated}`);
+    console.log(`Empty cast records deleted: ${castRepair.peopleDeleted}`);
     console.log(`Stale flags rehabilitated: ${removed.rehabilitated}`);
   }
 
@@ -482,7 +529,7 @@ function printSection(label, lines) {
 
   // Also live-scan active titles that aren't flagged yet
   const activeMovies = await Movie.find({ status: { $in: ['active', 'coming_soon'] } })
-    .select('title description tagline genre policyRestricted adsenseSafe')
+    .select('title description tagline genre policyRestricted adsenseSafe matureContent')
     .lean();
   let liveActiveUnsafeMovies = 0;
   for (const doc of activeMovies) {
@@ -490,7 +537,7 @@ function printSection(label, lines) {
   }
 
   const activeShows = await TVShow.find({ status: { $in: ['active', 'coming_soon'] } })
-    .select('title description tagline genre policyRestricted adsenseSafe episodes')
+    .select('title description tagline genre policyRestricted adsenseSafe matureContent episodes')
     .lean();
   let liveActiveUnsafeShows = 0;
   let liveUnsafeEpisodesPublic = 0;

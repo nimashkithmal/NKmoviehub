@@ -109,9 +109,6 @@ async function approvePendingTitle(pending, userId, payload = {}) {
       releaseStatus: String(payload.releaseStatus ?? pending.releaseStatus ?? '').trim(),
       addedBy: userId,
       status: siteStatus,
-      policyRestricted: false,
-      policyRestrictedReason: '',
-      adsenseSafe: true,
       matureContent
     });
 
@@ -154,9 +151,6 @@ async function approvePendingTitle(pending, userId, payload = {}) {
     tmdbId,
     addedBy: userId,
     status: siteStatus,
-    policyRestricted: false,
-    policyRestrictedReason: '',
-    adsenseSafe: true,
     matureContent
   });
 

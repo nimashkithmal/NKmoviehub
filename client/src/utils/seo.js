@@ -18,6 +18,7 @@ const ROUTE_TITLES = {
   '/collections': 'Collections | NK Movie Hub',
   '/cast-collection': 'Cast Collection | NK Movie Hub',
   '/about': 'About Us | NK Movie Hub',
+  '/how-we-curate': 'How We Curate Movies & TV | NK Movie Hub',
   '/contact': 'Contact Us | NK Movie Hub',
   '/privacy': 'Privacy Policy | NK Movie Hub',
   '/terms': 'Terms & Conditions | NK Movie Hub',
