@@ -135,13 +135,19 @@ jobs:
 
           echo "Private key loaded."
 
+          # Encode secret values before including them in the SSH command.
+          # This preserves Gmail App Passwords copied with spaces while keeping
+          # the remote shell from interpreting any part as a command.
+          EMAIL_USER_B64=$(printf '%s' "$EMAIL_USER" | base64 -w 0)
+          EMAIL_PASS_B64=$(printf '%s' "$EMAIL_PASS" | base64 -w 0)
+
           ssh -i ~/.ssh/deploy_key \
               -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null \
               -o BatchMode=yes \
               -o ConnectTimeout=20 \
               "$EC2_USER@$EC2_HOST" \
-              APP_DIR="$APP_DIR" PM2_APP="$PM2_APP" TMDB_API_KEY="$TMDB_API_KEY" EMAIL_USER="$EMAIL_USER" EMAIL_PASS="$EMAIL_PASS" 'bash -s' <<'REMOTE'
+              APP_DIR="$APP_DIR" PM2_APP="$PM2_APP" TMDB_API_KEY="$TMDB_API_KEY" EMAIL_USER_B64="$EMAIL_USER_B64" EMAIL_PASS_B64="$EMAIL_PASS_B64" 'bash -s' <<'REMOTE'
 
             set -euo pipefail
 
@@ -171,6 +177,8 @@ jobs:
 
             echo "--- syncing email credentials into config.env ---"
             CONFIG="$APP_DIR/server/config.env"
+            EMAIL_USER=$(printf '%s' "$EMAIL_USER_B64" | base64 --decode)
+            EMAIL_PASS=$(printf '%s' "$EMAIL_PASS_B64" | base64 --decode)
             touch "$CONFIG"
             update_config_value() {
               key="$1"
