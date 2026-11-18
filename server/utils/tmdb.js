@@ -5,8 +5,8 @@
 const fetch = require('node-fetch');
 
 const TMDB_API = 'https://api.themoviedb.org/3';
-/** Keep lists fresh — home client refreshes on a similar cadence. */
-const CACHE_TTL_MS = 10 * 60 * 1000;
+/** Keep lists in step with the home client's live refresh cadence. */
+const CACHE_TTL_MS = 2 * 60 * 1000;
 const STALE_TTL_MS = 6 * 60 * 60 * 1000;
 
 const cache = {

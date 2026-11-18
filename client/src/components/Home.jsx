@@ -16,7 +16,7 @@ import './BrowseShelf.css';
 const PAGE_SIZE = 20;
 /** Server batch size — UI still shows PAGE_SIZE; next batch loads when you leave this window. */
 const BATCH_SIZE = 500;
-const DISCOVERY_CACHE_KEY = 'nk-home-discovery-v11';
+const DISCOVERY_CACHE_KEY = 'nk-home-discovery-v12';
 const DISCOVERY_CACHE_TTL_MS = 10 * 60 * 1000;
 const COMING_SOON_CACHE_KEY = 'nk-home-coming-soon-v1';
 const COMING_SOON_CACHE_TTL_MS = 15 * 60 * 1000;
@@ -36,7 +36,8 @@ const purgeStaleDiscoveryCaches = () => {
       'nk-home-discovery-v7',
       'nk-home-discovery-v8',
       'nk-home-discovery-v9',
-      'nk-home-discovery-v10'
+      'nk-home-discovery-v10',
+      'nk-home-discovery-v11'
     ];
     for (const key of stale) sessionStorage.removeItem(key);
   } catch {
@@ -460,7 +461,8 @@ const Home = () => {
       if (showRefresh) setDiscoveryRefreshing(true);
       try {
         const response = await fetch('/api/discovery/home?limit=20', {
-          signal: controller.signal
+          signal: controller.signal,
+          cache: 'no-store'
         });
         const result = await response.json();
         if (!result.success || cancelled) return;

@@ -305,6 +305,13 @@ const buildLocalFallback = async (limit) => {
 // @desc    Live home rows from TMDB Popular / Now Playing / Top Rated (matched to local catalog)
 // @access  Public
 router.get('/home', async (req, res) => {
+  // The route already has a small shared in-memory cache. Prevent browsers and
+  // hosting CDNs from adding another cache layer that can leave "live" rows
+  // stuck on an older response after the server cache has refreshed.
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+
   try {
     const limit = Math.min(30, Math.max(8, parseInt(req.query.limit, 10) || 20));
     const now = Date.now();
@@ -411,7 +418,7 @@ router.get('/home', async (req, res) => {
         topRatedSource: usedTmdbTopRated ? 'tmdb' : 'catalog',
         trendingSource: usedTmdbTrending ? 'tmdb' : 'catalog',
         refreshedAt: new Date().toISOString(),
-        cacheMinutes: 10
+        cacheMinutes: 2
       }
     };
 
