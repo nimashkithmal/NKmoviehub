@@ -208,6 +208,9 @@ jobs:
               echo "WARNING: TMDB_API_KEY GitHub secret is empty — Now Playing will fall back."
             fi
 
+            echo "--- verifying Gmail SMTP authentication ---"
+            node scripts/verifyEmailConfig.js
+
             echo "--- restarting ---"
             pm2 restart "$PM2_APP" --update-env
             pm2 save
