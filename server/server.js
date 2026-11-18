@@ -49,6 +49,9 @@ const syncRoutes = require('./routes/sync');
 const { startCastIndexer } = require('./utils/castIndexer');
 const { startEmbedSyncIndexer } = require('./utils/embedSyncIndexer');
 const { startAgeClassificationIndexer } = require('./utils/ageClassification');
+const { restoreLegacyMatureTitles } = require('./utils/contentPolicy');
+const Movie = require('./models/Movie');
+const TVShow = require('./models/TVShow');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -63,9 +66,23 @@ mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => {
+.then(async () => {
   console.log('✅ Connected to MongoDB successfully');
   console.log('📊 Database: Configured');
+  try {
+    const [moviesRestored, showsRestored] = await Promise.all([
+      restoreLegacyMatureTitles(Movie),
+      restoreLegacyMatureTitles(TVShow)
+    ]);
+    const totalRestored = moviesRestored + showsRestored;
+    if (totalRestored > 0) {
+      require('./utils/publicCatalogCache').invalidatePublicCatalogCaches();
+      console.log(`🔞 Restored ${totalRestored} legacy mature titles to the public catalogue`);
+    }
+  } catch (error) {
+    // Do not prevent startup; retry on the next deployment/restart.
+    console.error('Legacy mature-title repair failed:', error.message || error);
+  }
   startCastIndexer();
   startEmbedSyncIndexer();
   startAgeClassificationIndexer();

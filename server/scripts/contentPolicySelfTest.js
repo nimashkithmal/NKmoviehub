@@ -3,9 +3,11 @@
 const assert = require('assert');
 const {
   applyPublicCatalogFilter,
+  applyIndexableCatalogFilter,
   evaluateContentPolicy,
   isAdsenseSafeContent,
   isIndexableContent,
+  isPubliclyAccessible,
   policyUpdateFields
 } = require('../utils/contentPolicy');
 
@@ -55,7 +57,17 @@ assert.equal(evaluateContentPolicy(matureTitle).restricted, false);
 assert.equal(
   isAdsenseSafeContent(matureTitle),
   false,
-  'Mature titles are excluded from the ad-supported public catalogue'
+  'Mature titles are excluded from AdSense-safe content'
+);
+assert.equal(
+  isPubliclyAccessible(matureTitle),
+  true,
+  'Certified mature titles remain searchable and open behind the age gate'
+);
+assert.equal(
+  isIndexableContent(matureTitle),
+  false,
+  'Certified mature titles stay out of search-engine indexing'
 );
 
 assert.equal(isAdsenseSafeContent({ ...safeTitle, policyRestricted: true }), false);
@@ -64,14 +76,24 @@ assert.equal(isAdsenseSafeContent({ ...safeTitle, adsenseSafe: false }), false);
 const publicFilter = applyPublicCatalogFilter({ status: 'active' });
 assert.deepEqual(publicFilter.policyRestricted, { $ne: true });
 assert.deepEqual(publicFilter.adsenseSafe, { $ne: false });
-assert.deepEqual(publicFilter.matureContent, { $ne: true });
-assert.ok(publicFilter.description.$regex.test('x'.repeat(40)));
-assert.equal(publicFilter.$and.length, 1);
+assert.equal(publicFilter.matureContent, undefined);
+assert.equal(publicFilter.description, undefined);
+assert.equal(publicFilter.$and, undefined);
+
+const indexableFilter = applyIndexableCatalogFilter({ status: 'active' });
+assert.deepEqual(indexableFilter.matureContent, { $ne: true });
+assert.ok(indexableFilter.description.$regex.test('x'.repeat(40)));
+assert.equal(indexableFilter.$and.length, 1);
 
 assert.equal(
   isAdsenseSafeContent({ ...safeTitle, description: 'Too short' }),
   true,
   'Content safety and content depth are intentionally separate checks'
+);
+assert.equal(
+  isPubliclyAccessible({ ...safeTitle, description: 'Too short' }),
+  true,
+  'Active safe titles do not disappear from site search due to thin metadata'
 );
 
 console.log('Content policy self-test passed.');

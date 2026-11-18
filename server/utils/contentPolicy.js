@@ -6,6 +6,7 @@
  * - Keep mainstream romance, action, drama, and mature storytelling
  * - Persist decisions via policyRestricted + adsenseSafe on catalog docs
  * - Exclude thin pages (no overview / no poster) from public indexing
+ * - Keep ordinary 18+ titles available behind the existing age gate
  */
 
 const BLOCKED_GENRE_PATTERNS = [
@@ -136,6 +137,8 @@ const BLOCKED_PERSON_PATTERNS = [
 ];
 
 const MIN_OVERVIEW_CHARS = 40;
+const LEGACY_MATURE_RESTRICTION_REASON =
+  'Blocked mature title from the ad-supported public catalogue';
 
 const asText = (value) => {
   if (value == null) return '';
@@ -230,7 +233,8 @@ const isThinContent = (item = {}) => {
 
 /**
  * Safe for sitemap + crawler prerender (policy + quality).
- * Mature and restricted titles are excluded from every ad-supported public surface.
+ * Mature and restricted titles are excluded from search-engine indexing.
+ * Ordinary mature titles may still be opened by visitors behind the age gate.
  */
 const isIndexableContent = (item = {}) =>
   item.matureContent !== true &&
@@ -240,8 +244,8 @@ const isIndexableContent = (item = {}) =>
 /**
  * Site policy (AdSense "Adult: Sexual content"): titles with adult / sexual
  * signals are blocked from every public surface — an age gate is not enough.
- * Mainstream mature titles are classified separately, but are also excluded
- * from this ad-supported public catalogue by applyPublicCatalogFilter.
+ * Mainstream mature titles are classified separately and remain available
+ * behind the site's age gate.
  */
 const evaluateContentPolicy = (item = {}) => detectAdultSignals(item);
 
@@ -301,22 +305,18 @@ const detectAdultSignals = (item = {}) => {
   return { restricted: false, adsenseSafe: true, reason: '' };
 };
 
-/** Mongo filter for public listings (adult / policy). */
+/**
+ * Mongo filter for visitor-facing listings.
+ *
+ * Do not filter `matureContent` here: it represents an ordinary certified
+ * 18+ title, which the UI protects with the age gate. Thin-content checks are
+ * an SEO/indexing concern and must not make an active catalogue record vanish
+ * from site search.
+ */
 const applyPublicCatalogFilter = (filter = {}) => ({
   ...filter,
   policyRestricted: { $ne: true },
-  adsenseSafe: { $ne: false },
-  matureContent: { $ne: true },
-  description: { $exists: true, $type: 'string', $regex: /[\s\S]{40,}/ },
-  $and: [
-    ...(filter.$and ? (Array.isArray(filter.$and) ? filter.$and : [filter.$and]) : []),
-    {
-      $or: [
-        { imageUrl: { $exists: true, $type: 'string', $ne: '' } },
-        { 'images.0': { $exists: true } }
-      ]
-    }
-  ]
+  adsenseSafe: { $ne: false }
 });
 
 /** Mongo filter for sitemap / SEO indexable pages. */
@@ -325,18 +325,81 @@ const applyIndexableCatalogFilter = (filter = {}) => {
   return {
     ...base,
     matureContent: { $ne: true },
-    $and: base.$and
+    description: { $exists: true, $type: 'string', $regex: /[\s\S]{40,}/ },
+    $and: [
+      ...(base.$and ? (Array.isArray(base.$and) ? base.$and : [base.$and]) : []),
+      {
+        $or: [
+          { imageUrl: { $exists: true, $type: 'string', $ne: '' } },
+          { 'images.0': { $exists: true } }
+        ]
+      }
+    ]
   };
 };
 
 const filterPublicItems = (items = []) =>
-  items.filter((item) => isAdsenseSafeContent(item) && !isThinContent(item));
+  items.filter((item) => isPubliclyAccessible(item));
 
 const filterIndexableItems = (items = []) =>
   items.filter((item) => isIndexableContent(item));
 
-const isPubliclyAccessible = (item) =>
-  isAdsenseSafeContent(item) && !isThinContent(item);
+/**
+ * Available to a visitor in catalogue search/detail routes. This intentionally
+ * differs from `isAdsenseSafeContent`: certified mature titles are available
+ * behind the age gate but stay out of SEO/AdSense indexing.
+ */
+const isPubliclyAccessible = (item = {}) => {
+  const fields = normalizeContentFields(item);
+  if (fields.policyRestricted || !fields.adsenseSafe) return false;
+  return !evaluateContentPolicy(item).restricted;
+};
+
+/**
+ * Repair records hidden by the short-lived policy that treated every certified
+ * 18+ title as restricted. Only that exact legacy reason is cleared, and the
+ * title is re-checked with the current explicit-content policy first.
+ */
+async function restoreLegacyMatureTitles(Model) {
+  const docs = await Model.find({
+    matureContent: true,
+    policyRestrictedReason: LEGACY_MATURE_RESTRICTION_REASON,
+    $or: [{ policyRestricted: true }, { adsenseSafe: false }, { status: 'inactive' }]
+  })
+    .select('title description tagline genre status matureContent policyRestrictedReason')
+    .lean();
+
+  const repairable = docs.filter((doc) =>
+    !evaluateContentPolicy({
+      ...doc,
+      policyRestricted: false,
+      adsenseSafe: true
+    }).restricted
+  );
+
+  if (!repairable.length) return 0;
+
+  await Model.bulkWrite(
+    repairable.map((doc) => ({
+      updateOne: {
+        filter: {
+          _id: doc._id,
+          policyRestrictedReason: LEGACY_MATURE_RESTRICTION_REASON
+        },
+        update: {
+          $set: {
+            policyRestricted: false,
+            policyRestrictedReason: '',
+            adsenseSafe: true,
+            ...(doc.status === 'inactive' ? { status: 'active' } : {})
+          }
+        }
+      }
+    }))
+  );
+
+  return repairable.length;
+}
 
 /**
  * Person / cast / crew AdSense safety.
@@ -498,6 +561,7 @@ module.exports = {
   filterSafePeople,
   sanitizeEmbedMetadata,
   isPubliclyAccessible,
+  restoreLegacyMatureTitles,
   policyUpdateFields,
   personPolicyUpdateFields
 };
