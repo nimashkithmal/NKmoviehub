@@ -9,8 +9,7 @@
     "test:content-policy": "node scripts/contentPolicySelfTest.js",
     "adsense:audit": "node scripts/adsenseAudit.js",
     "adsense:cleanup": "node scripts/adsenseAudit.js --cleanup",
-    "adsense:repair-cast": "node scripts/adsenseAudit.js --repair-cast",
-    "unblock:legacy": "node scripts/unblockLegacyTitles.js"
+    "adsense:repair-cast": "node scripts/adsenseAudit.js --repair-cast"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

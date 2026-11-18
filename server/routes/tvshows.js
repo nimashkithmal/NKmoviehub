@@ -276,7 +276,10 @@ router.get('/admin', protect, restrictToAdmin, async (req, res) => {
       };
     }
     
-    if (status) {
+    if (status === 'blocked') {
+      // Titles hidden by the adult-content policy (they are also inactive)
+      filter.policyRestricted = true;
+    } else if (status) {
       filter.status = status;
     }
 
@@ -541,6 +544,13 @@ router.post('/', protect, restrictToAdmin, [
       tagline: req.body.tagline,
       matureContent: req.body.matureContent === true || req.body.matureContent === 'true'
     });
+    if (policyCheck.restricted) {
+      return res.status(400).json({
+        success: false,
+        message: 'This title cannot be published due to content policy.',
+        reason: policyCheck.reason
+      });
+    }
 
     // Upload images to Cloudinary
     let imageUrl;
@@ -633,7 +643,6 @@ router.post('/', protect, restrictToAdmin, [
       imageUrl,
       images: images, // Store array of images
       ...meta,
-      ...policyUpdateFields(policyCheck),
       addedBy: req.user.id
     };
     
@@ -873,8 +882,10 @@ router.put('/:id', protect, restrictToAdmin, [
           ? updateData.matureContent
           : existing.matureContent
     });
-    const policyFields = policyUpdateFields(policyCheck);
-    Object.assign(updateData, policyFields);
+    Object.assign(
+      updateData,
+      policyUpdateFields(policyCheck, updateData.status || existing.status)
+    );
 
     const tvShow = await TVShow.findByIdAndUpdate(
       req.params.id,

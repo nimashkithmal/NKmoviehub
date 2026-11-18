@@ -5,7 +5,7 @@ const PendingTitle = require('../models/PendingTitle');
 const { protect, restrictToAdmin } = require('../middleware/auth');
 const { findExistingMovieDuplicate } = require('../utils/deduplicateMovies');
 const { uploadPoster } = require('../utils/cloudinaryUpload');
-const { evaluateContentPolicy, policyUpdateFields } = require('../utils/contentPolicy');
+const { evaluateContentPolicy } = require('../utils/contentPolicy');
 const { buildEpisodeUrl } = require('../utils/tvEpisodeUrls');
 const { buildAllSeasonEpisodes, summarizeEpisodes } = require('../utils/tvSeasonEpisodes');
 const { invalidateOnCatalogWrite } = require('../utils/publicCatalogCache');
@@ -55,20 +55,16 @@ async function approvePendingTitle(pending, userId, payload = {}) {
           : 'active';
   const siteStatus = catalogStatus === 'coming_soon' ? 'coming_soon' : 'active';
 
-  const requestedMature =
+  // Sexual / adult content is never published (AdSense policy). 18+ here only
+  // means mainstream mature titles (R / TV-MA), which stay age-gated.
+  const policy = evaluateContentPolicy({ title, description, genre });
+  if (policy.restricted) {
+    throw new Error('This title is blocked by content policy');
+  }
+  const matureContent =
     payload.matureContent === true ||
     payload.matureContent === 'true' ||
     pending.matureContent === true;
-  const policy = evaluateContentPolicy({
-    title,
-    description,
-    genre,
-    matureContent: requestedMature
-  });
-  const matureContent =
-    requestedMature ||
-    policy.mature;
-  const policyFields = policyUpdateFields(policy);
 
   if (!title || !year || !description || !genre) {
     throw new Error('Title, year, description, and genre are required');
@@ -113,8 +109,7 @@ async function approvePendingTitle(pending, userId, payload = {}) {
       releaseStatus: String(payload.releaseStatus ?? pending.releaseStatus ?? '').trim(),
       addedBy: userId,
       status: siteStatus,
-      matureContent,
-      ...policyFields
+      matureContent
     });
 
     return { kind: 'movie', id: movie._id };
@@ -156,8 +151,7 @@ async function approvePendingTitle(pending, userId, payload = {}) {
     tmdbId,
     addedBy: userId,
     status: siteStatus,
-    matureContent,
-    ...policyFields
+    matureContent
   });
 
   return { kind: 'tvshow', id: tvShow._id, numberOfSeasons: resolvedSeasons, episodeCount: episodes.length };

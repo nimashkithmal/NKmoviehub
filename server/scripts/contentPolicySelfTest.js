@@ -28,7 +28,6 @@ assert.equal(
 
 for (const unsafe of [
   { ...safeTitle, adult: true },
-  { ...safeTitle, matureContent: true },
   { ...safeTitle, title: 'Erotic Nights' },
   { ...safeTitle, description: 'A guide to sexual enhancement supplements.' },
   { ...safeTitle, genre: 'Adult' }
@@ -36,22 +35,28 @@ for (const unsafe of [
   const result = evaluateContentPolicy(unsafe);
   assert.equal(result.restricted, true, `Expected restricted: ${JSON.stringify(unsafe)}`);
   assert.equal(isAdsenseSafeContent(unsafe), false);
-  const fields = policyUpdateFields(result);
+  const fields = policyUpdateFields(result, 'active');
   assert.deepEqual(
     {
       policyRestricted: fields.policyRestricted,
       adsenseSafe: fields.adsenseSafe,
-      matureContent: fields.matureContent,
       status: fields.status
     },
     {
       policyRestricted: true,
       adsenseSafe: false,
-      matureContent: true,
       status: 'inactive'
     }
   );
 }
+
+const matureTitle = { ...safeTitle, matureContent: true };
+assert.equal(evaluateContentPolicy(matureTitle).restricted, false);
+assert.equal(
+  isAdsenseSafeContent(matureTitle),
+  false,
+  'Mature titles are excluded from the ad-supported public catalogue'
+);
 
 assert.equal(isAdsenseSafeContent({ ...safeTitle, policyRestricted: true }), false);
 assert.equal(isAdsenseSafeContent({ ...safeTitle, adsenseSafe: false }), false);

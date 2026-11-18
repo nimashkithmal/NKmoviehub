@@ -193,6 +193,7 @@ function mapEmbedToPending(type, tmdbId, data = {}, source = 'trending') {
   const description = descriptionFromEmbed(data);
   const genre = genreFromEmbed(data);
 
+  // Sexual / adult content is dropped before it reaches the review queue
   const policy = evaluateContentPolicy({
     title,
     description,
@@ -228,8 +229,7 @@ function mapEmbedToPending(type, tmdbId, data = {}, source = 'trending') {
     episodeCount: Math.max(0, Number(data.number_of_episodes) || 0),
     source,
     catalogStatus,
-    releaseStatus,
-    matureContent: policy.mature
+    releaseStatus
   };
 }
 

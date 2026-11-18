@@ -238,33 +238,18 @@ const isIndexableContent = (item = {}) =>
   !isThinContent(item);
 
 /**
- * Site policy: a title that matches adult / sexual-content signals is not
- * published on the ad-supported public site. An age gate alone does not make
- * restricted content eligible for Google-served ads.
+ * Site policy (AdSense "Adult: Sexual content"): titles with adult / sexual
+ * signals are blocked from every public surface — an age gate is not enough.
+ * Mainstream mature titles are classified separately, but are also excluded
+ * from this ad-supported public catalogue by applyPublicCatalogFilter.
  */
-const evaluateContentPolicy = (item = {}) => {
-  const signal = detectAdultSignals(item);
-  return {
-    restricted: signal.restricted,
-    adsenseSafe: !signal.restricted,
-    mature: signal.restricted,
-    reason: signal.reason
-  };
-};
+const evaluateContentPolicy = (item = {}) => detectAdultSignals(item);
 
-/** Raw adult / sexual-content signal check (drives the automatic 18+ flag). */
+/** Raw adult / sexual-content signal check. */
 const detectAdultSignals = (item = {}) => {
   const fields = normalizeContentFields(item);
   const { title } = fields;
   const text = getSearchText(fields);
-
-  if (fields.matureContent) {
-    return {
-      restricted: true,
-      adsenseSafe: false,
-      reason: 'Blocked mature title from the ad-supported public catalogue'
-    };
-  }
 
   if (fields.adult) {
     return {
@@ -458,60 +443,27 @@ const sanitizeEmbedMetadata = (data = {}) => {
 };
 
 /**
- * Build Mongo update fields after a policy evaluation. Unsafe records remain
- * available to admins for remediation but are inactive and cannot leak through
- * public catalogue queries, direct URLs, search, banners, cast, or SEO routes.
+ * Build Mongo update fields after a policy evaluation.
+ * Restricted titles are deactivated so they leave public surfaces.
  */
-const policyUpdateFields = (policyCheck) => {
-  if (policyCheck?.restricted || policyCheck?.mature) {
-    return {
+const policyUpdateFields = (policyCheck, currentStatus) => {
+  if (policyCheck.restricted) {
+    const next = {
       policyRestricted: true,
-      policyRestrictedReason:
-        policyCheck.reason || 'Blocked by the adult / sexual-content policy',
-      adsenseSafe: false,
-      matureContent: true,
-      status: 'inactive'
+      policyRestrictedReason: policyCheck.reason || 'Blocked by content policy',
+      adsenseSafe: false
     };
+    if (['active', 'coming_soon'].includes(currentStatus)) {
+      next.status = 'inactive';
+    }
+    return next;
   }
-
   return {
     policyRestricted: false,
     policyRestrictedReason: '',
-    adsenseSafe: true,
-    matureContent: false
+    adsenseSafe: true
   };
 };
-
-/** Policy reasons this module wrote when it used to block titles. */
-const LEGACY_POLICY_REASON = /^(Blocked (adult-flagged title|title|genre|keywords)\b|Marked as policy restricted)/;
-
-/**
- * Legacy repair retained for the maintenance command. Records that still match
- * the current rules stay restricted; false positives can be cleared after their
- * metadata is corrected. Pass { dryRun: true } to only report.
- */
-async function unblockLegacyRestrictedTitles(Model, { dryRun = false } = {}) {
-  const docs = await Model.find({ policyRestricted: true })
-    .select('title year description tagline genre status policyRestrictedReason matureContent')
-    .lean();
-  const changes = [];
-  for (const doc of docs) {
-    const mature = detectAdultSignals(doc).restricted;
-    const fromPolicy = LEGACY_POLICY_REASON.test(doc.policyRestrictedReason || '') || mature;
-    if (!fromPolicy) continue;
-    const set = policyUpdateFields({
-      restricted: mature,
-      mature,
-      reason: mature ? 'Blocked by the adult / sexual-content policy' : ''
-    });
-    if (!mature && doc.status === 'inactive') set.status = 'active';
-    changes.push({ id: String(doc._id), title: doc.title, year: doc.year, set });
-    if (!dryRun) {
-      await Model.updateOne({ _id: doc._id, policyRestricted: true }, { $set: set });
-    }
-  }
-  return changes;
-}
 
 const personPolicyUpdateFields = (policyCheck) => {
   if (policyCheck.restricted) {
@@ -547,6 +499,5 @@ module.exports = {
   sanitizeEmbedMetadata,
   isPubliclyAccessible,
   policyUpdateFields,
-  personPolicyUpdateFields,
-  unblockLegacyRestrictedTitles
+  personPolicyUpdateFields
 };
